@@ -147,8 +147,10 @@ class Control:
         from .pipeline import stage_finish
 
         try:
-            results = stage_finish(self.reload())
+            problems: list[str] = []
+            results = stage_finish(self.reload(), problems=problems)
             self.finish_lines += [f"READY {video}" for video, _ok in results]
+            self.finish_lines += [f"NOT MADE {p}" for p in problems]
             self.finish_lines.append(f"{time.strftime('%H:%M:%S')} done: {len(results)} file(s) in {self.cfg.data_dir / 'ready'}")
         except Exception as e:  # shown on the page instead of killing the server
             log.exception("finish failed")

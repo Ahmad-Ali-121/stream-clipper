@@ -185,11 +185,14 @@ def _cmd_hardware(args: argparse.Namespace) -> int:
 def _cmd_finish(args: argparse.Namespace) -> int:
     from .pipeline import stage_finish
 
-    results = stage_finish(load_config(args.config), url=args.url, brief_path=args.brief)
+    problems: list[str] = []
+    results = stage_finish(load_config(args.config), url=args.url, brief_path=args.brief, problems=problems)
     for video, ok in results:
         print(f"{'READY ' if ok else 'BRIEF FAILS'}  {video}")
+    for p in problems:
+        print(f"NOT MADE  {p}")
     print(f"{len(results)} file(s) rendered and exported")
-    return 0 if all(ok for _v, ok in results) else 1
+    return 0 if all(ok for _v, ok in results) and not problems else 1
 
 
 def _cmd_post(args: argparse.Namespace) -> int:

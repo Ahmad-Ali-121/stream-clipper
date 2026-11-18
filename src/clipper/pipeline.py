@@ -17,6 +17,7 @@ from .config import Config
 from .fetch import fetch_chat, fetch_meta, fetch_range, probe
 from .moments import find_moments, format_time
 from .sources import Source, parse_source
+from .tools import ToolError
 from .work import clip_dir, clip_dirs, clip_id, done, free_gb, read_json, work_dir, write_json
 
 log = logging.getLogger(__name__)
@@ -200,55 +201,71 @@ def all_works(cfg: Config) -> list[Path]:
     return sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
 
 
-def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = None) -> list[tuple[Path, bool]]:
+def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = None,
+                 problems: list[str] | None = None) -> list[tuple[Path, bool]]:
     """Render every approved clip that lacks an up-to-date render, then export it with a post sheet.
 
     Works across every stream, or one if ``url`` is given. Clips already exported
     and unchanged since are skipped, so this is safe to run after every review.
+    A clip that cannot be made is described in ``problems`` and the rest carry on.
     """
     from .brief import load_brief
+
+    works = [open_work(url, cfg)[1]] if url else all_works(cfg)
+    brief = load_brief(brief_path) if brief_path else None
+    results: list[tuple[Path, bool]] = []
+    for work in works:
+        for d in select_clips(work, status="approved"):
+            try:
+                _finish_clip(work, d, cfg, brief, results)
+            except Exception as e:  # one bad clip must not stop the others
+                log.exception("clip %s/%s could not be finished", work.name, d.name)
+                if problems is not None:
+                    problems.append(f"{work.name}/{d.name}: {e}")
+    return results
+
+
+def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Path, bool]]) -> None:
     from .compose import explained
     from .post import export_clip
     from .render import render_clip
 
-    works = [open_work(url, cfg)[1]] if url else all_works(cfg)
-    brief = load_brief(brief_path) if brief_path else None
-    results = []
-    for work in works:
-        for d in select_clips(work, status="approved"):
-            state = read_json(d / "clip.json")
-            if not done(d / "source.mp4"):
-                log.warning("clip %s/%s is approved but has no source video; skipped", work.name, d.name)
+    state = read_json(d / "clip.json")
+    if not done(d / "source.mp4"):
+        raise ToolError("approved, but its video was never downloaded (the draft failed). Reject it on the review page")
+    if "source_width" not in state or not done(d / "words.json"):
+        # The draft stopped part-way while it was being made; do the missing steps now.
+        from .watch import prepare_clip
+
+        log.info("clip %s/%s: the draft was never completed; completing it now", work.name, d.name)
+        state = prepare_clip(d, state, cfg)
+    ab = cfg.render.ab_versions
+    # A render made before the opening effects were switched on (or off) no longer matches the settings.
+    fresh = not done(d / "final.mp4") or bool(state.get("opening_used")) != bool(cfg.render.opening)
+    if fresh:
+        render_clip(d, cfg, force=True)
+        for name in ("explained.mp4", "explained_b.mp4", "final_b.mp4"):  # made with the old settings too
+            (d / name).unlink(missing_ok=True)
+    exported = Path(state["exported"]) if state.get("exported") else None
+    again = bool(brief) or exported is None or not exported.exists() or (ab and "_A." not in exported.name)
+    ready = cfg.data_dir / "ready"
+    if fresh or again:
+        results.append(export_clip(d, ready, brief, suffix="_A" if ab else ""))
+    if ab:
+        fresh_b = not done(d / "final_b.mp4")
+        if fresh_b:
+            render_clip(d, cfg, out_name="final_b.mp4", variant="b")
+        if fresh_b or again:
+            results.append(export_clip(d, ready, brief, video_name="final_b.mp4", suffix="_B", main=False))
+    if state.get("explainer"):
+        if not (state.get("intro") or "").strip():
+            raise ToolError("explainer ticked but there is no narration line; type one on the review page")
+        for variant, name, suffix in (("a", "explained.mp4", "_explained_A" if ab else "_explained"), ("b", "explained_b.mp4", "_explained_B")):
+            if variant == "b" and not ab:
                 continue
-            ab = cfg.render.ab_versions
-            # A render made before the opening effects were switched on (or off) no longer matches the settings.
-            fresh = not done(d / "final.mp4") or bool(state.get("opening_used")) != bool(cfg.render.opening)
-            if fresh:
-                render_clip(d, cfg, force=True)
-                for name in ("explained.mp4", "explained_b.mp4", "final_b.mp4"):  # made with the old settings too
-                    (d / name).unlink(missing_ok=True)
-            exported = Path(state["exported"]) if state.get("exported") else None
-            again = bool(brief) or exported is None or not exported.exists() or (ab and "_A." not in exported.name)
-            ready = cfg.data_dir / "ready"
-            if fresh or again:
-                results.append(export_clip(d, ready, brief, suffix="_A" if ab else ""))
-            if ab:
-                fresh_b = not done(d / "final_b.mp4")
-                if fresh_b:
-                    render_clip(d, cfg, out_name="final_b.mp4", variant="b")
-                if fresh_b or again:
-                    results.append(export_clip(d, ready, brief, video_name="final_b.mp4", suffix="_B", main=False))
-            if state.get("explainer"):
-                if not (state.get("intro") or "").strip():
-                    log.warning("clip %s/%s: explainer ticked but there is no narration line; type one on the review page", work.name, d.name)
-                    continue
-                for variant, name, suffix in (("a", "explained.mp4", "_explained_A" if ab else "_explained"), ("b", "explained_b.mp4", "_explained_B")):
-                    if variant == "b" and not ab:
-                        continue
-                    if not done(d / name) or again:
-                        explained(d, cfg, variant=variant)
-                        results.append(export_clip(d, ready, brief, video_name=name, suffix=suffix, main=False))
-    return results
+            if not done(d / name) or again:
+                explained(d, cfg, variant=variant)
+                results.append(export_clip(d, ready, brief, video_name=name, suffix=suffix, main=False))
 
 
 COPY_FIELDS = ("hook", "hook_b", "title", "title_b", "description", "tags", "intro", "intro_b", "rank_line")

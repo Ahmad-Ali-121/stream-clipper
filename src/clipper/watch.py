@@ -252,10 +252,32 @@ def new_moments(w: Watched, cfg: Config) -> list[dict]:
     return out
 
 
+def prepare_clip(d: Path, state: dict, cfg: Config) -> dict:
+    """Everything between a fetched source.mp4 and a render: measure it, frame it, transcribe it, write its text.
+
+    Also used by ``finish`` to complete a draft that stopped part-way (a crash, a failed download of the speech model).
+    """
+    from .cuts import apply_snap
+    from .layout import auto_layout
+    from .pipeline import write_clip_copy
+    from .transcribe import transcribe_file
+
+    info = probe(d / "source.mp4", cfg)
+    state.update({"source_width": info["width"], "source_height": info["height"], "source_duration_s": round(info["duration_s"], 2)})
+    state = auto_layout(d, state, cfg)
+    words = transcribe_file(d / "source.mp4", cfg)
+    write_json(d / "words.json", words)
+    state["transcript"] = " ".join(x["word"] for x in words)
+    state = apply_snap(state, words, max_shift=cfg.fetch.pad_s)
+    write_json(d / "clip.json", state)
+    state = write_clip_copy(d, state, cfg)  # hook, title, hashtags: by Claude when a key is set, plain text otherwise
+    write_json(d / "clip.json", state)
+    return state
+
+
 def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
     """Fetch, transcribe and render one moment from the live VOD."""
     from .render import render_clip
-    from .transcribe import transcribe_file
 
     if free_gb(cfg.data_dir) < 2.0:
         raise ToolError(f"less than 2 GB free on {cfg.data_dir.anchor}; delete old work folders")
@@ -287,21 +309,7 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
             write_json(d / "clip.json", state)
     else:
         fetch_range(w.source, state["fetch_start_s"], state["fetch_end_s"], d / "source.mp4", cfg)
-    info = probe(d / "source.mp4", cfg)
-    state.update({"source_width": info["width"], "source_height": info["height"], "source_duration_s": round(info["duration_s"], 2)})
-    from .cuts import apply_snap
-    from .layout import auto_layout
-
-    state = auto_layout(d, state, cfg)
-    words = transcribe_file(d / "source.mp4", cfg)
-    write_json(d / "words.json", words)
-    state["transcript"] = " ".join(x["word"] for x in words)
-    state = apply_snap(state, words, max_shift=cfg.fetch.pad_s)
-    write_json(d / "clip.json", state)
-    from .pipeline import write_clip_copy
-
-    state = write_clip_copy(d, state, cfg)  # hook, title, hashtags: by Claude when a key is set, plain text otherwise
-    write_json(d / "clip.json", state)
+    prepare_clip(d, state, cfg)
     render_clip(d, cfg)
     state = read_json(d / "clip.json")
     state["ready_seconds_after_moment"] = round(time.time() - float(w.meta["started_at"]) - state["peak_s"])
