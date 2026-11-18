@@ -75,6 +75,26 @@ def find_live_vod(channel: str, cfg: Config) -> tuple[Source, dict] | None:
     return source, meta
 
 
+def channel_is_live(channel: str, cfg: Config) -> bool:
+    """True when the channel is broadcasting right now, whether or not Twitch is recording it."""
+    from .fetch import _ytdlp
+
+    try:
+        proc = run(
+            _ytdlp(cfg) + ["--skip-download", "--print", "%(is_live)s", f"https://www.twitch.tv/{channel}"],
+            timeout_s=60, retries=0, retry_wait_s=3, what=f"{channel} live check",
+        )
+    except ToolError:
+        return False  # yt-dlp fails with "the channel is not currently live" when offline
+    return proc.stdout.strip().splitlines()[-1:] == ["True"]
+
+
+NO_RECORDING = (
+    "%s: LIVE, but Twitch is not recording this broadcast (the streamer has recordings switched off, "
+    "so there is nothing to cut clips from). This stream cannot be clipped; will check again"
+)
+
+
 class ChatReader(threading.Thread):
     """Reads one channel's chat live and appends it to <work>/chat.json as JSON lines."""
 
@@ -254,7 +274,10 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                     if w is None:
                         w = start_channel(name, cfg)
                         if w is None:
-                            log.info("%s: not live (or VODs are off); will check again", name)
+                            if channel_is_live(name, cfg):
+                                log.warning(NO_RECORDING, name)
+                            else:
+                                log.info("%s: not live; will check again", name)
                             continue
                         watched[name] = w
                     for moment in new_moments(w, cfg):

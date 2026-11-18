@@ -159,6 +159,7 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | A download fails | The connection dropped. Run the same command again; it continues where it stopped |
 | "not found on PATH" | Run the setup script again |
 | "less than 2 GB free" | Run `uv run clipper clean`, or delete old folders in `D:\clipper-data\work` |
+| "LIVE, but Twitch is not recording this broadcast" | The streamer has switched recordings (VODs) off for this stream. Clips are cut from the recording, so this stream cannot be clipped. Pick a channel whose Videos tab shows the current broadcast |
 | "no chat replay" | That video cannot be scored from chat. Use a live watch instead |
 | A clip is framed wrong | On the review page, change Layout and save; then run `finish` again |
 | Captions miss words | Normal on very noisy moments. The larger model is already the default |
