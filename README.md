@@ -4,7 +4,7 @@ Turn live streams into short vertical clips, with a person approving every one.
 
 Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, downloads only those few seconds, adds word-by-word captions, and shows you each draft on a local web page. You approve the good ones; it renders finished 9:16 videos and writes the title, description and hashtags to paste when you upload. It never posts anything itself.
 
-**New here? Read [GUIDE.md](GUIDE.md): install, daily use and troubleshooting in plain steps.**
+**New here? Read [GUIDE.md](GUIDE.md): install, daily use and troubleshooting in plain steps.** To check an install, work through [docs/testing-checklist.pdf](docs/testing-checklist.pdf).
 
 ## What it does
 
@@ -26,7 +26,7 @@ Everything in the core works with no paid service. Optional keys add nicer text 
 | Add-on | Key in `.env` | What it adds | Rough cost |
 |---|---|---|---|
 | Claude | `ANTHROPIC_API_KEY` | Writes hooks, titles, descriptions, narration; flags filler clips | about $0.01 per clip |
-| ElevenLabs | `ELEVENLABS_API_KEY` | More natural narrator voice (untested) | from $6 a month |
+| ElevenLabs | `ELEVENLABS_API_KEY` | More natural narrator voice (set `voice.backend: elevenlabs`) | from $6 a month |
 | Groq | `GROQ_API_KEY` | Faster speech-to-text on their servers (untested) | about $0.04 per audio hour |
 
 ## Quick start (Windows)
@@ -75,7 +75,7 @@ The code is plain Python and FFmpeg, so it should run on macOS and Linux, but th
 | `hardware [--refresh]` | Show which GPU or CPU paths are in use |
 | `clean [--dry-run]` | Delete the video files of rejected clips |
 | `find`, `fetch`, `transcribe`, `render`, `post` | The single stages of `run` and `finish` |
-| `check-brief FILE` | Validate a campaign brief file |
+| `check-brief BRIEF CLIP` | Check one clip's JSON against a campaign brief |
 
 Every setting lives in [config.yaml](config.yaml), with a comment on each line. Personal overrides go in `config.local.yaml`, keys in `.env`; neither is committed.
 
