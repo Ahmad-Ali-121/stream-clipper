@@ -1,0 +1,17 @@
+# Example campaign brief. Copy this file per campaign and fill it in from the
+# campaign's own page; never guess a rule. Run:
+#   uv run clipper check-brief briefs/example.yaml clip.json
+name: Example streamer campaign
+allowed_sources:
+  - twitch.tv/examplestreamer
+  - https://www.youtube.com/watch?v=XXXXXXXXXXX
+min_duration_s: 15
+max_duration_s: 60
+aspect: "9:16"
+required_tags: ["#ad"]
+required_text: []
+require_disclosure_overlay: true
+forbid_watermark: true
+manual_checks:
+  - link submitted to the campaign within 30 minutes of posting
+  - posted from the account connected inside the campaign platform

@@ -1,0 +1,21 @@
+# secrets and local overrides
+.env
+config.local.yaml
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+
+# big files never go in git: recordings, clips, models, caches
+data/
+*.ts
+*.mp4
+*.mkv
+*.wav
+models/
+
+# third-party guide (copyrighted, keep local only)
+chat-clip-finder-guide.pdf

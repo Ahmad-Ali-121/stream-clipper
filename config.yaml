@@ -1,0 +1,128 @@
+# Single config file for the whole pipeline.
+# Machine-specific overrides go in config.local.yaml (git-ignored, same keys).
+# Secrets (API keys) go in .env, never here.
+
+paths:
+  # Where recordings, work folders, models and caches live.
+  # On the RTX 3050 laptop set this to a folder on D: (e.g. D:/clipper-data)
+  # in config.local.yaml. Relative paths resolve against the project folder.
+  data_dir: data
+
+moments:
+  bucket_s: 10            # chat is counted in buckets this long
+  window_s: 300           # local baseline: 5 minutes around (VOD) or before (live) each bucket
+  mode: symmetric         # symmetric = VOD (uses chat before and after); trailing = live (past only)
+  count_mode: chatters    # chatters = unique authors per bucket (resists one-account spam); messages = raw count
+  min_activity: 5         # ignore buckets with fewer chatters/messages than this
+  min_score: 2.0          # ignore buckets less than this many times the local baseline
+  min_neighbors: 6        # buckets of baseline history needed before a bucket can score
+  gap_s: 90               # minimum distance between two picked moments
+  top: 5                  # how many moments to return
+  before_s: 20            # clip starts this long before the spike (chat lags the action)
+  after_s: 10             # clip ends this long after the spike bucket starts
+  hype_weight: 0.5        # score boost when the bucket's messages are all hype words (0 disables)
+  audio_weight: 0.5       # score boost for the loudest buckets, when audio scores are supplied (0 disables)
+  hype_spikes: true       # also score spikes in hype-word messages; needed when chat is so busy that volume is flat
+  hype_spike_min_ratio: 0.15   # share of a bucket's messages that must be hype words for that to count
+  skip_start_s: 120       # ignore the greeting flood in the first minutes of a stream
+  hype_words: [W, LOL, LMAO, LMFAO, OMG, WTF, NO WAY, CLIP, CLIP IT, HOLY, BRO, WHAT, KEKW, LUL, OMEGALUL, POG, POGGERS, "💀", "😭", "😂"]
+
+fetch:
+  pad_s: 5                # extra seconds fetched on each side of a moment; cuts slide up to this far to land on a pause
+  max_height: 1080
+  retries: 5              # the connection drops; a failed download is retried
+  retry_wait_s: 10
+  timeout_s: 1800
+
+transcribe:
+  backend: local          # local = faster-whisper on this machine (free); groq = paid API, needs GROQ_API_KEY in .env
+  model: large-v3-turbo   # most complete captions; about 45-65 s per 36-second clip on this CPU. "small" takes about 5 s but drops and mishears more
+  vad_filter: false       # the silence filter removed real speech under game audio, so it is off
+  min_word_prob: 0.35     # drop words the model itself is unsure of
+  compute_type: auto      # auto, or int8 / int8_float16 / float16
+  device: auto            # auto = NVIDIA GPU when usable, else CPU; or force cpu / cuda
+  language: en
+  groq_model: whisper-large-v3-turbo
+
+render:
+  width: 1080
+  height: 1920
+  fps: 30
+  layout: crop            # crop = centre 9:16 crop; split = facecam on top, gameplay below
+  crop_x: 0.5             # horizontal centre of the crop, 0 = left edge, 1 = right edge
+  facecam: [0.0, 0.0, 0.25, 0.25]   # facecam box in the source as fractions: x, y, width, height
+  split_top: 0.38         # share of the output height the facecam gets in split layout
+  encoder: auto           # auto = NVIDIA, Intel or AMD hardware encoder when one works, else libx264 (CPU)
+  preset: veryfast
+  crf: 20
+  audio_bitrate: 192k
+  loudness_lufs: -14
+  hook_seconds: 3
+  opening: true           # eye-catching first seconds: quick zoom-in, hook pops in, whoosh, progress bar
+  ab_versions: true       # finish makes two versions of each approved clip (A and B) with different hooks
+  hook_font_size: 76
+  credit_font_size: 40
+  disclosure_text: Ad
+  disclosure_seconds: 4
+  font_file: C:/Windows/Fonts/arialbd.ttf
+
+watch:
+  poll_s: 30              # how often live chat is re-scored
+  min_score: 2.5          # live clips are made automatically, so the bar is a little higher than for VODs
+  vod_delay_s: 60         # wait this long after a moment so Twitch's recording has it
+  live_check_s: 300       # how often to confirm the stream is still live
+  channels: []            # channels the options panel on the review page starts watching
+  mode: chat              # what finds moments: chat, audio (chat + audio), video (chat + video), all. The terminal asks unless --mode is given
+  audio_level: 5          # how unusual a loud moment must be to make a clip without chat (higher = fewer clips)
+  video_level: 6          # the same for fast action on screen
+  signal_gap_s: 300       # at most one audio-only or video-only clip in this many seconds
+  feed_delay_s: 8         # how far the low-quality feed runs behind the broadcast
+
+trends:
+  enabled: true
+  seeds: [gta6]           # hashtags always researched on YouTube, besides the streamer's own name
+  cache_hours: 6
+  max_tags: 6             # hashtags per post
+
+llm:                      # writes hooks, titles, descriptions and narration. Needs ANTHROPIC_API_KEY in .env
+  enabled: true
+  model: claude-opus-5-5  # claude-haiku-5-5 costs about 40 times less and is usually enough for this job
+  effort: low
+
+voice:                    # narration for the "explained" and "top moments" formats
+  backend: kokoro         # kokoro = free, runs on this machine; elevenlabs = paid, needs ELEVENLABS_API_KEY in .env
+  kokoro_voice: am_michael
+  speed: 1.05
+  elevenlabs_voice_id: JBFqnCBsd6RMkjVDRZzb
+  elevenlabs_model: eleven_turbo_v2_5
+
+# Per-streamer layout, keyed by lower-case channel name. Each streamer puts the
+# facecam somewhere different, so measure it once from a frame and record it here.
+channels:
+  lacy:
+    layout: split
+    facecam: [0.0, 0.0, 0.256, 0.256]   # measured on the GTA 6 gameplay layout with a grid, 2026-11-18
+  xqc:
+    layout: split
+    facecam: [0.0, 0.4996, 0.192, 0.272]   # measured with a grid, 2026-11-18 (left edge, lower half)
+  clix:
+    layout: split
+    facecam: [0.0, 0.0, 0.249, 0.249]     # measured with a grid, 2026-11-18
+
+captions:
+  play_res_x: 1080
+  play_res_y: 1920
+  font: Arial Black
+  font_size: 88
+  text_color: "FFFFFF"      # RRGGBB
+  active_color: "FFE600"    # the word being spoken
+  outline_color: "000000"
+  outline: 6
+  shadow: 2
+  active_scale: 112         # percent size of the active word
+  margin_v: 520             # distance of the caption from the bottom edge, in pixels
+  uppercase: true
+  max_words: 3              # words on screen at once
+  max_chars: 18
+  max_gap_s: 0.6            # a pause longer than this starts a new caption line
+  min_word_s: 0.12          # shortest time a word stays highlighted
