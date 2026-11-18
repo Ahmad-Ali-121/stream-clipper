@@ -8,7 +8,9 @@ param([string]$DataDir = "data")
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
-$FfmpegUrl = 'https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.2-essentials_build.zip'
+# Two addresses for the same FFmpeg build: the author's site, and his copy on GitHub for when the site is unreachable.
+$FfmpegUrl = 'https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.2-essentials_build.zip',
+             'https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip'
 $TdUrl     = 'https://github.com/lay295/TwitchDownloader/releases/download/1.56.5/TwitchDownloaderCLI-1.56.5-Windows-x64.zip'
 
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
@@ -26,16 +28,24 @@ if (-not (Test-Path config.local.yaml)) {
     Write-Host "Wrote config.local.yaml (data_dir = $DataDir)"
 }
 
-function Get-Tool($name, $url, $folder) {
+function Get-Tool($name, $urls, $folder) {
     if ((Get-Command $name -ErrorAction SilentlyContinue) -or (Get-ChildItem $tools -Recurse -Filter "$name.exe" -ErrorAction SilentlyContinue)) {
         Write-Host "  OK       $name"
         return
     }
     $zip = Join-Path $dl "$folder.zip"
     Write-Host "  Getting  $name ..."
-    # curl resumes (-C -) and retries, because the connection drops.
-    curl.exe -L -C - --retry 30 --retry-delay 5 --retry-all-errors -sS -o $zip $url
-    if ($LASTEXITCODE -ne 0) { throw "download of $name failed" }
+    # curl resumes (-C -) and retries, because the connection drops. If one address keeps failing, the next is tried.
+    $ok = $false
+    foreach ($url in @($urls)) {
+        curl.exe -f -L -C - --retry 8 --retry-delay 5 --retry-all-errors -sS -o $zip $url
+        if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+        Write-Host "  That address did not work ($(([uri]$url).Host)); trying another if there is one ..."
+        Remove-Item $zip -ErrorAction SilentlyContinue   # a partial file from one address must not be resumed from another
+    }
+    if (-not $ok) {
+        throw "download of $name failed. Check the internet connection (a firewall, antivirus or the provider may be blocking it) and run this script again."
+    }
     Expand-Archive -Path $zip -DestinationPath (Join-Path $tools $folder) -Force
     Write-Host "  OK       $name (installed under $tools)"
 }
