@@ -18,7 +18,20 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
+if ($args.Count -gt 0) {
+    throw "Did not understand '$($args -join ' ')'. If the data folder's name has a space in it, put it in quotes: -DataDir `"D:\my folder`""
+}
 $DataDir = [System.IO.Path]::GetFullPath($DataDir)
+# The program reads its data folder from config.local.yaml. Installing the tools anywhere else would leave it unable to find them.
+if (Test-Path config.local.yaml) {
+    $line = Get-Content config.local.yaml | Where-Object { $_ -match '^\s*data_dir\s*:\s*(.+?)\s*$' } | Select-Object -First 1
+    if ($line -and $line -match '^\s*data_dir\s*:\s*(.+?)\s*$') {
+        $existing = [System.IO.Path]::GetFullPath($Matches[1].Trim('"', "'"))
+        if ($existing.TrimEnd('\') -ne $DataDir.TrimEnd('\')) {
+            throw "config.local.yaml already says the data folder is $existing, but this run was given $DataDir. Run setup again with -DataDir `"$existing`", or delete config.local.yaml first to move to the new folder."
+        }
+    }
+}
 $tools = Join-Path $DataDir 'tools'
 $dl = Join-Path $DataDir 'downloads'
 New-Item -ItemType Directory -Force $tools, $dl | Out-Null
