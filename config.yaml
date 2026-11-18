@@ -77,6 +77,9 @@ watch:
   video_level: 6          # the same for fast action on screen
   signal_gap_s: 300       # at most one audio-only or video-only clip in this many seconds
   feed_delay_s: 8         # how far the low-quality feed runs behind the broadcast
+  buffer_when_no_vod: true  # when Twitch is not recording a stream (recordings switched off): keep the last minutes of the live feed
+                          # on disk and cut clips from that. Uses about 3 GB of internet an hour per such channel. false = skip such streams
+  buffer_minutes: 10      # how many minutes that rolling copy holds (about 60 MB a minute; older pieces are deleted)
 
 trends:
   enabled: true

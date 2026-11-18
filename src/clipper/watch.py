@@ -90,8 +90,8 @@ def channel_is_live(channel: str, cfg: Config) -> bool:
 
 
 NO_RECORDING = (
-    "%s: LIVE, but Twitch is not recording this broadcast (the streamer has recordings switched off, "
-    "so there is nothing to cut clips from). This stream cannot be clipped; will check again"
+    "%s: LIVE, but Twitch is not recording this broadcast and watch.buffer_when_no_vod is off in the settings, "
+    "so there is nothing to cut clips from; will check again"
 )
 
 
@@ -146,19 +146,45 @@ class ChatReader(threading.Thread):
 
 
 class Watched:
-    def __init__(self, channel: str, source: Source, meta: dict, work: Path, reader: ChatReader, watch_from: float, feed=None) -> None:
+    def __init__(self, channel: str, source: Source, meta: dict, work: Path, reader: ChatReader, watch_from: float, feed=None, buffer=None) -> None:
         self.channel, self.source, self.meta, self.work, self.reader, self.watch_from = channel, source, meta, work, reader, watch_from
         self.feed = feed  # SignalReader when audio or video is being analysed, else None
+        self.buffer = buffer  # LiveBuffer when Twitch is not recording this broadcast, else None
         self.last_live_check = time.time()
 
     def stop(self) -> None:
         self.reader.stop()
         if self.feed:
             self.feed.stop()
+        if self.buffer:
+            self.buffer.stop()
+            self.buffer.join(timeout=10)  # it empties its folder on the way out
+
+
+def find_unrecorded(channel: str, cfg: Config) -> tuple[Source, dict] | None:
+    """A live broadcast Twitch is not recording, as a source with its own work folder; None when offline."""
+    from .buffer import live_info
+
+    info = live_info(channel, cfg)
+    if not info:
+        return None
+    url = f"https://www.twitch.tv/{channel}"
+    source = Source("twitch", f"live{info['id']}", url)
+    meta = {
+        "url": url, "platform": "twitch", "video_id": source.video_id, "title": info["title"],
+        "channel": info["channel"], "channel_id": channel, "channel_url": url, "duration_s": None,
+        "is_live": True, "started_at": info["started_at"], "no_vod": True,
+    }
+    write_json(work_dir(cfg.data_dir, source) / "meta.json", meta)
+    return source, meta
 
 
 def start_channel(channel: str, cfg: Config) -> Watched | None:
     found = find_live_vod(channel, cfg)
+    unrecorded = False
+    if not found and cfg.watch.buffer_when_no_vod:
+        found = find_unrecorded(channel, cfg)
+        unrecorded = bool(found)
     if not found:
         return None
     source, meta = found
@@ -181,9 +207,21 @@ def start_channel(channel: str, cfg: Config) -> Watched | None:
     if audio or video:
         feed = SignalReader(channel, work / "signals.jsonl", start, cfg, audio, video)
         feed.start()
-    log.info("%s: live, %s in; watching %s from now (VOD %s)", channel, format_time(watch_from),
-             " + ".join(["chat"] + ["audio"] * audio + ["video"] * video), source.video_id)
-    return Watched(channel, source, meta, work, reader, watch_from, feed)
+    using = " + ".join(["chat"] + ["audio"] * audio + ["video"] * video)
+    buffer = None
+    if unrecorded:
+        from .buffer import LiveBuffer
+
+        buffer = LiveBuffer(channel, work / "buffer", start, cfg)
+        buffer.start()
+        log.warning(
+            "%s: live, %s in, but Twitch is not recording this broadcast. Keeping the last %g minutes of the live feed "
+            "to cut clips from (uses about 3 GB of internet an hour; moments during advert breaks are lost). Watching %s from now",
+            channel, format_time(watch_from), cfg.watch.buffer_minutes, using,
+        )
+    else:
+        log.info("%s: live, %s in; watching %s from now (VOD %s)", channel, format_time(watch_from), using, source.video_id)
+    return Watched(channel, source, meta, work, reader, watch_from, feed, buffer)
 
 
 def new_moments(w: Watched, cfg: Config) -> list[dict]:
@@ -222,7 +260,8 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
     if free_gb(cfg.data_dir) < 2.0:
         raise ToolError(f"less than 2 GB free on {cfg.data_dir.anchor}; delete old work folders")
     d = clip_dir(w.work, clip_id(moment["peak_s"]))
-    attempts = read_json(d / "clip.json", {}).get("attempts", 0) + 1
+    earlier = read_json(d / "clip.json", {})
+    attempts = earlier.get("attempts", 0) + 1
     state = {
         "attempts": attempts,  # a moment whose download keeps failing is given up after three tries
         "id": d.name, "rank": 0, "status": "candidate", "live": True,
@@ -235,9 +274,19 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
     }
     state["fetch_start_s"] = max(0.0, state["start_s"] - cfg.fetch.pad_s)
     state["fetch_end_s"] = state["end_s"] + cfg.fetch.pad_s
+    if earlier.get("from_live_buffer") and done(d / "source.mp4"):
+        # Cut from the live buffer on an earlier try: keep where that file really starts.
+        state.update(fetch_start_s=earlier["fetch_start_s"], from_live_buffer=True)
     write_json(d / "clip.json", state)
     t0 = time.monotonic()
-    fetch_range(w.source, state["fetch_start_s"], state["fetch_end_s"], d / "source.mp4", cfg)
+    if getattr(w, "buffer", None):
+        if not done(d / "source.mp4"):
+            # Whole pieces are joined, so the file starts a second or so before the asked start.
+            state["fetch_start_s"] = w.buffer.cut(state["fetch_start_s"], state["fetch_end_s"], d / "source.mp4")
+            state["from_live_buffer"] = True
+            write_json(d / "clip.json", state)
+    else:
+        fetch_range(w.source, state["fetch_start_s"], state["fetch_end_s"], d / "source.mp4", cfg)
     info = probe(d / "source.mp4", cfg)
     state.update({"source_width": info["width"], "source_height": info["height"], "source_duration_s": round(info["duration_s"], 2)})
     from .cuts import apply_snap
@@ -287,7 +336,7 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                         print(f"DRAFT {name} {d.name}  {s.get('trigger', 'chat')} {s['score']}  ready {s['ready_seconds_after_moment']}s after the moment  {d / 'final.mp4'}")
                     if time.time() - w.last_live_check > cfg.watch.live_check_s:
                         w.last_live_check = time.time()
-                        if not find_live_vod(name, cfg):
+                        if not (channel_is_live(name, cfg) if w.buffer else find_live_vod(name, cfg)):
                             log.info("%s: stream ended", name)
                             w.stop()
                             watched.pop(name, None)

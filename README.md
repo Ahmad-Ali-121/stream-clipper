@@ -10,7 +10,7 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 
 - **Finds moments from chat.** Counts chatters in 10-second slices and compares with the last five minutes. No AI, no key, almost no bandwidth.
 - **Optionally listens and looks too.** Modes B, C and D also measure loudness and on-screen motion from the stream's lowest-quality feed, to catch moments chat missed.
-- **Never downloads a whole stream.** Only the clip ranges are fetched, at full quality.
+- **Never downloads a whole stream.** Only the clip ranges are fetched, at full quality. For streams Twitch is not recording, a rolling copy of the last ten minutes of the live feed stands in for the recording.
 - **Works live or on finished streams.** `watch` follows several live Twitch channels at once; `run` processes a finished Twitch VOD (or a YouTube recording with chat replay).
 - **Frames the clip by itself.** Detects a full-screen camera or a small facecam over gameplay, and measures each streamer's facecam box from the picture.
 - **Captions.** Local Whisper speech-to-text, word-by-word highlighted captions burned in.
@@ -101,8 +101,8 @@ src/clipper/
   llm.py         text by Claude             trends.py    hashtags from YouTube
   tts.py         narration voice            compose.py   explained and top-N videos
   post.py        export and upload text     brief.py     campaign rule checks
-  hw.py          GPU / CPU choice
-tests/           96 unit tests (uv run pytest -q)
+  hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
+tests/           104 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about
@@ -110,6 +110,7 @@ tests/           96 unit tests (uv run pytest -q)
 - Chat spikes also happen for giveaways, greetings and raids. Expect filler among the drafts; that is what the review step is for.
 - The audio and video signals are new and their thresholds are not tuned on many streams.
 - Live YouTube streams are not supported yet.
+- A stream with recordings switched off costs about 3 GB of internet an hour to watch, and moments during advert breaks cannot be clipped.
 - The NVIDIA path is implemented but has not been run on NVIDIA hardware.
 - The first clip or two of a new streamer may be framed slightly off until the facecam box has been measured twice.
 

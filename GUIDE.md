@@ -159,7 +159,7 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | A download fails | The connection dropped. Run the same command again; it continues where it stopped |
 | "not found on PATH" | Run the setup script again |
 | "less than 2 GB free" | Run `uv run clipper clean`, or delete old folders in `D:\clipper-data\work` |
-| "LIVE, but Twitch is not recording this broadcast" | The streamer has switched recordings (VODs) off for this stream. Clips are cut from the recording, so this stream cannot be clipped. Pick a channel whose Videos tab shows the current broadcast |
+| "live ... but Twitch is not recording this broadcast" | Not an error. The streamer has recordings (VODs) switched off, so the watcher keeps the last 10 minutes of the live stream on disk and cuts clips from that. It uses about 3 GB of internet an hour for that channel, the first minute is lost to Twitch's opening advert, and moments during advert breaks are lost. To skip such streams instead, set `buffer_when_no_vod: false` under `watch:` in `config.yaml` |
 | "no chat replay" | That video cannot be scored from chat. Use a live watch instead |
 | A clip is framed wrong | On the review page, change Layout and save; then run `finish` again |
 | Captions miss words | Normal on very noisy moments. The larger model is already the default |

@@ -164,6 +164,8 @@ class WatchSettings:
     video_level: float = 6.0  # the same for fast action on screen
     signal_gap_s: float = 300.0  # at most one audio-only or video-only clip in this many seconds
     feed_delay_s: float = 8.0  # how far the low-quality feed runs behind the broadcast
+    buffer_when_no_vod: bool = True  # stream not being recorded by Twitch: keep a short rolling copy of the live feed to cut from
+    buffer_minutes: float = 10.0  # how much of the live feed that copy holds
 
 
 @dataclass
