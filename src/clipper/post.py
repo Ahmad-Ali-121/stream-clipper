@@ -56,6 +56,15 @@ def build_caption(state: dict, brief: Brief | None) -> tuple[str, str, list[str]
     return title, description, build_tags(state, brief)
 
 
+def campaign_check(state: dict, brief: Brief, width: int = 1080, height: int = 1920) -> list[dict]:
+    """What a campaign's rules say about a clip as it stands now, before any video is made."""
+    title, description, tags = build_caption(state, brief)
+    start, end = float(state.get("cut_start_s", state.get("start_s", 0))), float(state.get("cut_end_s", state.get("end_s", 0)))
+    clip = ClipInfo(source_url=state.get("source_url", ""), duration_s=round(end - start, 1), width=width, height=height,
+                    caption=f"{title}\n{description}\n{' '.join(tags)}", has_disclosure_overlay=bool(state.get("disclosure")))
+    return [{"level": i.level, "message": i.message} for i in check_clip(clip, brief)]
+
+
 def post_sheet(state: dict, video_name: str, brief: Brief | None) -> tuple[str, list]:
     title, description, tags = build_caption(state, brief)
     tag_line = " ".join(tags)
@@ -155,6 +164,7 @@ def export_clip(clip_dir: Path, ready_root: Path, brief: Brief | None = None, vi
     if not main:
         return video, ok
     write_text(clip_dir / "post.txt", sheet)
-    state.update({"exported": str(video), "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"), "brief": brief.name if brief else None, "brief_ok": ok if brief else None})
+    state.update({"exported": str(video), "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"), "brief": brief.name if brief else None, "brief_ok": ok if brief else None,
+                  "brief_issues": [{"level": i.level, "message": i.message} for i in issues] if brief else []})
     write_json(clip_dir / "clip.json", state)
     return video, ok

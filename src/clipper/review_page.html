@@ -87,6 +87,16 @@ pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid
 .clip.cur{outline:2px solid var(--accent);outline-offset:2px}
 .keys{color:var(--muted);font-size:12px;margin:-4px 0 12px}.keys kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--surface);font:inherit;font-size:11.5px}
 .capprev{margin-top:8px;padding:14px 8px;border-radius:9px;background:linear-gradient(135deg,#2b3550,#16324a);text-align:center;font-size:22px;line-height:1.2;letter-spacing:.3px}
+.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.tot{padding:12px 14px}.tot b{display:block;font-size:22px}.tot span{color:var(--muted);font-size:12.5px}
+.ttable{width:100%;border-collapse:collapse;font-size:13px}
+.ttable th{text-align:left;color:var(--muted);font-weight:600;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ttable td{padding:6px;border-bottom:1px solid var(--line);vertical-align:top}
+.ttable input,.ttable select{padding:5px 7px;font-size:13px;min-width:70px}
+.ttable td.num input{width:92px}.ttable td.link input{min-width:190px}
+.twrap{overflow-x:auto}
+.issues{margin:0 0 8px;padding:8px 10px;border-radius:9px;background:var(--surface2);font-size:13px}
+.issues ul{margin:4px 0 0;padding-left:18px}.issues li.fail{color:var(--bad)}
 .lerr{color:var(--bad);font-weight:600}.lwarn{color:var(--warn)}
 .switch{display:flex;gap:10px;align-items:flex-start;padding:7px 0;cursor:pointer}
 .switch input{flex:none;width:36px;height:20px;appearance:none;background:var(--line);border-radius:999px;position:relative;cursor:pointer;margin-top:1px;transition:.15s}
@@ -233,6 +243,9 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
         <p class="help">Turns every approved clip into finished 9:16 videos with their upload text. Nothing is posted.</p>
         <label class="switch"><input type="checkbox" id="o-ab" onchange="saveOpts()"><span><b>A and B versions</b>Two versions of each clip with different opening text and title, to test which does better.</span></label>
         <label class="switch"><input type="checkbox" id="o-opening" onchange="saveOpts()"><span><b>Eye-catching first seconds</b>Zoom-in, pop-in text, a whoosh and a progress bar.</span></label>
+        <label class="f" for="o-camp">Campaign (checks every clip against its rules)</label>
+        <select id="o-camp" onchange="saveOpts()"></select>
+        <p class="help" id="camp-rules" style="margin:6px 0 0"></p>
         <label class="f" for="o-cap">Caption style</label>
         <select id="o-cap" onchange="saveOpts()"></select>
         <div class="capprev" id="capprev" aria-hidden="true"></div>
@@ -246,6 +259,16 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
   </aside>
 
   <main>
+    <div class="tabs" style="max-width:320px"><button id="v-clips" class="on" onclick="view('clips')">Clips</button><button id="v-track" onclick="view('track')">Tracker</button></div>
+    <div id="view-track" hidden>
+      <div class="mainhead"><h2>What you posted, and what it earned</h2>
+        <div class="filters"><button class="chipbtn" id="b-views" onclick="refreshViews()">Refresh views</button><a class="chipbtn" href="/api/tracker.csv" style="text-decoration:none">Download as a spreadsheet</a></div></div>
+      <p class="keys">After you post a clip by hand, open that clip and use "Posted it? Log it". Views can be read automatically from public links; payouts and rejections you type in.</p>
+      <div class="totals" id="t-totals"></div>
+      <div class="card twrap"><table class="ttable"><thead><tr><th>Clip</th><th>Version</th><th>Campaign</th><th>Platform</th><th>Link</th><th>Status</th><th>Views</th><th>Paid ($)</th><th>Rejection reason or note</th><th></th></tr></thead><tbody id="t-rows"></tbody></table></div>
+      <div class="empty" id="t-empty" hidden><b>Nothing logged yet.</b>Make a clip's videos, post one by hand, then open the clip and use "Posted it? Log it".</div>
+    </div>
+    <div id="view-clips">
     <div class="mainhead">
       <h2><span class="step">2</span>Review the clips</h2>
       <div class="filters" id="filters"></div>
@@ -253,6 +276,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
     <p class="keys">Keys: <kbd>J</kbd> <kbd>K</kbd> next and previous clip · <kbd>Space</kbd> play or pause · <kbd>A</kbd> approve · <kbd>R</kbd> reject</p>
     <div class="clips" id="clips" data-filter="candidate"></div>
     <div class="empty" id="empty" hidden></div>
+    </div>
   </main>
 </div>
 <div id="toast"><span id="toasttext"></span><button class="x" title="Close" aria-label="Close" onclick="$('toast').style.display='none'">×</button></div>
@@ -292,6 +316,7 @@ function show(s){
     $('o-modes').innerHTML=Object.keys(s.modes).map(k=>{const m=MODES[k]||['?',k,s.modes[k]];
       return '<label class="mode" data-k="'+k+'"><input type="radio" name="o-mode" value="'+k+'" onchange="pickMode()"><b>'+m[0]+'</b><span>'+m[1]+'</span><em>'+m[2]+'</em></label>'}).join('');
     $('o-channels').value=s.channels; drawn=true;
+    $('o-camp').innerHTML='<option value="">No campaign</option>'+(s.campaigns||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+(c.problem?' (file has a problem)':'')+'</option>').join('');
     $('o-cap').innerHTML=Object.entries(s.caption_presets||{}).map(([k,p])=>'<option value="'+k+'">'+esc(p.label)+'</option>').join('');
     $('a-backend').innerHTML=Object.entries(s.ai.backends).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('');
     $('a-prefer').innerHTML=Object.entries(s.ai.ways||{}).map(([k,w])=>'<option value="'+k+'">'+esc(w.name)+'</option>').join('');
@@ -319,6 +344,9 @@ function show(s){
       cp.style.fontFamily='"'+p.font+'",Arial,sans-serif'; cp.style.fontWeight=900; cp.style.webkitTextStroke=Math.max(1,p.outline/4)+'px #000'; cp.style.paintOrder='stroke fill';
       cp.innerHTML='<span style="color:#'+p.text_color+'">'+t[0]+' </span><span style="color:#'+p.active_color+';font-size:112%">'+t[1]+'</span><span style="color:#'+p.text_color+'"> '+t[2]+'</span>'}
     else cp.textContent='Custom style from the settings file'}
+  if(document.activeElement!==$('o-camp'))$('o-camp').value=s.campaign||'';
+  const cc=(s.campaigns||[]).find(c=>c.id===s.campaign);
+  $('camp-rules').textContent=cc?(cc.problem?'This campaign file cannot be read: '+cc.problem:'Rules: '+(cc.rules||'none that can be checked automatically')+'. Rule files are in the briefs folder.'):'Pick a campaign to have its length, tag and label rules checked on every clip. Rule files are in the briefs folder.';
   const fp=s.finish_progress||{done:0,total:0,now:''}; $('f-bar').hidden=!s.finishing;
   $('f-bar').firstElementChild.style.width=(fp.total?Math.round(100*fp.done/fp.total):0)+'%';
   $('r-bar').hidden=!s.running; $('h-bar').hidden=!(s.health&&s.health.maint.running);
@@ -367,7 +395,7 @@ async function hAct(url,ask){if(ask&&!confirm(ask))return;act(url,{})}
 function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_prefer:val('a-prefer'),llm_fallback:$('a-fallback').checked,llm_model:val('a-model'),ai_model:val('a-stream')})}
 async function act2(url){if(await post(url))poll1()}
 async function poll1(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){}}
-function saveOpts(){const o={mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked};if(val('o-cap'))o.caption_preset=val('o-cap');act('/api/options',o)}
+function saveOpts(){const o={mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked};if(val('o-cap'))o.caption_preset=val('o-cap');o.campaign=val('o-camp');act('/api/options',o)}
 async function poll(){
   let s=null;
   try{const r=await fetch('/api/options');if(r.ok)s=await r.json();else setErr('The page could not read the program state: '+r.status+' '+await r.text())}
@@ -408,6 +436,8 @@ function cardHtml(c){
    +(c.ai_pick?'<div class="ai"><b>Why AI picked it:</b> '+esc(c.ai_pick)+'</div>':'')
    +(c.ai_judged&&c.copy_source==='plain'?'<div class="ai"><b>The opening text and titles below are placeholders,</b> because AI was not used: '+esc(c.copy_problem||'no reason recorded')+'. Type your own, or press "Write text with AI".</div>'
      :(c.ai_judged&&c.ai_reason?'<div class="ai">'+esc(c.ai_reason)+'</div>':''))
+   +(c.campaign?'<div class="issues"><b>'+esc(c.campaign)+':</b> '+((c.campaign_issues||[]).some(i=>i.level==='fail')?'<span style="color:var(--bad)">does not meet the rules yet</span>':'meets the rules that can be checked')
+      +((c.campaign_issues||[]).length?'<ul>'+c.campaign_issues.map(i=>'<li class="'+(i.level==='fail'?'fail':'')+'">'+(i.level==='fail'?'Fix: ':'Check by hand: ')+esc(i.message)+'</li>').join('')+'</ul>':'')+'</div>':'')
    +(c.error?'<div class="cliperr"><b>This clip has an error:</b> '+esc(c.error)+'<button class="x" title="Close this message" aria-label="Close this message" onclick="clearErr(\''+k+'\')">×</button></div>':'')
    +(c.notes?'<div class="ai"><b>Note:</b> '+esc(c.notes)+'</div>':'')
    +'<div class="said">'+(c.transcript?'“'+esc(c.transcript)+'”':'<span style="color:var(--muted)">No transcript yet.</span>')+'</div>'
@@ -432,6 +462,12 @@ function cardHtml(c){
    +'<div><label class="f">Framing</label><select name="layout">'+lay+'</select></div></div>'
    +'<p class="help" style="margin-top:6px">Can be set anywhere from '+esc(c.lo)+' to '+esc(c.hi)+' seconds. Framing now: '+esc(c.layout_reason||'not checked yet')+'.</p>'
    +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
+   +(c.exported?'<details class="sec"><summary>Posted it? Log it <small>keeps views, payouts and rejections in the Tracker</small></summary>'
+     +'<div class="three"><div><label class="f">Where</label><select name="t_platform"><option>YouTube Shorts</option><option>TikTok</option><option>Instagram Reels</option><option>Facebook Reels</option><option>Other</option></select></div>'
+     +'<div><label class="f">Version</label><select name="t_version"><option>A</option><option>B</option><option>Explained A</option><option>Explained B</option></select></div>'
+     +'<div><label class="f">Link to the post</label><input type="text" name="t_url" placeholder="https://..."></div></div>'
+     +'<label class="f">Campaign (leave empty if none)</label><input type="text" name="t_campaign" value="'+esc(c.campaign)+'">'
+     +'<div class="btns"><button class="btn" data-act="log" data-key="'+esc(k)+'">Add to the tracker</button></div></details>':'')
    +'<div class="acts"><button class="btn ok" onclick="save(\''+k+'\',{status:\'approved\'})">Approve</button>'
    +'<button class="btn bad" onclick="save(\''+k+'\',{status:\'rejected\'})">Reject</button>'
    +'<button class="btn" onclick="save(\''+k+'\')">Save changes</button>'
@@ -455,6 +491,8 @@ function drawFilters(clips){
 }
 function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
 let known=[];
+/* What a card was drawn from: when any of this changes, the card is drawn again. */
+function sig(c){return [c.mtime,c.status,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
 async function loadClips(){
   let clips;try{const r=await fetch('/api/clips');if(!r.ok)return;clips=await r.json()}catch(e){return}
   known=clips;
@@ -463,10 +501,10 @@ async function loadClips(){
   let prev=null;
   for(const c of clips){
     let el=$(domId(c.key));
-    if(!el){el=document.createElement('div');el.className='card clip';el.id=domId(c.key);el.dataset.status=c.status;el.dataset.m=c.mtime;el.innerHTML=cardHtml(c);
+    if(!el){el=document.createElement('div');el.className='card clip';el.id=domId(c.key);el.dataset.status=c.status;el.dataset.m=sig(c);el.innerHTML=cardHtml(c);
       el.addEventListener('input',()=>{el.dataset.dirty='1';const s=el.querySelector('.acts .saved');s.textContent='Unsaved changes';s.className='saved warn'});
       if(prev)prev.after(el);else box.prepend(el)}
-    else if(String(c.mtime)!==el.dataset.m&&!busy(el)){el.dataset.status=c.status;el.dataset.m=c.mtime;el.innerHTML=cardHtml(c)}
+    else if(sig(c)!==el.dataset.m&&!busy(el)){el.dataset.status=c.status;el.dataset.m=sig(c);el.innerHTML=cardHtml(c)}
     prev=el;
   }
   drawFilters(clips);
@@ -569,6 +607,53 @@ async function saveWords(key){
   el.dataset.dirty='';el.dataset.m='';if(document.activeElement)document.activeElement.blur();
   toast('Captions saved. The draft is made again when you press Make videos, or use "Make B preview".');loadClips();
 }
+
+/* ---------- tracker ---------- */
+function view(n){$('view-clips').hidden=n!=='clips';$('view-track').hidden=n!=='track';$('v-clips').className=n==='clips'?'on':'';$('v-track').className=n==='track'?'on':'';if(n==='track')loadTracker()}
+async function send(url,body){
+  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+    if(!r.ok)return {error:await r.text()}; return await r.json()}
+  catch(e){return {error:'The program is not answering: '+e}}
+}
+let trackerData=null;
+async function loadTracker(){
+  let d;try{const r=await fetch('/api/tracker');if(!r.ok){toast(await r.text(),true);return}d=await r.json()}catch(e){toast('The program is not answering: '+e,true);return}
+  trackerData=d; const t=d.totals, money=n=>'$'+Number(n||0).toFixed(2);
+  $('t-totals').innerHTML=[['Posts',t.posts],['Views',Number(t.views).toLocaleString()],['Paid',money(t.payout)],['Rejected',t.rejected]].map(x=>'<div class="card tot"><b>'+x[1]+'</b><span>'+x[0]+'</span></div>').join('')
+    +Object.entries(t.campaigns).filter(([n])=>n!=='(no campaign)').map(([n,c])=>'<div class="card tot"><b>'+money(c.payout)+'</b><span>'+esc(n)+': '+c.posts+' post(s), '+Number(c.views).toLocaleString()+' views'+(c.rejected?', '+c.rejected+' rejected':'')+'</span></div>').join('');
+  const sel=(list,v)=>list.map(o=>'<option'+(o===v?' selected':'')+'>'+esc(o)+'</option>').join('');
+  $('t-rows').innerHTML=d.rows.slice().reverse().map(r=>'<tr data-id="'+r.id+'"><td><b>'+esc(r.channel||'')+'</b><br><span style="color:var(--muted)">'+esc((r.clip||'').split('/').pop())+'<br>'+esc(r.posted_at||'')+'</span></td>'
+    +'<td><input data-f="version" value="'+esc(r.version)+'" style="width:86px"></td>'
+    +'<td><input data-f="campaign" value="'+esc(r.campaign)+'"></td>'
+    +'<td><select data-f="platform">'+sel(d.platforms,r.platform)+'</select></td>'
+    +'<td class="link"><input data-f="url" value="'+esc(r.url)+'" placeholder="https://...">'+(r.url?'<br><a href="'+esc(r.url)+'" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">open</a>':'')+'</td>'
+    +'<td><select data-f="status">'+sel(d.statuses,r.status)+'</select></td>'
+    +'<td class="num"><input data-f="views" type="number" min="0" value="'+(r.views??'')+'"></td>'
+    +'<td class="num"><input data-f="payout" type="number" min="0" step="0.01" value="'+(r.payout??'')+'"></td>'
+    +'<td><input data-f="reason" value="'+esc(r.reason||r.notes||'')+'" placeholder="why it was rejected, or a note"></td>'
+    +'<td><button class="btn quiet" data-act="trdel" title="Remove this line from the tracker">Remove</button></td></tr>').join('');
+  $('t-empty').hidden=d.rows.length>0;
+}
+document.addEventListener('change',async e=>{
+  const f=e.target.dataset&&e.target.dataset.f, tr=e.target.closest&&e.target.closest('#t-rows tr'); if(!f||!tr)return;
+  const r=await send('/api/tracker/update',{id:tr.dataset.id,changes:{[f]:e.target.value}});
+  if(r.error){toast('Not saved: '+r.error,true);loadTracker();return} toast('Saved'); loadTracker();
+});
+document.addEventListener('click',async e=>{
+  const b=e.target.closest&&e.target.closest('[data-act]'); if(!b)return;
+  if(b.dataset.act==='trdel'){if(!confirm('Remove this line from the tracker? The post itself is not touched.'))return;
+    const r=await send('/api/tracker/delete',{id:b.closest('tr').dataset.id}); if(r.error)toast(r.error,true); loadTracker(); return}
+  if(b.dataset.act==='log'){const key=b.dataset.key, el=$(domId(key)), c=known.find(x=>x.key===key)||{}, g=n=>el.querySelector('[name='+n+']').value;
+    const body={clip:key,channel:c.channel||'',title:c.title||'',platform:g('t_platform'),version:g('t_version'),url:g('t_url'),campaign:g('t_campaign')};
+    let r=await send('/api/tracker/add',body);
+    if(r.error&&/already logged/.test(r.error)){if(!confirm(r.error+String.fromCharCode(10,10)+'Log it anyway?'))return; r=await send('/api/tracker/add',Object.assign(body,{allow_duplicate:true}))}
+    if(r.error){toast('Not logged: '+r.error,true);return}
+    el.querySelector('[name=t_url]').value=''; toast('Logged. See it under Tracker.')}
+});
+async function refreshViews(){const b=$('b-views');b.disabled=true;b.textContent='Reading views…';
+  const r=await send('/api/tracker/refresh');b.disabled=false;b.textContent='Refresh views';
+  if(r.error){toast(r.error,true);return}
+  toast(r.updated+' view count(s) updated'+(r.problems.length?'. Could not read '+r.problems.length+': '+r.problems[0]:''),r.problems.length>0&&r.updated===0);loadTracker()}
 
 /* ---------- keyboard ---------- */
 let cur=null;

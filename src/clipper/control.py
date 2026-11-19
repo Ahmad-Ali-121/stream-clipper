@@ -56,6 +56,11 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if not isinstance(value, bool):
                 raise ValueError(f"{key} must be on or off")
             out.setdefault("render", {})[key] = value
+        elif key == "campaign":
+            value = str(value or "")
+            if value and not (PROJECT_ROOT / "briefs" / f"{value}.yaml").is_file():
+                raise ValueError(f"there is no campaign file briefs/{value}.yaml")
+            out.setdefault("render", {})["campaign"] = value
         elif key == "caption_preset":
             if value not in CAPTION_PRESETS:
                 raise ValueError(f"unknown caption style {value!r}")
@@ -89,6 +94,24 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             out.setdefault("watch", {})["channels"] = names
         else:
             raise ValueError(f"unknown option: {key}")
+    return out
+
+
+def campaigns() -> list[dict]:
+    """The campaign rule files in briefs/, each with a short plain summary of its rules; a broken file says why."""
+    from .brief import load_brief
+
+    out = []
+    for f in sorted((PROJECT_ROOT / "briefs").glob("*.yaml")):
+        try:
+            b = load_brief(f)
+            rules = [f"{b.min_duration_s:g} to {b.max_duration_s:g} s" if b.max_duration_s else (f"at least {b.min_duration_s:g} s" if b.min_duration_s else "")]
+            rules += [f"needs {' '.join(b.required_tags)}"] if b.required_tags else []
+            rules += ["on-screen ad label"] if b.require_disclosure_overlay else []
+            rules += [f"{len(b.manual_checks)} thing(s) to check by hand"] if b.manual_checks else []
+            out.append({"id": f.stem, "name": b.name, "rules": "; ".join(r for r in rules if r), "problem": ""})
+        except Exception as e:
+            out.append({"id": f.stem, "name": f.stem, "rules": "", "problem": str(e)})
     return out
 
 
@@ -131,6 +154,7 @@ class Control:
         return {
             "mode": parse_mode(cfg.watch.mode), "modes": MODE_TEXT, "channels": " ".join(cfg.watch.channels),
             "ab_versions": cfg.render.ab_versions, "opening": cfg.render.opening,
+            "campaign": cfg.render.campaign, "campaigns": campaigns(),
             "caption_preset": cfg.captions.preset,
             "caption_presets": {k: {"label": v[0], **v[1]} for k, v in CAPTION_PRESETS.items()},
             "finish_progress": self.finish_progress,
@@ -414,8 +438,11 @@ class Control:
             def progress(done: int, total: int, now: str) -> None:
                 self.finish_progress = {"done": done, "total": total, "now": now}
 
-            results = stage_finish(self.reload(), problems=problems, progress=progress)
-            self.finish_lines += [f"READY {video}" for video, _ok in results]
+            cfg = self.reload()
+            brief = str(PROJECT_ROOT / "briefs" / f"{cfg.render.campaign}.yaml") if cfg.render.campaign else None
+            results = stage_finish(cfg, brief_path=brief, problems=problems, progress=progress)
+            self.finish_lines += [f"READY {video}" if ok else f"NOT MADE to the campaign's rules: {video} (see its text file for what to fix)"
+                                  for video, ok in results]
             self.finish_lines += [f"NOT MADE {p}" for p in problems]
             self.finish_lines.append(f"{time.strftime('%H:%M:%S')} done: {len(results)} file(s) in {self.cfg.data_dir / 'ready'}")
         except Exception as e:  # shown on the page instead of killing the server

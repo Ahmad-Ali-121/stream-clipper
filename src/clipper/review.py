@@ -58,7 +58,7 @@ def page_html(title: str, has_panel: bool) -> str:
             .replace("__STAMP__", json.dumps(code_stamp())))
 
 
-def clip_view(d: Path, weights: dict | None = None) -> dict:
+def clip_view(d: Path, weights: dict | None = None, brief=None) -> dict:
     """What the page needs to draw one clip."""
     from . import scoring
 
@@ -73,7 +73,9 @@ def clip_view(d: Path, weights: dict | None = None) -> dict:
         key=f"{d.parent.parent.name}/{c['id']}",  # work folder / clip id: unique across streams
         status=c.get("status", "candidate"), video=video, points=scoring.combined(c, weights),
         videos=[n for n in ("final.mp4", "final_b.mp4", "explained.mp4", "explained_b.mp4", "source.mp4") if (d / n).exists()],
-        fetch_start_s=c.get("fetch_start_s", 0), has_words=(d / "words.json").exists(), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
+        fetch_start_s=c.get("fetch_start_s", 0), has_words=(d / "words.json").exists(),
+        exported_name=Path(c["exported"]).name if c.get("exported") else "",
+        campaign=brief.name if brief else "", campaign_issues=_campaign_issues(c, brief), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
         lo=c.get("fetch_start_s", c["start_s"]), hi=c.get("fetch_end_s", c["end_s"]),
         # Changes whenever the clip's data or its draft video changes, so the page knows to redraw it.
         mtime=int(max((d / n).stat().st_mtime for n in ("clip.json", video) if n) * 1000),
@@ -130,6 +132,31 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
         (d / name).unlink(missing_ok=True)
     write_json(path, state)
     return state
+
+
+def _campaign_issues(state: dict, brief) -> list[dict]:
+    if brief is None:
+        return []
+    from .post import campaign_check
+
+    try:
+        return campaign_check(state, brief)
+    except Exception as e:  # a clip the check cannot read still shows up, with the reason
+        return [{"level": "fail", "message": f"the campaign check could not run on this clip: {e}"}]
+
+
+def current_brief(cfg):
+    """The campaign chosen on the page, loaded; None when there is none or its file is broken (the page shows that)."""
+    if cfg is None or not cfg.render.campaign:
+        return None
+    from .brief import load_brief
+    from .config import PROJECT_ROOT
+
+    try:
+        return load_brief(PROJECT_ROOT / "briefs" / f"{cfg.render.campaign}.yaml")
+    except Exception as e:
+        log.warning("the chosen campaign %r could not be loaded: %s", cfg.render.campaign, e)
+        return None
 
 
 def wave_peaks(d: Path, cfg, bins: int = 480) -> dict:
@@ -267,13 +294,29 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 from . import scoring
 
                 weights = scoring.load_weights(cfg.data_dir) if cfg is not None else None
+                brief = current_brief(control.cfg if control else cfg)
                 views = []
                 for d in list_clips(list(by_name.values()), weights):
                     try:
-                        views.append(clip_view(d, weights))
+                        views.append(clip_view(d, weights, brief))
                     except Exception as e:  # one unreadable clip must not blank the whole page
                         log.error("clip %s could not be shown: %s", d, e, exc_info=True)
                 return self._send(200, json.dumps(views).encode("utf-8"), "application/json")
+            if self.path.split("?")[0] in ("/api/tracker", "/api/tracker.csv") and cfg is not None:
+                from . import tracker
+
+                rows = tracker.load(cfg.data_dir)
+                if self.path.startswith("/api/tracker.csv"):
+                    self.send_response(200)
+                    body = tracker.to_csv(rows).encode("utf-8-sig")
+                    self.send_header("Content-Type", "text/csv; charset=utf-8")
+                    self.send_header("Content-Disposition", 'attachment; filename="stream-clipper-tracker.csv"')
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                data = {"rows": rows, "totals": tracker.totals(rows), "platforms": tracker.PLATFORMS, "statuses": tracker.STATUSES}
+                return self._send(200, json.dumps(data).encode("utf-8"), "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(wave|words)", self.path.split("?")[0])
             if m and m.group(1) in by_name:
                 d = by_name[m.group(1)] / "clips" / m.group(2)
@@ -347,6 +390,25 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     return self._send(400, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(result).encode(), "application/json")
             refresh()
+            m = re.fullmatch(r"/api/tracker/(add|update|delete|refresh)", self.path)
+            if m and cfg is not None:
+                from . import tracker
+
+                try:
+                    body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
+                    if m.group(1) == "add":
+                        result = tracker.add(cfg.data_dir, body, allow_duplicate=bool(body.get("allow_duplicate")))
+                    elif m.group(1) == "update":
+                        result = tracker.update(cfg.data_dir, str(body.get("id")), body.get("changes") or {})
+                    elif m.group(1) == "delete":
+                        result = {"deleted": tracker.delete(cfg.data_dir, str(body.get("id")))}
+                    else:
+                        result = tracker.refresh_views(cfg.data_dir, cfg)
+                except KeyError as e:
+                    return self._send(404, str(e).encode(), "text/plain")
+                except (ValueError, TypeError) as e:
+                    return self._send(400, str(e).encode(), "text/plain")
+                return self._send(200, json.dumps(result).encode("utf-8"), "application/json")
             if self.path == "/api/clips/delete-rejected":
                 gone, mb = 0, 0.0
                 for d in list_clips(list(by_name.values())):

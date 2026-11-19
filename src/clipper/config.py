@@ -121,6 +121,7 @@ class RenderSettings:
     audio_bitrate: str = "192k"
     loudness_lufs: float = -14.0
     hook_seconds: float = 3.0  # how long the hook text stays on screen
+    campaign: str = ""  # name of a file in briefs/ (without .yaml): every clip is checked against that campaign's rules
     opening: bool = True  # eye-catching start: quick zoom-in, hook pops in, whoosh, progress bar
     ab_versions: bool = True  # finish makes two versions of each approved clip (A and B) with different hooks
     hook_font_size: int = 76

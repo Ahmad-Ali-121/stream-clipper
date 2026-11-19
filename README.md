@@ -105,9 +105,10 @@ src/clipper/
   tts.py         narration voice            compose.py   explained and top-N videos
   post.py        export and upload text     brief.py     campaign rule checks
   streamread.py  AI reads a whole stream's speech
-  health.py      setup check, repair, update
+  health.py      setup check, repair, update   scoring.py   one score per clip, learning
+  tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           136 unit tests (uv run pytest -q)
+tests/           140 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

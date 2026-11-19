@@ -82,7 +82,9 @@ On each clip you can also:
 - **Compare versions:** the small buttons under the video switch between A, B and the raw download.
 - **Use the keyboard:** J and K move between clips, Space plays, A approves, R rejects.
 
-The caption look (four styles) is chosen in *Make the videos*.
+The caption look (four styles) is chosen in *Make the videos*. So is the **campaign**: pick one and every clip shows whether it meets that campaign's rules, and what to fix. Campaign rule files live in the `briefs` folder; copy `example.yaml` and fill it in from the campaign's own page.
+
+**Tracker.** After you post a clip by hand, open the clip, use *Posted it? Log it*, and paste the link. The **Tracker** tab (above the clip list) then keeps your posts, views, payouts and rejections together, adds them up per campaign, and warns you before the same clip goes to the same campaign twice.
 
 **Delete** on a clip removes it and its files for good; in the Rejected list, **Delete all rejected** clears them all. Videos you already made stay in the ready folder. Red messages can be closed with the × in their corner.
 
