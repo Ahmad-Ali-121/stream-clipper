@@ -330,6 +330,10 @@ def save_words(d: Path, words: list) -> int:
     return len(clean)
 
 
+class ClipInUse(ValueError):
+    """A clip's file is open in another program, so it cannot be deleted yet."""
+
+
 def delete_clip(d: Path) -> float:
     """Delete a clip: every file in its folder goes, megabytes freed are returned.
 
@@ -341,8 +345,14 @@ def delete_clip(d: Path) -> float:
     freed = 0
     for f in d.iterdir():
         if f.is_file() and f.name != "clip.json":
-            freed += f.stat().st_size
-            f.unlink()
+            size = f.stat().st_size
+            try:
+                f.unlink()
+            except PermissionError:
+                # Windows refuses to delete a file that is open: a job is still working on this clip, or its video is playing.
+                raise ClipInUse(f"this clip cannot be deleted right now: its file {f.name} is in use. A job is still working on it "
+                                "(press Stop in step 1, or wait for it to end), or its video is playing. Then delete it again.") from None
+            freed += size
     state["status"] = "deleted"
     state.pop("error", None)
     write_json(path, state)
@@ -595,13 +605,19 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 log.info("deleted the downloaded part %s/%s, %.0f MB freed", m.group(1), m.group(2), mb)
                 return self._send(200, json.dumps({"deleted": 1, "mb": round(mb)}).encode(), "application/json")
             if self.path == "/api/clips/delete-rejected":
-                gone, mb = 0, 0.0
+                gone, mb, busy = 0, 0.0, 0
                 for d in list_clips(list(by_name.values())):
                     if read_json(d / "clip.json", {}).get("status") == "rejected":
-                        mb += delete_clip(d)
-                        gone += 1
+                        try:
+                            mb += delete_clip(d)
+                            gone += 1
+                        except ClipInUse as e:
+                            busy += 1
+                            log.warning("clip %s: %s", d.name, e)
                 log.info("deleted %d rejected clip(s), %.0f MB freed", gone, mb)
-                return self._send(200, json.dumps({"deleted": gone, "mb": round(mb)}).encode(), "application/json")
+                if busy and not gone:
+                    return self._send(400, f"{busy} rejected clip(s) are in use right now and could not be deleted; stop the running job or wait, then try again".encode(), "text/plain")
+                return self._send(200, json.dumps({"deleted": gone, "mb": round(mb), "busy": busy}).encode(), "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(words|render-b)", self.path)
             if m and m.group(1) in by_name and cfg is not None:
                 d = by_name[m.group(1)] / "clips" / m.group(2)
@@ -659,7 +675,11 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 if not (d / "clip.json").exists():
                     return self._send(404, b"no such clip", "text/plain")
                 if m.group(3) == "delete":
-                    mb = delete_clip(d)
+                    try:
+                        mb = delete_clip(d)
+                    except ClipInUse as e:
+                        log.warning("clip %s/%s: %s", m.group(1), m.group(2), e)
+                        return self._send(400, str(e).encode(), "text/plain")
                     log.info("deleted clip %s/%s, %.0f MB freed", m.group(1), m.group(2), mb)
                     return self._send(200, json.dumps({"deleted": 1, "mb": round(mb)}).encode(), "application/json")
                 state = read_json(d / "clip.json")

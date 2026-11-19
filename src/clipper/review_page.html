@@ -726,7 +726,7 @@ async function delClip(key){
 async function delRejected(n){
   if(!confirm('Delete all '+n+' rejected clip'+(n>1?'s':'')+' for good?'+NL+NL+'Their drafts and downloaded videos are removed and cannot be brought back.'))return;
   const r=await post('/api/clips/delete-rejected'); if(!r)return;
-  toast(r.deleted+' clip'+(r.deleted===1?'':'s')+' deleted ('+r.mb+' MB freed)'); loadClips();
+  toast(r.deleted+' clip'+(r.deleted===1?'':'s')+' deleted ('+r.mb+' MB freed)'+(r.busy?'. '+r.busy+' could not be deleted because a job is still using them; try again when it has ended.':''),r.busy>0); loadClips();
 }
 async function clearErr(key){if(await post('/api/clip/'+key+'/clear-error')){const el=$(domId(key));el.dataset.m='';loadClips()}}
 function showVid(key,name,btn){const el=$(domId(key)),v=el.querySelector('.vid video');const c=known.find(x=>x.key===key)||{};

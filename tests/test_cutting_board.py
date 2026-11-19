@@ -122,3 +122,28 @@ def test_downloaded_parts_are_listed_for_the_cutting_board(tmp_path):
     (c / "clip.json").write_text(json.dumps({"id": "0h05m10s", "range_id": d.name}), encoding="utf-8")
     (r,) = list_ranges(cfg)
     assert r["key"] == "youtube_abc/0h05m10s-0h06m40s" and r["duration_s"] == 90 and r["clips"] == 1
+
+
+def test_a_clip_whose_file_is_in_use_says_so_instead_of_crashing(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from clipper.review import ClipInUse, delete_clip
+
+    d = tmp_path / "clips" / "0h00m10s"
+    d.mkdir(parents=True)
+    (d / "clip.json").write_text(json.dumps({"id": "0h00m10s", "status": "candidate"}), encoding="utf-8")
+    (d / "source.mp4").write_bytes(b"x")
+    real = Path.unlink
+
+    def locked(self, *a, **k):
+        if self.name == "source.mp4":
+            raise PermissionError(32, "in use")
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(Path, "unlink", locked)
+    with pytest.raises(ClipInUse, match="in use"):
+        delete_clip(d)
+    assert json.loads((d / "clip.json").read_text(encoding="utf-8"))["status"] == "candidate"  # not half deleted
+    monkeypatch.setattr(Path, "unlink", real)
+    delete_clip(d)
+    assert json.loads((d / "clip.json").read_text(encoding="utf-8"))["status"] == "deleted" and not (d / "source.mp4").exists()
