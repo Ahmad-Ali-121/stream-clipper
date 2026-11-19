@@ -325,3 +325,56 @@ def test_options_panel_validates_and_saves_to_the_local_file(tmp_path):
     save_local({"render": {"opening": False}, "watch": {"channels": ["lacy"]}}, folder=tmp_path)
     assert _yaml.safe_load((tmp_path / "config.local.yaml").read_text(encoding="utf-8")) == {
         "paths": {"data_dir": "D:/clipper-data"}, "watch": {"mode": "audio", "channels": ["lacy"]}, "render": {"opening": False}}
+
+
+def _clip(tmp_path, **extra):
+    from clipper.work import write_json
+
+    d = tmp_path / "twitch_1" / "clips" / "0h01m00s"
+    d.mkdir(parents=True)
+    write_json(d / "clip.json", {"id": "0h01m00s", "status": "candidate", "start_s": 40, "end_s": 70, "fetch_start_s": 35, "fetch_end_s": 75,
+                                 "channel": "Someone", "score": 3.2, "tags": ["#a"], "copy_auto": ["title", "tags", "hook"], **extra})
+    return d
+
+
+def test_page_can_edit_upload_text_and_keeps_it_from_the_automatic_writer(tmp_path):
+    from clipper.review import apply_edit
+
+    d = _clip(tmp_path)
+    state = apply_edit(d.parent.parent, "0h01m00s", {"title": "My title", "tags": "one #two, three"})
+    assert state["title"] == "My title" and state["tags"] == ["#one", "#two", "#three"]
+    assert state["copy_auto"] == ["hook"]  # typed fields are no longer the writer's to replace
+
+
+def test_clip_view_has_what_the_page_draws(tmp_path):
+    from clipper.review import clip_view
+
+    d = _clip(tmp_path, error="12:00:00 draft failed: example")
+    v = clip_view(d)
+    assert v["key"] == "twitch_1/0h01m00s" and v["status"] == "candidate" and v["video"] == ""
+    assert (v["lo"], v["hi"]) == (35, 75) and v["error"].endswith("example") and v["mtime"] > 0
+    (d / "source.mp4").write_bytes(b"x")
+    assert clip_view(d)["video"] == "source.mp4"
+
+
+def test_page_file_fills_in_title_safely():
+    from clipper.review import page_html
+
+    page = page_html('A </script> "title"', True)
+    assert "__TITLE__" not in page and "__HAS_PANEL__" not in page
+    assert '</script> "title"' not in page  # the title cannot close the script block
+
+
+def test_finished_stream_button_refuses_what_is_not_a_video_link(tmp_path):
+    import pytest
+
+    from clipper.config import load_config
+    from clipper.control import Control
+
+    cfg = load_config()
+    cfg.paths.data_dir = str(tmp_path)
+    c = Control(cfg)
+    with pytest.raises(ValueError):
+        c.start_run({"url": "https://www.twitch.tv/somechannel"})
+    with pytest.raises(ValueError):
+        c.start_run({"url": "https://www.twitch.tv/videos/1234567890", "top": 99})

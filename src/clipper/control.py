@@ -67,6 +67,11 @@ class Control:
         self.finish_lines: list[str] = []
         self.finishing = False
         self.watch_problem = ""  # why the watcher is not running although nobody stopped it
+        self.run_proc: subprocess.Popen | None = None  # "analyse a finished stream", the same as `clipper run URL`
+        self.run_log_path = cfg.data_dir / "run.log"
+        self.run_problem = ""
+        self.watch_seen = False
+        self.run_seen = False  # a run was started from this page, so its log is worth showing
         self._lock = threading.Lock()
 
     def reload(self) -> Config:
@@ -79,13 +84,14 @@ class Control:
         cfg = self.cfg
         self._notice_death()
         tail: list[str] = []
-        if self.log_path.exists():
+        if self.watch_seen and self.log_path.exists():  # a log left by an earlier session is not this session's news
             tail = self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-200:]
         return {
             "mode": parse_mode(cfg.watch.mode), "modes": MODE_TEXT, "channels": " ".join(cfg.watch.channels),
             "ab_versions": cfg.render.ab_versions, "opening": cfg.render.opening,
             "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
             "finishing": self.finishing, "finish_log": self.finish_lines[-200:],
+            "running": self.running(), "run_log": self._run_tail(), "run_problem": self.run_problem,
         }
 
     def save(self, raw: dict) -> dict:
@@ -122,7 +128,7 @@ class Control:
         with self._lock:
             if self.watching():
                 raise ValueError("already watching; stop it first")
-            self.watch_problem = ""
+            self.watch_problem, self.watch_seen = "", True
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             out = self.log_path.open("w", encoding="utf-8")
             out.write(f"{time.strftime('%H:%M:%S')} starting: {' '.join(names)} ({cfg.watch.mode})\n")
@@ -148,6 +154,60 @@ class Control:
                     self.proc.kill()
                 self.proc = None  # stopped on purpose: not a death to report
                 with self.log_path.open("a", encoding="utf-8") as fh:
+                    fh.write(f"{time.strftime('%H:%M:%S')} stopped\n")
+        return self.status()
+
+    # ---- a finished stream ----
+
+    def running(self) -> bool:
+        return self.run_proc is not None and self.run_proc.poll() is None
+
+    def _run_tail(self) -> list[str]:
+        if not self.run_seen or not self.run_log_path.exists():
+            return []
+        with self._lock:
+            if self.run_proc is not None and self.run_proc.poll() is not None:
+                code, self.run_proc = self.run_proc.returncode, None
+                if code != 0:
+                    from .hw import describe_exit
+
+                    self.run_problem = f"ANALYSING THE FINISHED STREAM FAILED at {time.strftime('%H:%M:%S')}: {describe_exit(code)}. The lines above it say why."
+                    with self.run_log_path.open("a", encoding="utf-8") as fh:
+                        fh.write(self.run_problem + "\n")
+                    log.error(self.run_problem)
+        return self.run_log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-200:]
+
+    def start_run(self, raw: dict) -> dict:
+        from .sources import parse_source
+
+        source = parse_source(str(raw.get("url") or ""))  # a clear ValueError for anything that is not a video link
+        top = int(raw.get("top") or 8)
+        if not 1 <= top <= 30:
+            raise ValueError("the number of clips must be between 1 and 30")
+        with self._lock:
+            if self.running():
+                raise ValueError("a finished stream is already being analysed; wait for it to end")
+            self.run_problem, self.run_seen = "", True
+            self.run_log_path.parent.mkdir(parents=True, exist_ok=True)
+            out = self.run_log_path.open("w", encoding="utf-8")
+            out.write(f"{time.strftime('%H:%M:%S')} analysing {source.url}: the best {top} moments\n")
+            out.flush()
+            self.run_proc = subprocess.Popen(
+                [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())",
+                 "run", source.url, "--top", str(top)],
+                stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(PROJECT_ROOT),
+            )
+        return self.status()
+
+    def stop_run(self) -> dict:
+        with self._lock:
+            if self.running():
+                if sys.platform == "win32":
+                    subprocess.run(["taskkill", "/PID", str(self.run_proc.pid), "/T", "/F"], capture_output=True)
+                else:
+                    self.run_proc.terminate()
+                self.run_proc = None  # stopped on purpose: not a failure to report
+                with self.run_log_path.open("a", encoding="utf-8") as fh:
                     fh.write(f"{time.strftime('%H:%M:%S')} stopped\n")
         return self.status()
 

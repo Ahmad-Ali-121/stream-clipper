@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stream Clipper</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --bg:#0e1014;--surface:#161a21;--surface2:#1d222b;--line:#2a303b;--text:#e9ecf1;--muted:#98a1b0;
+  --accent:#8b7cf6;--accent-ink:#fff;--ok:#2fae68;--ok-soft:#173526;--bad:#e5534b;--bad-soft:#3b1c1a;--warn:#e0a93b;--warn-soft:#3a2f14;
+  --field:#0e1014;--shadow:0 1px 2px rgba(0,0,0,.35);
+}
+@media (prefers-color-scheme: light){:root{
+  --bg:#f3f4f7;--surface:#fff;--surface2:#f0f1f5;--line:#d9dce3;--text:#161a21;--muted:#5d6675;
+  --accent:#5b4be0;--ok:#1f8f52;--ok-soft:#dcf3e6;--bad:#c93a32;--bad-soft:#fbe2e0;--warn:#9a6b00;--warn-soft:#fbefcf;
+  --field:#fff;--shadow:0 1px 2px rgba(20,24,33,.08);
+}}
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+h1,h2,h3,p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{font-size:17px;font-weight:700;letter-spacing:.2px}
+.brand small{display:block;font-size:12px;font-weight:400;color:var(--muted)}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);font-size:12.5px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.live .dot{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.pill.busy .dot{background:var(--warn)}
+#errbox{display:none;margin:14px 20px 0;padding:11px 14px;border-radius:10px;background:var(--bad-soft);border:1px solid var(--bad);white-space:pre-wrap;font-size:13px}
+.layout{display:grid;grid-template-columns:372px minmax(0,1fr);gap:20px;padding:20px;align-items:start;max-width:1500px;margin:0 auto}
+.side{position:sticky;top:72px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 88px);overflow:auto;padding-right:2px}
+@media (max-width:980px){.layout{grid-template-columns:1fr;padding:14px}.side{position:static;max-height:none}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.card>header{display:flex;align-items:center;gap:10px;padding:13px 16px 0}
+.step{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:13px;display:grid;place-items:center}
+.card h2{font-size:15px}
+.card .body{padding:10px 16px 16px}
+.help{color:var(--muted);font-size:12.5px;margin:2px 0 10px}
+.tabs{display:flex;gap:4px;padding:3px;background:var(--surface2);border-radius:10px;margin-bottom:12px}
+.tabs button{flex:1;border:0;background:none;padding:7px 8px;border-radius:8px;cursor:pointer;font-weight:600;color:var(--muted)}
+.tabs button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+label.f{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px}
+input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;background:var(--field);border:1px solid var(--line);border-radius:8px}
+textarea{resize:vertical;min-height:64px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.modes{display:grid;gap:6px;margin-top:4px}
+.mode{display:grid;grid-template-columns:26px 1fr;gap:2px 8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--field)}
+.mode input{position:absolute;opacity:0}
+.mode b{grid-row:span 2;width:24px;height:24px;border-radius:7px;background:var(--surface2);display:grid;place-items:center;font-size:12.5px}
+.mode span{font-weight:600;font-size:13.5px}.mode em{font-style:normal;color:var(--muted);font-size:12px}
+.mode.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}.mode.on b{background:var(--accent);color:var(--accent-ink)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:9px;border:1px solid transparent;font-weight:600;cursor:pointer;background:var(--surface2);border-color:var(--line)}
+.btn:hover{filter:brightness(1.08)}.btn:disabled{opacity:.5;cursor:default;filter:none}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.btn.ok{background:var(--ok);color:#fff;border-color:transparent}
+.btn.bad{background:none;color:var(--bad);border-color:var(--bad)}
+.btn.wide{width:100%}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.note{margin-top:10px;padding:8px 10px;border-radius:9px;background:var(--surface2);font-size:12.5px;color:var(--muted)}
+.note b{color:var(--text)}
+details.log{margin-top:10px}details.log summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid var(--line);border-radius:8px;font:11.5px/1.45 Consolas,monospace;max-height:230px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.lerr{color:var(--bad);font-weight:600}.lwarn{color:var(--warn)}
+.switch{display:flex;gap:10px;align-items:flex-start;padding:7px 0;cursor:pointer}
+.switch input{flex:none;width:36px;height:20px;appearance:none;background:var(--line);border-radius:999px;position:relative;cursor:pointer;margin-top:1px;transition:.15s}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s}
+.switch input:checked{background:var(--accent)}.switch input:checked::after{left:18px}
+.switch span b{display:block;font-weight:600}.switch span{font-size:12.5px;color:var(--muted)}.switch span b{color:var(--text);font-size:13.5px}
+.ready{list-style:none;margin:8px 0 0;padding:0;font-size:12.5px}.ready li{padding:3px 0;word-break:break-all}.ready li::before{content:"✓ ";color:var(--ok);font-weight:700}
+.ready li.nm::before{content:"✕ ";color:var(--bad)}
+.mainhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.mainhead h2{font-size:17px;display:flex;align-items:center;gap:10px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.chipbtn{border:1px solid var(--line);background:var(--surface);padding:5px 12px;border-radius:999px;cursor:pointer;font-weight:600;color:var(--muted)}
+.chipbtn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chipbtn i{font-style:normal;opacity:.8;margin-left:4px}
+.clips{display:flex;flex-direction:column;gap:16px}
+.clip{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;padding:16px;border-left:4px solid var(--line)}
+.clip[data-status=approved]{border-left-color:var(--ok)}.clip[data-status=rejected]{border-left-color:var(--bad);opacity:.6}
+@media (max-width:680px){.clip{grid-template-columns:1fr}}
+.clips[data-filter=candidate] .clip:not([data-status=candidate]),.clips[data-filter=approved] .clip:not([data-status=approved]),.clips[data-filter=rejected] .clip:not([data-status=rejected]){display:none}
+.vid video{width:100%;aspect-ratio:9/16;background:#000;border-radius:10px;display:block}
+.vid .none{aspect-ratio:9/16;border-radius:10px;border:1px dashed var(--line);display:grid;place-items:center;text-align:center;color:var(--muted);padding:16px;font-size:13px}
+.vid small{display:block;margin-top:6px;color:var(--muted);font-size:12px;text-align:center}
+.chead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.chead h3{font-size:16px}.chead .when{color:var(--muted);font-size:13px}
+.badge{margin-left:auto;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;background:var(--surface2);border:1px solid var(--line)}
+.clip[data-status=approved] .badge{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.clip[data-status=rejected] .badge{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.chip{padding:2px 9px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);font-size:12px;color:var(--muted)}
+.chip.good{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}.chip.meh{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.ai{font-size:13px;color:var(--muted);margin-bottom:8px}
+.cliperr{background:var(--bad-soft);border:1px solid var(--bad);padding:8px 10px;border-radius:9px;font-size:13px;margin-bottom:10px;white-space:pre-wrap}
+.said{border-left:3px solid var(--line);padding:2px 0 2px 12px;margin:4px 0 6px;color:var(--text);font-size:13.5px;max-height:5.9em;overflow:hidden}
+.said.open{max-height:none}
+.more{background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-size:12.5px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.three{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:10px}
+@media (max-width:680px){.two,.three{grid-template-columns:1fr}}
+details.sec{border-top:1px solid var(--line);margin-top:12px;padding-top:8px}
+details.sec>summary{cursor:pointer;font-weight:600;font-size:13.5px;list-style:none;display:flex;align-items:center;gap:8px}
+details.sec>summary::before{content:"▸";color:var(--muted);transition:.15s}details.sec[open]>summary::before{transform:rotate(90deg)}
+details.sec>summary small{font-weight:400;color:var(--muted)}
+.check{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13.5px;cursor:pointer}
+.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.saved{font-size:12.5px;color:var(--muted)}.saved.warn{color:var(--warn)}
+.empty{padding:40px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+.empty b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(640px,92vw);padding:10px 16px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.35);display:none;z-index:9;white-space:pre-wrap}
+#toast.err{border-color:var(--bad);background:var(--bad-soft)}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand">Stream Clipper<small id="scope"></small></div>
+  <div class="pills">
+    <span class="pill" id="p-watch"><span class="dot"></span><span>Not watching</span></span>
+    <span class="pill" id="p-count">0 to review</span>
+  </div>
+</div>
+<div id="errbox"></div>
+
+<div class="layout">
+  <aside class="side" id="side">
+    <section class="card">
+      <header><span class="step">1</span><h2>Find moments</h2></header>
+      <div class="body">
+        <div class="tabs"><button id="t-live" class="on" onclick="tab('live')">Live streams</button><button id="t-vod" onclick="tab('vod')">Finished stream</button></div>
+        <div id="tab-live">
+          <p class="help">Watches the streams while they are live and makes a draft clip each time something happens.</p>
+          <label class="f" for="o-channels">Twitch channels (names, separated by spaces)</label>
+          <input type="text" id="o-channels" placeholder="lacy xqc clix">
+          <label class="f">What should find the moments?</label>
+          <div class="modes" id="o-modes"></div>
+          <div class="btns"><button class="btn primary" id="b-start" onclick="startWatch()">Start watching</button><button class="btn bad" id="b-stop" onclick="act('/api/watch/stop',{})">Stop</button></div>
+          <div class="note" id="w-note">Not watching.</div>
+          <details class="log"><summary>Activity log</summary><pre class="log" id="wlog"></pre></details>
+        </div>
+        <div id="tab-vod" hidden>
+          <p class="help">Paste the link of a stream that has ended. Its chat replay is scored, and only the best moments are downloaded and turned into drafts.</p>
+          <label class="f" for="r-url">Twitch video link</label>
+          <input type="text" id="r-url" placeholder="https://www.twitch.tv/videos/1234567890">
+          <label class="f" for="r-top">How many clips</label>
+          <select id="r-top"><option>5</option><option selected>8</option><option>12</option><option>20</option></select>
+          <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top')})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="act('/api/run/stop',{})">Stop</button></div>
+          <div class="note" id="r-note">Nothing running.</div>
+          <details class="log"><summary>Activity log</summary><pre class="log" id="rlog"></pre></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <header><span class="step">3</span><h2>Make the videos</h2></header>
+      <div class="body">
+        <p class="help">Turns every approved clip into finished 9:16 videos with their upload text. Nothing is posted.</p>
+        <label class="switch"><input type="checkbox" id="o-ab" onchange="saveOpts()"><span><b>A and B versions</b>Two versions of each clip with different opening text and title, to test which does better.</span></label>
+        <label class="switch"><input type="checkbox" id="o-opening" onchange="saveOpts()"><span><b>Eye-catching first seconds</b>Zoom-in, pop-in text, a whoosh and a progress bar.</span></label>
+        <div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button></div>
+        <div class="note" id="f-note">Nothing made yet in this session.</div>
+        <ul class="ready" id="f-ready"></ul>
+        <details class="log"><summary>Activity log</summary><pre class="log" id="flog"></pre></details>
+      </div>
+    </section>
+  </aside>
+
+  <main>
+    <div class="mainhead">
+      <h2><span class="step">2</span>Review the clips</h2>
+      <div class="filters" id="filters"></div>
+    </div>
+    <div class="clips" id="clips" data-filter="candidate"></div>
+    <div class="empty" id="empty" hidden></div>
+  </main>
+</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id), val=id=>$(id).value;
+const NL=String.fromCharCode(10);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clock=s=>{s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0')};
+const HAS_PANEL=__HAS_PANEL__;
+const MODES={chat:['A','Chat only','Clips when chat suddenly erupts. Uses almost no internet.'],
+  audio:['B','Chat + sound','Also catches loud moments chat missed. About 70 MB an hour per channel.'],
+  video:['C','Chat + picture','Also catches fast action on screen. About 100 MB an hour per channel.'],
+  all:['D','Chat + sound + picture','Uses all three. About 100 MB an hour per channel.']};
+let drawn=false, toastTimer=0, last={};
+
+function toast(msg,err){const t=$('toast');t.textContent=msg;t.className=err?'err':'';t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',err?9000:2500)}
+function tab(name){for(const n of ['live','vod']){$('tab-'+n).hidden=n!==name;$('t-'+n).className=n===name?'on':''}}
+function mode(){return (document.querySelector('[name=o-mode]:checked')||{}).value}
+function isBad(l){return /ERROR|FAILED|NOT MADE|Traceback|Error:|fatal exception|STOPPED BY ITSELF/.test(l)}
+function logTo(id,lines){const el=$(id);const stick=el.scrollTop+el.clientHeight>=el.scrollHeight-30;el.textContent='';
+  for(const l of lines){const d=document.createElement('div');d.textContent=l||' ';if(isBad(l))d.className='lerr';else if(/WARNING/.test(l))d.className='lwarn';el.appendChild(d)}
+  if(stick)el.scrollTop=el.scrollHeight}
+function lastLine(lines){for(let i=lines.length-1;i>=0;i--){if(lines[i].trim())return lines[i]}return ''}
+
+function show(s){
+  last=s;
+  if(!drawn){
+    $('o-modes').innerHTML=Object.keys(s.modes).map(k=>{const m=MODES[k]||['?',k,s.modes[k]];
+      return '<label class="mode" data-k="'+k+'"><input type="radio" name="o-mode" value="'+k+'" onchange="pickMode()"><b>'+m[0]+'</b><span>'+m[1]+'</span><em>'+m[2]+'</em></label>'}).join('');
+    $('o-channels').value=s.channels; drawn=true;
+  }
+  const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!r.checked&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
+  for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);
+  $('o-ab').checked=s.ab_versions; $('o-opening').checked=s.opening;
+  const pw=$('p-watch'); pw.className='pill'+(s.watching?' live':''); pw.lastElementChild.textContent=s.watching?'Watching '+(s.channels||'').split(' ').filter(Boolean).join(', '):'Not watching';
+  $('b-start').disabled=s.watching; $('b-stop').disabled=!s.watching;
+  $('w-note').innerHTML=s.watching?'<b>Watching.</b> Drafts appear on the right as moments happen. '+esc(lastLine(s.watch_log)):(s.watch_problem?'<b>Stopped with a problem.</b> Open the activity log.':'Not watching.');
+  logTo('wlog',s.watch_log);
+  $('b-run').disabled=s.running; $('b-runstop').disabled=!s.running;
+  $('r-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?'<b>Done.</b> '+esc(lastLine(s.run_log)):'Nothing running.'));
+  logTo('rlog',s.run_log);
+  const ready=s.finish_log.filter(l=>l.startsWith('READY ')), notMade=s.finish_log.filter(l=>l.startsWith('NOT MADE ')||l.startsWith('FAILED'));
+  $('f-note').innerHTML=s.finishing?'<b>Working…</b> this takes about a minute per clip.':(s.finish_log.length?'<b>'+ready.length+' video file(s) made.</b> '+(notMade.length?notMade.length+' could not be made.':'')+' They are in the <b>ready</b> folder inside your data folder.':'Nothing made yet in this session.');
+  $('f-ready').innerHTML=ready.map(l=>'<li>'+esc(l.slice(6).split(/[\\/]/).pop())+'</li>').join('')+notMade.map(l=>'<li class="nm">'+esc(l)+'</li>').join('');
+  $('b-finish').disabled=s.finishing;
+  logTo('flog',s.finish_log);
+  const bad=s.watch_log.concat(s.finish_log,s.run_log).filter(isBad), eb=$('errbox'), probs=[s.watch_problem,s.run_problem].filter(Boolean);
+  eb.style.display=(bad.length||probs.length)?'block':'none';
+  eb.textContent=probs.concat(bad.length?[bad.length+' error line(s) in the activity logs, shown in red. Latest: '+bad[bad.length-1]]:[]).join(NL);
+  if(s.running)tab('vod');
+}
+async function act(url,body){
+  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok){toast(await r.text(),true);return} show(await r.json())}
+  catch(e){toast('The program is not answering: '+e,true)}
+}
+function startWatch(){act('/api/watch/start',{channels:val('o-channels'),mode:mode()})}
+function pickMode(){for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);saveOpts()}
+function saveOpts(){act('/api/options',{mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked})}
+async function poll(){const eb=$('errbox');
+  try{const r=await fetch('/api/options');if(r.ok)show(await r.json());else{eb.style.display='block';eb.textContent='The page could not read the program state: '+r.status+' '+await r.text()}}
+  catch(e){eb.style.display='block';eb.textContent='THE PROGRAM IS NOT ANSWERING ('+e+'). It has stopped or crashed: look at the terminal window where you started it; the reason is printed there.'}
+  setTimeout(poll,5000)}
+
+/* ---------- clips ---------- */
+const STATUS_TEXT={candidate:'To review',approved:'Approved',rejected:'Rejected'};
+let filter='candidate';
+function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
+  if(t.includes('chat'))parts.push('Chat spike ×'+c.score);
+  if(t.includes('audio'))parts.push('Loud moment');
+  if(t.includes('video'))parts.push('Fast action');
+  return parts.length?parts:[t]}
+function cardHtml(c){
+  const k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
+  const vid=c.video?'<video controls preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+'"></video><small>'+shown+'</small>'
+    :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
+  const chips=foundBy(c).map(x=>'<span class="chip">'+esc(x)+'</span>').join('')
+    +(c.activity!=null?'<span class="chip">'+esc(c.activity)+' chatters</span>':'')
+    +(c.ai_judged?'<span class="chip '+(c.ai_keep?'good':'meh')+'">'+(c.ai_keep?'AI: worth posting':'AI: probably filler')+'</span>':'')
+    +(c.exported?'<span class="chip good">Videos made</span>':'');
+  const lay=[['','Automatic'],['split','Split: facecam over gameplay'],['crop','Centre crop']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
+  return '<div class="vid">'+vid+'</div><div class="info">'
+   +'<div class="chead"><h3>'+esc(c.channel||'Unknown streamer')+'</h3><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[c.status]+'</span></div>'
+   +'<div class="chips">'+chips+'</div>'
+   +(c.ai_judged&&c.ai_reason?'<div class="ai">'+esc(c.ai_reason)+'</div>':'')
+   +(c.error?'<div class="cliperr"><b>This clip has an error:</b> '+esc(c.error)+'</div>':'')
+   +(c.notes?'<div class="ai"><b>Note:</b> '+esc(c.notes)+'</div>':'')
+   +'<div class="said">'+(c.transcript?'“'+esc(c.transcript)+'”':'<span style="color:var(--muted)">No transcript yet.</span>')+'</div>'
+   +(String(c.transcript||'').length>260?'<button class="more" onclick="this.previousElementSibling.classList.toggle(\'open\');this.textContent=this.textContent===\'Show all\'?\'Show less\':\'Show all\'">Show all</button>':'')
+   +'<div class="two"><div><label class="f">Opening text on the video (version A)</label><input type="text" name="hook" value="'+esc(c.hook)+'"></div>'
+   +'<div><label class="f">Opening text, version B <small>(empty = same as A)</small></label><input type="text" name="hook_b" value="'+esc(c.hook_b)+'"></div></div>'
+   +'<details class="sec"'+(c.explainer?' open':'')+'><summary>Explainer version <small>a narrator sets up the moment, then the clip plays</small></summary>'
+   +'<label class="check"><input type="checkbox" name="explainer"'+(c.explainer?' checked':'')+'> Also make an explainer version of this clip</label>'
+   +'<div class="two"><div><label class="f">What the narrator says (version A)</label><input type="text" name="intro" value="'+esc(c.intro)+'"></div>'
+   +'<div><label class="f">Narrator, version B <small>(empty = same as A)</small></label><input type="text" name="intro_b" value="'+esc(c.intro_b)+'"></div></div></details>'
+   +'<details class="sec"><summary>Upload text <small>title, description and hashtags to paste when you post</small></summary>'
+   +'<div class="two"><div><label class="f">Title (version A)</label><input type="text" name="title" value="'+esc(c.title)+'"></div>'
+   +'<div><label class="f">Title, version B</label><input type="text" name="title_b" value="'+esc(c.title_b)+'"></div></div>'
+   +'<label class="f">Description</label><textarea name="description">'+esc(c.description)+'</textarea>'
+   +'<label class="f">Hashtags (separated by spaces)</label><input type="text" name="tags" value="'+esc((c.tags||[]).join(' '))+'"></details>'
+   +'<details class="sec"><summary>Fine-tune <small>where it starts and ends, framing, ad label</small></summary>'
+   +'<div class="three"><div><label class="f">Start (seconds into the stream)</label><input type="number" step="0.5" name="cut_start_s" value="'+esc(c.cut_start_s??c.start_s)+'"></div>'
+   +'<div><label class="f">End</label><input type="number" step="0.5" name="cut_end_s" value="'+esc(c.cut_end_s??c.end_s)+'"></div>'
+   +'<div><label class="f">Framing</label><select name="layout">'+lay+'</select></div></div>'
+   +'<p class="help" style="margin-top:6px">Can be set anywhere from '+esc(c.lo)+' to '+esc(c.hi)+' seconds. Framing now: '+esc(c.layout_reason||'not checked yet')+'.</p>'
+   +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
+   +'<div class="acts"><button class="btn ok" onclick="save(\''+k+'\',{status:\'approved\'})">Approve</button>'
+   +'<button class="btn bad" onclick="save(\''+k+'\',{status:\'rejected\'})">Reject</button>'
+   +'<button class="btn" onclick="save(\''+k+'\')">Save changes</button>'
+   +(c.status!=='candidate'?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\'})">Back to review</button>':'')
+   +'<span class="saved"></span></div></div>';
+}
+function domId(k){return 'c-'+k.replace('/','--')}
+function busy(el){const v=el.querySelector('video');return el.dataset.dirty==='1'||(v&&!v.paused)||el.contains(document.activeElement)}
+function drawFilters(clips){
+  const n={candidate:0,approved:0,rejected:0};for(const c of clips)n[c.status]=(n[c.status]||0)+1;
+  $('filters').innerHTML=[['candidate','To review'],['approved','Approved'],['rejected','Rejected'],['all','All']].map(f=>
+    '<button class="chipbtn'+(filter===f[0]?' on':'')+'" onclick="setFilter(\''+f[0]+'\')">'+f[1]+'<i>'+(f[0]==='all'?clips.length:n[f[0]])+'</i></button>').join('');
+  $('p-count').textContent=n.candidate+' to review · '+n.approved+' approved';
+  if(HAS_PANEL)$('b-finish').textContent=n.approved?'Make videos for '+n.approved+' approved clip'+(n.approved>1?'s':''):'Make videos (approve a clip first)';
+  const shown=filter==='all'?clips.length:n[filter], em=$('empty');
+  em.hidden=shown>0;
+  em.innerHTML=clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved yet',rejected:'rejected'}[filter]||'in this list')+'.'
+    :'<b>No clips yet.</b>'+(HAS_PANEL?'Start watching a live stream, or paste a finished stream, in step 1 on the left.':'Run find first.');
+}
+function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
+let known=[];
+async function loadClips(){
+  let clips;try{const r=await fetch('/api/clips');if(!r.ok)return;clips=await r.json()}catch(e){return}
+  known=clips;
+  const box=$('clips'), want=new Set(clips.map(c=>domId(c.key)));
+  for(const el of [...box.children])if(!want.has(el.id))el.remove();
+  let prev=null;
+  for(const c of clips){
+    let el=$(domId(c.key));
+    if(!el){el=document.createElement('div');el.className='card clip';el.id=domId(c.key);el.dataset.status=c.status;el.dataset.m=c.mtime;el.innerHTML=cardHtml(c);
+      el.addEventListener('input',()=>{el.dataset.dirty='1';const s=el.querySelector('.saved');s.textContent='Unsaved changes';s.className='saved warn'});
+      if(prev)prev.after(el);else box.prepend(el)}
+    else if(String(c.mtime)!==el.dataset.m&&!busy(el)){el.dataset.status=c.status;el.dataset.m=c.mtime;el.innerHTML=cardHtml(c)}
+    prev=el;
+  }
+  drawFilters(clips);
+}
+async function save(key,extra){
+  const el=$(domId(key)), g=n=>el.querySelector('[name='+n+']');
+  const body=Object.assign({hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,
+    title:g('title').value,title_b:g('title_b').value,description:g('description').value,tags:g('tags').value,
+    layout:g('layout').value,disclosure:g('disclosure').checked,cut_start_s:parseFloat(g('cut_start_s').value),cut_end_s:parseFloat(g('cut_end_s').value)},extra||{});
+  let r;try{r=await fetch('/api/clip/'+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}catch(e){toast('The program is not answering: '+e,true);return}
+  if(!r.ok){toast('Not saved: '+await r.text(),true);return}
+  const s=await r.json();
+  el.dataset.dirty='';el.dataset.m='';  /* redraw from the saved state on the next load */
+  if(document.activeElement)document.activeElement.blur();
+  const v=el.querySelector('video');if(v)v.pause();
+  toast(extra&&extra.status?({approved:'Approved',rejected:'Rejected',candidate:'Moved back to review'}[s.status]):'Saved');
+  loadClips();
+}
+async function clipLoop(){await loadClips();setTimeout(clipLoop,8000)}
+$('scope').textContent=__TITLE__;
+if(HAS_PANEL)poll();else $('side').remove();
+if(!HAS_PANEL)document.querySelector('.layout').style.gridTemplateColumns='1fr';
+clipLoop();
+</script>
+</body>
+</html>

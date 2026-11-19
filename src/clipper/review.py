@@ -6,7 +6,6 @@ anywhere from here; it only edits each clip's clip.json.
 
 from __future__ import annotations
 
-import html
 import json
 import logging
 import re
@@ -18,139 +17,37 @@ from .work import clip_dirs, read_json, write_json
 
 log = logging.getLogger(__name__)
 
-EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "disclosure", "layout", "cut_start_s", "cut_end_s", "title", "description", "tags", "notes"}
+EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "disclosure", "layout", "cut_start_s", "cut_end_s",
+            "title", "title_b", "description", "tags", "notes"}
+TEXT_FIELDS = ("hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags")
 
-PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>Review clips</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#14161a;color:#e8e8e8}
-header{padding:14px 20px;background:#1d2026;position:sticky;top:0;z-index:2}
-h1{font-size:18px;margin:0}.sub{color:#9aa3ad;font-size:13px}
-.clip{display:flex;gap:18px;padding:18px 20px;border-bottom:1px solid #2a2e36;flex-wrap:wrap}
-video{width:270px;max-height:480px;background:#000;border-radius:6px}
-.info{flex:1;min-width:300px}.meta{color:#9aa3ad;font-size:13px;margin:4px 0 10px}
-.tr{background:#1d2026;padding:10px;border-radius:6px;font-size:14px;line-height:1.45;margin-bottom:10px}
-label{display:block;font-size:12px;color:#9aa3ad;margin-top:8px}
-input[type=text],input[type=number],select{width:100%;box-sizing:border-box;padding:7px;background:#0f1114;color:#e8e8e8;border:1px solid #333a45;border-radius:5px}
-.row{display:flex;gap:10px}.row>div{flex:1}
-button{padding:9px 16px;border:0;border-radius:5px;font-weight:600;cursor:pointer;margin:12px 8px 0 0}
-.ok{background:#2e9e5b;color:#fff}.no{background:#c0473f;color:#fff}.save{background:#3a4250;color:#fff}
-.badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:600}
-.approved{background:#2e9e5b}.rejected{background:#c0473f}.candidate{background:#59606c}
-.clip.rejected-row{opacity:.45}
-.panel{padding:14px 20px;background:#191c21;border-bottom:1px solid #2a2e36}
-.panel h2{font-size:14px;margin:0 0 8px;color:#cfd6de}.cols{display:flex;gap:26px;flex-wrap:wrap}.cols>div{flex:1;min-width:280px}
-.panel label{color:#e8e8e8;font-size:13px;margin-top:5px}.hint{color:#9aa3ad;font-size:12px;margin-top:6px}
-pre{background:#0f1114;color:#b8c0c9;padding:8px;border-radius:5px;font-size:11px;max-height:320px;overflow:auto;white-space:pre-wrap;margin:8px 0 0}
-.lerr{color:#ff6b61;font-weight:600}.lwarn{color:#e5b84a}
-#errbox{display:none;background:#5c1f1b;color:#fff;border:1px solid #c0473f;padding:10px 14px;margin:0 0 12px;border-radius:6px;font-size:13px;white-space:pre-wrap}
-.cliperr{background:#5c1f1b;color:#fff;border:1px solid #c0473f;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:10px;white-space:pre-wrap}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#59606c;margin-right:6px}.dot.on{background:#2e9e5b}
-</style></head><body><header><h1>__TITLE__</h1><div class="sub">__SUB__</div></header>
-__PANEL__
-<div id="clips">__CLIPS__</div>
-<script>
-const val=id=>document.getElementById(id).value, mode=()=>(document.querySelector('[name=o-mode]:checked')||{}).value;
-let drawn=false;
-function show(s){
-  if(!drawn){
-    document.getElementById('o-modes').innerHTML=Object.entries(s.modes).map(([k,t],i)=>
-      '<label><input type="radio" name="o-mode" value="'+k+'" onchange="saveOpts()"> '+'ABCD'[i]+' &nbsp;'+t+'</label>').join('');
-    document.getElementById('o-channels').value=s.channels; drawn=true;
-  }
-  const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
-  document.getElementById('o-ab').checked=s.ab_versions; document.getElementById('o-opening').checked=s.opening;
-  document.getElementById('wdot').className='dot'+(s.watching?' on':'');
-  logTo('wlog',[s.watching?'WATCHING':'not watching'].concat(s.watch_log));
-  logTo('flog',(s.finishing?['WORKING...']:[]).concat(s.finish_log.length?s.finish_log:['nothing made yet in this session']));
-  const bad=s.watch_log.concat(s.finish_log).filter(isBad);
-  const eb=document.getElementById('errbox');
-  eb.style.display=(bad.length||s.watch_problem)?'block':'none';
-  eb.textContent=(s.watch_problem?s.watch_problem+String.fromCharCode(10):'')+(bad.length?bad.length+' error or warning line(s) below, shown in colour. Latest: '+bad[bad.length-1]:'');
-}
-async function act(url,body){
-  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(!r.ok){alert(await r.text());return} show(await r.json());
-}
-function saveOpts(){act('/api/options',{mode:mode(),ab_versions:document.getElementById('o-ab').checked,opening:document.getElementById('o-opening').checked})}
-function isBad(l){return /ERROR|FAILED|NOT MADE|Traceback|Error:|fatal exception|STOPPED BY ITSELF/.test(l)}
-function logTo(id,lines){const el=document.getElementById(id);const stick=el.scrollTop+el.clientHeight>=el.scrollHeight-30;el.textContent='';
-  for(const l of lines){const d=document.createElement('div');d.textContent=l||' ';if(isBad(l))d.className='lerr';else if(/WARNING/.test(l))d.className='lwarn';el.appendChild(d)}
-  if(stick)el.scrollTop=el.scrollHeight}
-async function poll(){const eb=document.getElementById('errbox');
-  try{const r=await fetch('/api/options');if(r.ok)show(await r.json());else{eb.style.display='block';eb.textContent='The page could not read the program state: '+r.status+' '+await r.text()}}
-  catch(e){eb.style.display='block';eb.textContent='THE PROGRAM IS NOT ANSWERING ('+e+'). It has stopped or crashed: look at the terminal window where you started it; the reason is printed there.'}
-  setTimeout(poll,5000)}
-if(document.getElementById('panel'))poll();
-
-async function save(id, extra){
-  const el=document.getElementById('c-'+id.replace('/','--')), g=n=>el.querySelector('[name='+n+']');
-  const body=Object.assign({hook:g('hook').value, hook_b:g('hook_b').value, intro:g('intro').value, intro_b:g('intro_b').value, explainer:g('explainer').checked, layout:g('layout').value, disclosure:g('disclosure').checked,
-    cut_start_s:parseFloat(g('cut_start_s').value), cut_end_s:parseFloat(g('cut_end_s').value)}, extra||{});
-  const r=await fetch('/api/clip/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(!r.ok){alert('Save failed: '+await r.text());return}
-  const s=await r.json(), b=el.querySelector('.badge');
-  b.textContent=s.status; b.className='badge '+s.status; el.classList.toggle('rejected-row', s.status==='rejected');
-}
-</script></body></html>"""
+PAGE_FILE = Path(__file__).with_name("review_page.html")
 
 
-PANEL = """<div class="panel" id="panel"><div id="errbox"></div><div class="cols">
-<div><h2><span class="dot" id="wdot"></span>Watch live streams</h2>
-<label>Twitch channels (names, separated by spaces)</label><input type="text" id="o-channels" placeholder="lacy xqc clix">
-<div id="o-modes"></div>
-<button class="ok" onclick="act('/api/watch/start',{channels:val('o-channels'),mode:mode()})">Start watching</button>
-<button class="no" onclick="act('/api/watch/stop',{})">Stop</button>
-<pre id="wlog">not watching</pre></div>
-<div><h2>Versions to make</h2>
-<label><input type="checkbox" id="o-ab" onchange="saveOpts()"> Make an A and a B version of every approved clip (different opening text and title)</label>
-<label><input type="checkbox" id="o-opening" onchange="saveOpts()"> Eye-catching first seconds (zoom-in, pop-in text, whoosh, progress bar)</label>
-<div class="hint">The explainer is chosen per clip with its own tick box below. With A/B on, the explainer also gets an A and a B.</div>
-<button class="ok" onclick="act('/api/finish',{})">Finish: make the videos for approved clips</button>
-<button class="save" onclick="location.reload()">Reload clip list</button>
-<pre id="flog">nothing made yet in this session</pre></div>
-</div></div>"""
+def page_html(title: str, has_panel: bool) -> str:
+    """The review page: one HTML file, with the title and whether the controls are shown filled in."""
+    return (PAGE_FILE.read_text(encoding="utf-8")
+            .replace("__TITLE__", json.dumps(title).replace("</", "<\\/"))
+            .replace("__HAS_PANEL__", "true" if has_panel else "false"))
 
 
-def _clip_html(d: Path) -> str:
+def clip_view(d: Path) -> dict:
+    """What the page needs to draw one clip."""
     c = read_json(d / "clip.json")
-    cid = c["id"]
-    key = f"{d.parent.parent.name}/{cid}"  # work folder / clip id: unique across streams
-    dom = key.replace("/", "--")
     video = "final.mp4" if (d / "final.mp4").exists() else ("source.mp4" if (d / "source.mp4").exists() else "")
-    player = (
-        f'<video controls preload="metadata" src="/media/{key}/{video}"></video>'
-        if video
-        else '<div class="tr">not fetched yet</div>'
+    out = {k: c.get(k) for k in (
+        "channel", "start_s", "end_s", "cut_start_s", "cut_end_s", "trigger", "score", "activity", "layout", "layout_reason",
+        "transcript", "hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags", "explainer", "disclosure",
+        "ai_keep", "ai_reason", "error", "notes", "stream_title",
+    )}
+    out.update(
+        key=f"{d.parent.parent.name}/{c['id']}",  # work folder / clip id: unique across streams
+        status=c.get("status", "candidate"), video=video, ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
+        lo=c.get("fetch_start_s", c["start_s"]), hi=c.get("fetch_end_s", c["end_s"]),
+        # Changes whenever the clip's data or its draft video changes, so the page knows to redraw it.
+        mtime=int(max((d / n).stat().st_mtime for n in ("clip.json", video) if n) * 1000),
     )
-    e = lambda v: html.escape(str(v if v is not None else ""), quote=True)  # noqa: E731
-    layout = c.get("layout") or ""
-    opts = "".join(
-        f'<option value="{v}"{" selected" if layout == v else ""}>{t}</option>'
-        for v, t in (("", "default for this streamer"), ("split", "split: facecam over gameplay"), ("crop", "centre crop"))
-    )
-    status = c.get("status", "candidate")
-    return f"""<div class="clip{' rejected-row' if status == 'rejected' else ''}" id="c-{dom}">{player}
-<div class="info"><b>{e(c.get('channel'))} &nbsp; {cid}</b> <span class="badge {status}">{status}</span>
-<div class="meta">{format_time(c['start_s'])} - {format_time(c['end_s'])} &middot; found by {e(c.get('trigger') or 'chat')} (strength {c.get('score')}) &middot;
-{c.get('activity')} chatters &middot; layout: {e(c.get('layout') or 'default')} ({e(c.get('layout_reason') or 'not checked')}) &middot; showing {video or 'nothing'}</div>
-{f'<div class="meta"><b>Note:</b> {e(c.get("notes"))}</div>' if c.get('notes') else ''}
-{f'<div class="meta"><b>{"AI suggests keeping" if c.get("ai_keep") else "AI suggests rejecting"}:</b> {e(c.get("ai_reason"))} &middot; tags: {e(" ".join(c.get("tags") or []))}</div>' if c.get('copy_at') else ''}
-{f'<div class="cliperr"><b>This clip has an error:</b> {e(c.get("error"))}</div>' if c.get('error') else ''}
-<div class="tr">{e(c.get('transcript') or '(no transcript yet)')}</div>
-<label>Hook text, version A (shown for the first seconds)</label><input type="text" name="hook" value="{e(c.get('hook'))}">
-<label>Hook text, version B (the second version made for A/B testing; empty = same as A)</label><input type="text" name="hook_b" value="{e(c.get('hook_b'))}">
-<label>Narration line, version A (spoken before the clip in the explainer version)</label><input type="text" name="intro" value="{e(c.get('intro'))}">
-<label>Narration line, version B (empty = same as A)</label><input type="text" name="intro_b" value="{e(c.get('intro_b'))}">
-<div class="row"><div><label>Cut start (seconds into the stream)</label><input type="number" step="0.5" name="cut_start_s" value="{e(c.get('cut_start_s', c['start_s']))}"></div>
-<div><label>Cut end</label><input type="number" step="0.5" name="cut_end_s" value="{e(c.get('cut_end_s', c['end_s']))}"></div>
-<div><label>Layout</label><select name="layout">{opts}</select></div></div>
-<label><input type="checkbox" name="explainer"{' checked' if c.get('explainer') else ''}> Also make an explainer version (narrated intro, then the clip)</label>
-<label><input type="checkbox" name="disclosure"{' checked' if c.get('disclosure') else ''}> Show on-screen ad disclosure (campaign clips)</label>
-<button class="ok" onclick="save('{key}',{{status:'approved'}})">Approve</button>
-<button class="no" onclick="save('{key}',{{status:'rejected'}})">Reject</button>
-<button class="save" onclick="save('{key}')">Save edits only</button>
-</div></div>"""
+    return out
 
 
 def apply_edit(work: Path, cid: str, edit: dict) -> dict:
@@ -167,6 +64,9 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
     if edit.get("layout") not in (None, "", "split", "crop"):
         raise ValueError("layout must be split, crop or empty")
     state = read_json(path)
+    edit = dict(edit)
+    if isinstance(edit.get("tags"), str):  # the page sends hashtags as one line of text
+        edit["tags"] = ["#" + t.lstrip("#") for t in re.split(r"[\s,]+", edit["tags"]) if t.strip("#")]
     start = float(edit.get("cut_start_s", state.get("cut_start_s", state["start_s"])))
     end = float(edit.get("cut_end_s", state.get("cut_end_s", state["end_s"])))
     lo = float(state.get("fetch_start_s", state["start_s"]))
@@ -174,10 +74,10 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
     if not (lo <= start < end <= hi):
         raise ValueError(f"cut must stay inside the fetched range {lo:g}-{hi:g} seconds and start before it ends")
     before = (state.get("hook"), state.get("layout"), state.get("disclosure"), state.get("cut_start_s"), state.get("cut_end_s"))
-    text_before = {k: state.get(k) or "" for k in ("hook", "hook_b", "intro", "intro_b")}
+    text_before = {k: state.get(k) or ("" if k != "tags" else []) for k in TEXT_FIELDS}
     state.update(edit)
     # Text a person changed here is theirs: the automatic writer must not replace it later.
-    typed = {k for k, v in text_before.items() if (state.get(k) or "") != v}
+    typed = {k for k, v in text_before.items() if (state.get(k) or ("" if k != "tags" else [])) != v}
     if typed:
         state["copy_auto"] = [k for k in state.get("copy_auto") or [] if k not in typed]
     # A choice made by a person is final: automatic layout and cut snapping must not undo it.
@@ -250,14 +150,15 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 return self._send(200, json.dumps(control.status()).encode(), "application/json")
             refresh()
             if self.path == "/":
-                dirs = list_clips(list(by_name.values()))
-                page = (
-                    PAGE.replace("__TITLE__", html.escape(title))
-                    .replace("__PANEL__", PANEL if control else "")
-                    .replace("__SUB__", f"{len(dirs)} clips &middot; edits save to each clip.json &middot; press Ctrl+C in the terminal when done")
-                    .replace("__CLIPS__", "".join(_clip_html(d) for d in dirs) or "<p style='padding:20px'>No clips yet. Run find first.</p>")
-                )
-                return self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
+                return self._send(200, page_html(title, bool(control)).encode("utf-8"), "text/html; charset=utf-8")
+            if self.path == "/api/clips":
+                views = []
+                for d in list_clips(list(by_name.values())):
+                    try:
+                        views.append(clip_view(d))
+                    except Exception as e:  # one unreadable clip must not blank the whole page
+                        log.error("clip %s could not be shown: %s", d, e, exc_info=True)
+                return self._send(200, json.dumps(views).encode("utf-8"), "application/json")
             m = re.fullmatch(r"/media/([A-Za-z0-9_-]+)/([0-9a-z]+)/(final|source)\.mp4", self.path.split("?")[0])
             if not m or m.group(1) not in by_name:
                 return self._send(404, b"not found", "text/plain")
@@ -305,12 +206,13 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             origin = self.headers.get("Origin")
             if origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
                 return self._send(403, b"not allowed from another site", "text/plain")
-            actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch", "/api/finish": "start_finish"}
+            actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch",
+                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run"}
             if control and self.path in actions:
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
                     name = actions[self.path]
-                    result = getattr(control, name)(body) if name in ("save", "start_watch") else getattr(control, name)()
+                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run") else getattr(control, name)()
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(result).encode(), "application/json")
@@ -337,3 +239,4 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
         server.server_close()
         if control:
             control.stop_watch()
+            control.stop_run()

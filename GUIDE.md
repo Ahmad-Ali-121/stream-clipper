@@ -57,11 +57,15 @@ All commands are typed in a terminal opened in the `Clipping` folder.
 uv run clipper review
 ```
 
-Open http://127.0.0.1:8765/ in your browser. The panel at the top of the page does everything:
+Open http://127.0.0.1:8765/ in your browser. The page follows three numbered steps:
 
-- **Watch live streams:** type channel names, pick A, B, C or D, press **Start watching**. The box under it shows what the watcher is doing. **Stop** ends it.
-- **Versions to make:** switch the A/B versions and the eye-catching opening on or off.
-- **Finish:** makes the videos for every clip you approved.
+1. **Find moments** (left side). Two tabs:
+   - **Live streams:** type channel names, pick A, B, C or D, press **Start watching**. **Stop** ends it.
+   - **Finished stream:** paste the link of a Twitch video that has ended, choose how many clips, press **Find the best moments**.
+2. **Review the clips** (right side). Each clip shows its video, why it was picked, what was said and the opening text. Press **Approve** or **Reject**. The buttons at the top switch between clips to review, approved and rejected. New drafts appear by themselves.
+3. **Make the videos** (left side). Switch the A/B versions and the eye-catching opening on or off, then press the green button. It makes the videos for every clip you approved.
+
+Each step has an "Activity log" you can open to see what the program is doing. Problems are shown in red, at the top of the page and on the clip they belong to.
 
 Keep the terminal open while you use the page. The steps below do the same things from the terminal.
 
