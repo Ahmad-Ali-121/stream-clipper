@@ -71,7 +71,9 @@ def clip_view(d: Path, weights: dict | None = None) -> dict:
     )}
     out.update(
         key=f"{d.parent.parent.name}/{c['id']}",  # work folder / clip id: unique across streams
-        status=c.get("status", "candidate"), video=video, points=scoring.combined(c, weights), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
+        status=c.get("status", "candidate"), video=video, points=scoring.combined(c, weights),
+        videos=[n for n in ("final.mp4", "final_b.mp4", "explained.mp4", "explained_b.mp4", "source.mp4") if (d / n).exists()],
+        fetch_start_s=c.get("fetch_start_s", 0), has_words=(d / "words.json").exists(), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
         lo=c.get("fetch_start_s", c["start_s"]), hi=c.get("fetch_end_s", c["end_s"]),
         # Changes whenever the clip's data or its draft video changes, so the page knows to redraw it.
         mtime=int(max((d / n).stat().st_mtime for n in ("clip.json", video) if n) * 1000),
@@ -128,6 +130,56 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
         (d / name).unlink(missing_ok=True)
     write_json(path, state)
     return state
+
+
+def wave_peaks(d: Path, cfg, bins: int = 480) -> dict:
+    """The clip's sound as ``bins`` loudness values between 0 and 1 over its whole downloaded range, for the trimmer."""
+    cache = d / "wave.json"
+    src = d / "source.mp4"
+    if cache.exists() and cache.stat().st_mtime >= src.stat().st_mtime:
+        return read_json(cache)
+    import subprocess
+
+    import numpy as np
+
+    from .tools import find_tool
+
+    raw = subprocess.run([find_tool("ffmpeg", cfg.data_dir), "-v", "error", "-i", str(src), "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
+                         capture_output=True, stdin=subprocess.DEVNULL, timeout=120).stdout
+    x = np.abs(np.frombuffer(raw[: len(raw) // 2 * 2], dtype=np.int16).astype(np.float32))
+    if len(x) < bins:
+        raise ValueError("this clip has no sound to draw")
+    step = len(x) // bins
+    peaks = x[: step * bins].reshape(bins, step).max(axis=1)
+    top = float(peaks.max()) or 1.0
+    out = {"seconds": round(len(x) / 8000, 2), "peaks": [round(float(p) / top, 3) for p in peaks]}
+    write_json(cache, out)
+    return out
+
+
+RENDERS = ("final.mp4", "final_b.mp4", "body.mp4", "explained.mp4", "explained_b.mp4", "intro_card.mp4", "intro_card_b.mp4", "still.png")
+
+
+def save_words(d: Path, words: list) -> int:
+    """Replace the caption words of a clip (times stay relative to source.mp4). Returns how many are left."""
+    clean: list[dict] = []
+    for w in words:
+        text = str(w.get("word", "")).strip()
+        start, end = float(w["start"]), float(w["end"])
+        if not text:
+            continue  # an emptied word is a deleted word
+        if not (0 <= start <= end):
+            raise ValueError(f"a caption word has an impossible time ({start}-{end})")
+        clean.append({**{k: v for k, v in w.items() if k not in ("word", "start", "end")}, "word": text, "start": start, "end": end})
+    clean.sort(key=lambda w: w["start"])
+    write_json(d / "words.json", clean)
+    state = read_json(d / "clip.json")
+    state["transcript"] = " ".join(w["word"] for w in clean)
+    state["words_edited"] = True
+    write_json(d / "clip.json", state)
+    for name in RENDERS:  # captions are burned into every render
+        (d / name).unlink(missing_ok=True)
+    return len(clean)
 
 
 def delete_clip(d: Path) -> float:
@@ -222,7 +274,21 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     except Exception as e:  # one unreadable clip must not blank the whole page
                         log.error("clip %s could not be shown: %s", d, e, exc_info=True)
                 return self._send(200, json.dumps(views).encode("utf-8"), "application/json")
-            m = re.fullmatch(r"/media/([A-Za-z0-9_-]+)/([0-9a-z]+)/(final|source)\.mp4", self.path.split("?")[0])
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(wave|words)", self.path.split("?")[0])
+            if m and m.group(1) in by_name:
+                d = by_name[m.group(1)] / "clips" / m.group(2)
+                try:
+                    if m.group(3) == "wave":
+                        if not (d / "source.mp4").exists():
+                            return self._send(404, b"this clip has no downloaded video yet", "text/plain")
+                        data = wave_peaks(d, cfg)
+                    else:
+                        data = read_json(d / "words.json", [])
+                except Exception as e:
+                    log.error("clip %s: %s could not be read: %s", d.name, m.group(3), e, exc_info=True)
+                    return self._send(500, str(e).encode(), "text/plain")
+                return self._send(200, json.dumps(data).encode(), "application/json")
+            m = re.fullmatch(r"/media/([A-Za-z0-9_-]+)/([0-9a-z]+)/(final|final_b|explained|explained_b|source)\.mp4", self.path.split("?")[0])
             if not m or m.group(1) not in by_name:
                 return self._send(404, b"not found", "text/plain")
             f = by_name[m.group(1)] / "clips" / m.group(2) / f"{m.group(3)}.mp4"
@@ -289,6 +355,26 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                         gone += 1
                 log.info("deleted %d rejected clip(s), %.0f MB freed", gone, mb)
                 return self._send(200, json.dumps({"deleted": gone, "mb": round(mb)}).encode(), "application/json")
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(words|render-b)", self.path)
+            if m and m.group(1) in by_name and cfg is not None:
+                d = by_name[m.group(1)] / "clips" / m.group(2)
+                if not (d / "clip.json").exists():
+                    return self._send(404, b"no such clip", "text/plain")
+                try:
+                    if m.group(3) == "words":
+                        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
+                        return self._send(200, json.dumps({"words": save_words(d, body.get("words") or [])}).encode(), "application/json")
+                    from .render import render_clip
+
+                    if not (d / "final.mp4").exists():
+                        render_clip(d, cfg)
+                    render_clip(d, cfg, out_name="final_b.mp4", variant="b")
+                    return self._send(200, b"{}", "application/json")
+                except (ValueError, TypeError, KeyError) as e:
+                    return self._send(400, str(e).encode(), "text/plain")
+                except Exception as e:
+                    log.error("clip %s: %s failed: %s", d.name, m.group(3), e, exc_info=True)
+                    return self._send(500, f"{type(e).__name__}: {e}".encode(), "text/plain")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(delete|clear-error)", self.path)
             if m and m.group(1) in by_name:
                 d = by_name[m.group(1)] / "clips" / m.group(2)

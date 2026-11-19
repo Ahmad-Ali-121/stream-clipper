@@ -249,7 +249,7 @@ def render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str 
         raise ToolError(f"render of clip {clip_dir.name} produced no file")
     os.replace(clip_dir / part, out)
     state.update({"render_seconds": round(time.monotonic() - t0, 1), "duration_s": round(duration, 2), "width": r.width, "height": r.height,
-                  "layout_used": layout, "encoder_used": enc, "opening_used": bool(r.opening), "caption_words": len(words), "has_disclosure_overlay": bool(state.get("disclosure"))})
+                  "layout_used": layout, "encoder_used": enc, "opening_used": bool(r.opening), "style_used": cfg.captions.preset, "caption_words": len(words), "has_disclosure_overlay": bool(state.get("disclosure"))})
     if out_name == "final.mp4":  # variants must not overwrite the main render's record
         write_json(clip_dir / "clip.json", state)
     log.info("clip %s: rendered %.0fs %s layout in %.0fs", clip_dir.name, duration, layout, state["render_seconds"])

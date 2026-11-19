@@ -26,6 +26,14 @@ log = logging.getLogger(__name__)
 
 LOCAL_FILE = "config.local.yaml"
 
+# Caption looks offered on the page: name -> (label, the caption settings it sets). Fonts are ones every Windows has.
+CAPTION_PRESETS = {
+    "bold": ("Bold white, yellow highlight", dict(font="Arial Black", font_size=88, text_color="FFFFFF", active_color="FFE600", outline=6, uppercase=True, max_words=3)),
+    "impact": ("Impact, green highlight", dict(font="Impact", font_size=100, text_color="FFFFFF", active_color="3CFF6B", outline=7, uppercase=True, max_words=2)),
+    "yellow": ("Big yellow, white highlight", dict(font="Arial Black", font_size=98, text_color="FFE600", active_color="FFFFFF", outline=8, uppercase=True, max_words=2)),
+    "clean": ("Clean sentence case, blue highlight", dict(font="Segoe UI Black", font_size=76, text_color="FFFFFF", active_color="5CC8FF", outline=4, uppercase=False, max_words=4)),
+}
+
 
 def save_local(values: dict[str, dict[str, Any]], folder: Path = PROJECT_ROOT) -> None:
     """Merge ``{section: {key: value}}`` into config.local.yaml, keeping whatever else is in it."""
@@ -48,6 +56,10 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if not isinstance(value, bool):
                 raise ValueError(f"{key} must be on or off")
             out.setdefault("render", {})[key] = value
+        elif key == "caption_preset":
+            if value not in CAPTION_PRESETS:
+                raise ValueError(f"unknown caption style {value!r}")
+            out.setdefault("captions", {}).update(preset=value, **CAPTION_PRESETS[value][1])
         elif key == "llm_backend":
             from .llm import CHOICES
 
@@ -89,6 +101,7 @@ class Control:
         self.log_path = cfg.data_dir / "watch.log"
         self.finish_lines: list[str] = []
         self.finishing = False
+        self.finish_progress = {"done": 0, "total": 0, "now": ""}
         self.watch_problem = ""  # why the watcher is not running although nobody stopped it
         self.run_proc: subprocess.Popen | None = None  # "analyse a finished stream", the same as `clipper run URL`
         self.run_log_path = cfg.data_dir / "run.log"
@@ -118,6 +131,9 @@ class Control:
         return {
             "mode": parse_mode(cfg.watch.mode), "modes": MODE_TEXT, "channels": " ".join(cfg.watch.channels),
             "ab_versions": cfg.render.ab_versions, "opening": cfg.render.opening,
+            "caption_preset": cfg.captions.preset,
+            "caption_presets": {k: {"label": v[0], **v[1]} for k, v in CAPTION_PRESETS.items()},
+            "finish_progress": self.finish_progress,
             "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
             "finishing": self.finishing, "finish_log": self.finish_lines[-200:],
             "running": self.running(), "run_log": self._run_tail(), "run_problem": self.run_problem,
@@ -393,7 +409,12 @@ class Control:
 
         try:
             problems: list[str] = []
-            results = stage_finish(self.reload(), problems=problems)
+            self.finish_progress = {"done": 0, "total": 0, "now": ""}
+
+            def progress(done: int, total: int, now: str) -> None:
+                self.finish_progress = {"done": done, "total": total, "now": now}
+
+            results = stage_finish(self.reload(), problems=problems, progress=progress)
             self.finish_lines += [f"READY {video}" for video, _ok in results]
             self.finish_lines += [f"NOT MADE {p}" for p in problems]
             self.finish_lines.append(f"{time.strftime('%H:%M:%S')} done: {len(results)} file(s) in {self.cfg.data_dir / 'ready'}")

@@ -76,6 +76,14 @@ Open http://127.0.0.1:8765/ in your browser. The page follows three numbered ste
 2. **Review the clips** (right side). Each clip shows its video, why it was picked, what was said and the opening text. Press **Approve** or **Reject**. The buttons at the top switch between clips to review, approved and rejected. New drafts appear by themselves.
 3. **Make the videos** (left side). Switch the A/B versions and the eye-catching opening on or off, then press the green button. It makes the videos for every clip you approved.
 
+On each clip you can also:
+- **Trim it:** open *Fine-tune*, drag the two handles over the sound wave, and press Save changes.
+- **Fix the captions:** open *Captions*, correct a word or empty its box to remove it, and press Save captions.
+- **Compare versions:** the small buttons under the video switch between A, B and the raw download.
+- **Use the keyboard:** J and K move between clips, Space plays, A approves, R rejects.
+
+The caption look (four styles) is chosen in *Make the videos*.
+
 **Delete** on a clip removes it and its files for good; in the Rejected list, **Delete all rejected** clears them all. Videos you already made stay in the ready folder. Red messages can be closed with the × in their corner.
 
 Each step has an "Activity log" you can open to see what the program is doing. Problems are shown in red, at the top of the page and on the clip they belong to.

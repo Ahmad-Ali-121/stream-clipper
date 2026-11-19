@@ -448,3 +448,47 @@ def test_two_review_pages_cannot_share_a_port():
             OneAtATimeServer(("127.0.0.1", first.server_address[1]), BaseHTTPRequestHandler)
     finally:
         first.server_close()
+
+
+def test_caption_words_can_be_fixed_and_removed(tmp_path):
+    from clipper.review import save_words
+    from clipper.work import read_json, write_json
+
+    d = _clip(tmp_path)
+    write_json(d / "words.json", [{"word": "helo", "start": 1.0, "end": 1.2, "probability": 0.9}, {"word": "um", "start": 1.3, "end": 1.4}, {"word": "world", "start": 1.5, "end": 1.9}])
+    (d / "final.mp4").write_bytes(b"old render")
+    left = save_words(d, [{"word": "hello", "start": 1.0, "end": 1.2, "probability": 0.9}, {"word": " ", "start": 1.3, "end": 1.4}, {"word": "world", "start": 1.5, "end": 1.9}])
+    assert left == 2
+    assert [w["word"] for w in read_json(d / "words.json")] == ["hello", "world"] and read_json(d / "words.json")[0]["probability"] == 0.9
+    state = read_json(d / "clip.json")
+    assert state["transcript"] == "hello world" and state["words_edited"] is True
+    assert not (d / "final.mp4").exists()  # captions are burned in, so the old render is gone
+
+
+def test_caption_style_choice_sets_the_caption_settings():
+    import pytest
+
+    from clipper.control import CAPTION_PRESETS, clean_options
+
+    out = clean_options({"caption_preset": "impact"})
+    assert out["captions"]["preset"] == "impact" and out["captions"]["font"] == "Impact" and out["captions"]["max_words"] == 2
+    assert set(CAPTION_PRESETS) >= {"bold", "impact", "yellow", "clean"}
+    with pytest.raises(ValueError):
+        clean_options({"caption_preset": "comic sans"})
+
+
+def test_finish_reports_progress_and_carries_on_past_a_bad_clip(tmp_path, monkeypatch):
+    from clipper import pipeline
+    from clipper.config import load_config
+    from clipper.work import write_json
+
+    cfg = load_config()
+    cfg.paths.data_dir = str(tmp_path)
+    for name in ("0h01m00s", "0h02m00s"):
+        d = tmp_path / "work" / "twitch_1" / "clips" / name
+        d.mkdir(parents=True)
+        write_json(d / "clip.json", {"id": name, "status": "approved", "start_s": 40, "end_s": 70, "channel": "Someone"})
+    seen, problems = [], []
+    pipeline.stage_finish(cfg, problems=problems, progress=lambda done, total, now: seen.append((done, total)))
+    assert seen == [(0, 2), (1, 2), (2, 2)]
+    assert len(problems) == 2 and "never downloaded" in problems[0]  # both reported, neither stopped the other

@@ -63,6 +63,7 @@ class MomentSettings:
 
 @dataclass
 class CaptionSettings:
+    preset: str = "bold"  # the look chosen on the page; "custom" when the values below were set by hand
     play_res_x: int = 1080
     play_res_y: int = 1920
     font: str = "Arial Black"

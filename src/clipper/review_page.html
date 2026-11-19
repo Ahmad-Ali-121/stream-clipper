@@ -67,6 +67,26 @@ pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid
 .hrow{display:grid;grid-template-columns:14px 1fr;gap:2px 9px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
 .hrow:first-child{border-top:0}.hrow .dot{margin-top:6px}.hrow small{grid-column:2;color:var(--muted);font-size:12px;word-break:break-word}
 .hrow small.fix{color:var(--text)}
+.vtabs{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.vtabs button{border:1px solid var(--line);background:var(--surface2);color:var(--muted);border-radius:7px;padding:2px 9px;font-size:12px;cursor:pointer}
+.vtabs button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.trim video{width:100%;max-height:230px;background:#000;border-radius:8px;display:block}
+.tl{position:relative;height:64px;margin-top:8px;border:1px solid var(--line);border-radius:8px;background:var(--field);touch-action:none;user-select:none;cursor:pointer}
+.tl canvas{position:absolute;inset:0;width:100%;height:100%}
+.tl .sel{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 22%,transparent);border-left:2px solid var(--accent);border-right:2px solid var(--accent);pointer-events:none}
+.tl .h{position:absolute;top:-4px;bottom:-4px;width:16px;margin-left:-8px;cursor:ew-resize;display:grid;place-items:center}
+.tl .h::after{content:"";width:6px;height:60%;border-radius:4px;background:var(--accent)}
+.tl .ph{position:absolute;top:0;bottom:0;width:1px;background:var(--text);pointer-events:none;display:none}
+.words{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.words input{width:auto;padding:4px 6px;font-size:13px;border-radius:6px}
+.bar{height:6px;background:var(--surface2);border-radius:99px;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
+.bar.indet i{width:30%;animation:slide 1.3s infinite linear}
+@keyframes slide{from{margin-left:-30%}to{margin-left:100%}}
+@media (prefers-reduced-motion:reduce){.bar.indet i{animation:none;width:100%;opacity:.5}}
+.clip.cur{outline:2px solid var(--accent);outline-offset:2px}
+.keys{color:var(--muted);font-size:12px;margin:-4px 0 12px}.keys kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--surface);font:inherit;font-size:11.5px}
+.capprev{margin-top:8px;padding:14px 8px;border-radius:9px;background:linear-gradient(135deg,#2b3550,#16324a);text-align:center;font-size:22px;line-height:1.2;letter-spacing:.3px}
 .lerr{color:var(--bad);font-weight:600}.lwarn{color:var(--warn)}
 .switch{display:flex;gap:10px;align-items:flex-start;padding:7px 0;cursor:pointer}
 .switch input{flex:none;width:36px;height:20px;appearance:none;background:var(--line);border-radius:999px;position:relative;cursor:pointer;margin-top:1px;transition:.15s}
@@ -144,6 +164,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
             <button class="btn" id="b-hrepair" onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. Continue?')">Repair</button>
             <button class="btn primary" id="b-hupdate" hidden onclick="hAct('/api/health/update','Update takes the newest version from GitHub. Your clips, settings and keys are not touched. Continue?')">Update</button>
           </div>
+          <div class="bar indet" id="h-bar" hidden><i></i></div>
           <div class="note" id="h-note" hidden></div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="hlog"></pre></details>
         </div>
@@ -178,6 +199,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <label class="f" for="r-top">How many clips</label>
           <select id="r-top"><option>5</option><option selected>8</option><option>12</option><option>20</option></select>
           <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig'),ai:$('r-ai').checked})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="act('/api/run/stop',{})">Stop</button></div>
+          <div class="bar indet" id="r-bar" hidden><i></i></div>
           <div class="note" id="r-note">Nothing running.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="rlog"></pre></details>
         </div>
@@ -211,7 +233,11 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
         <p class="help">Turns every approved clip into finished 9:16 videos with their upload text. Nothing is posted.</p>
         <label class="switch"><input type="checkbox" id="o-ab" onchange="saveOpts()"><span><b>A and B versions</b>Two versions of each clip with different opening text and title, to test which does better.</span></label>
         <label class="switch"><input type="checkbox" id="o-opening" onchange="saveOpts()"><span><b>Eye-catching first seconds</b>Zoom-in, pop-in text, a whoosh and a progress bar.</span></label>
+        <label class="f" for="o-cap">Caption style</label>
+        <select id="o-cap" onchange="saveOpts()"></select>
+        <div class="capprev" id="capprev" aria-hidden="true"></div>
         <div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button></div>
+        <div class="bar" id="f-bar" hidden><i></i></div>
         <div class="note" id="f-note">Nothing made yet in this session.</div>
         <ul class="ready" id="f-ready"></ul>
         <details class="log"><summary>Activity log</summary><pre class="log" id="flog"></pre></details>
@@ -224,6 +250,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
       <h2><span class="step">2</span>Review the clips</h2>
       <div class="filters" id="filters"></div>
     </div>
+    <p class="keys">Keys: <kbd>J</kbd> <kbd>K</kbd> next and previous clip · <kbd>Space</kbd> play or pause · <kbd>A</kbd> approve · <kbd>R</kbd> reject</p>
     <div class="clips" id="clips" data-filter="candidate"></div>
     <div class="empty" id="empty" hidden></div>
   </main>
@@ -265,6 +292,7 @@ function show(s){
     $('o-modes').innerHTML=Object.keys(s.modes).map(k=>{const m=MODES[k]||['?',k,s.modes[k]];
       return '<label class="mode" data-k="'+k+'"><input type="radio" name="o-mode" value="'+k+'" onchange="pickMode()"><b>'+m[0]+'</b><span>'+m[1]+'</span><em>'+m[2]+'</em></label>'}).join('');
     $('o-channels').value=s.channels; drawn=true;
+    $('o-cap').innerHTML=Object.entries(s.caption_presets||{}).map(([k,p])=>'<option value="'+k+'">'+esc(p.label)+'</option>').join('');
     $('a-backend').innerHTML=Object.entries(s.ai.backends).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('');
     $('a-prefer').innerHTML=Object.entries(s.ai.ways||{}).map(([k,w])=>'<option value="'+k+'">'+esc(w.name)+'</option>').join('');
     const names={'claude-haiku-5-5':'Haiku (fastest, cheapest)','claude-sonnet-5-5':'Sonnet (balanced)','claude-opus-5-5':'Opus (best judgement)','claude-fable-5-2':'Fable (most capable)'};
@@ -285,6 +313,15 @@ function show(s){
   const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!r.checked&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
   for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);
   $('o-ab').checked=s.ab_versions; $('o-opening').checked=s.opening;
+  if(s.caption_presets){if(document.activeElement!==$('o-cap'))$('o-cap').value=s.caption_preset in s.caption_presets?s.caption_preset:'';
+    const p=s.caption_presets[$('o-cap').value]; const cp=$('capprev');
+    if(p){const t=p.uppercase?['NO WAY','HE','DID THAT']:['No way','he','did that'];
+      cp.style.fontFamily='"'+p.font+'",Arial,sans-serif'; cp.style.fontWeight=900; cp.style.webkitTextStroke=Math.max(1,p.outline/4)+'px #000'; cp.style.paintOrder='stroke fill';
+      cp.innerHTML='<span style="color:#'+p.text_color+'">'+t[0]+' </span><span style="color:#'+p.active_color+';font-size:112%">'+t[1]+'</span><span style="color:#'+p.text_color+'"> '+t[2]+'</span>'}
+    else cp.textContent='Custom style from the settings file'}
+  const fp=s.finish_progress||{done:0,total:0,now:''}; $('f-bar').hidden=!s.finishing;
+  $('f-bar').firstElementChild.style.width=(fp.total?Math.round(100*fp.done/fp.total):0)+'%';
+  $('r-bar').hidden=!s.running; $('h-bar').hidden=!(s.health&&s.health.maint.running);
   const pw=$('p-watch'); pw.className='pill'+(s.watching?' live':''); pw.lastElementChild.textContent=s.watching?'Watching '+(s.channels||'').split(' ').filter(Boolean).join(', '):'Not watching';
   $('b-start').disabled=s.watching; $('b-stop').disabled=!s.watching;
   $('w-note').innerHTML=s.watching?'<b>Watching.</b> Drafts appear on the right as moments happen. '+esc(lastLine(s.watch_log)):(s.watch_problem?'<b>Stopped with a problem.</b> Open the activity log.':'Not watching.');
@@ -293,7 +330,7 @@ function show(s){
   $('r-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?'<b>Done.</b> '+esc(lastLine(s.run_log)):'Nothing running.'));
   logTo('rlog',s.run_log);
   const ready=s.finish_log.filter(l=>l.startsWith('READY ')), notMade=s.finish_log.filter(l=>l.startsWith('NOT MADE ')||l.startsWith('FAILED'));
-  $('f-note').innerHTML=s.finishing?'<b>Working…</b> this takes about a minute per clip.':(s.finish_log.length?'<b>'+ready.length+' video file(s) made.</b> '+(notMade.length?notMade.length+' could not be made.':'')+' They are in the <b>ready</b> folder inside your data folder.':'Nothing made yet in this session.');
+  $('f-note').innerHTML=s.finishing?'<b>Working…</b> '+(fp.total?'clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total+(fp.now?': '+esc(fp.now):''):'starting')+'. About a minute per clip.':(s.finish_log.length?'<b>'+ready.length+' video file(s) made.</b> '+(notMade.length?notMade.length+' could not be made.':'')+' They are in the <b>ready</b> folder inside your data folder.':'Nothing made yet in this session.');
   $('f-ready').innerHTML=ready.map(l=>'<li>'+esc(l.slice(6).split(/[\\/]/).pop())+'</li>').join('')+notMade.map(l=>'<li class="nm">'+esc(l)+'</li>').join('');
   $('b-finish').disabled=s.finishing;
   logTo('flog',s.finish_log);
@@ -330,7 +367,7 @@ async function hAct(url,ask){if(ask&&!confirm(ask))return;act(url,{})}
 function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_prefer:val('a-prefer'),llm_fallback:$('a-fallback').checked,llm_model:val('a-model'),ai_model:val('a-stream')})}
 async function act2(url){if(await post(url))poll1()}
 async function poll1(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){}}
-function saveOpts(){act('/api/options',{mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked})}
+function saveOpts(){const o={mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked};if(val('o-cap'))o.caption_preset=val('o-cap');act('/api/options',o)}
 async function poll(){
   let s=null;
   try{const r=await fetch('/api/options');if(r.ok)s=await r.json();else setErr('The page could not read the program state: '+r.status+' '+await r.text())}
@@ -350,7 +387,10 @@ function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
   return parts.length?parts:[t]}
 function cardHtml(c){
   const k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
-  const vid=c.video?'<video controls preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+'"></video><small>'+shown+'</small>'
+  const VN={'final.mp4':'A','final_b.mp4':'B','explained.mp4':'Explained A','explained_b.mp4':'Explained B','source.mp4':'Raw'};
+  const tabs=(c.videos||[]).length>1||(c.videos||[]).includes('final.mp4')?'<div class="vtabs">'+(c.videos||[]).map(n=>'<button class="'+(n===c.video?'on':'')+'" onclick="showVid(\''+k+'\',\''+n+'\',this)">'+VN[n]+'</button>').join('')
+    +((c.videos||[]).includes('final.mp4')&&!(c.videos||[]).includes('final_b.mp4')?'<button onclick="makeB(\''+k+'\',this)" title="Render version B now so you can compare it">Make B preview</button>':'')+'</div>':'';
+  const vid=c.video?'<video controls preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+'"></video>'+tabs+'<small>'+shown+'</small>'
     :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
   const pc=c.points>=70?'good':(c.points>=40?'':'meh');
   const chips='<span class="chip '+pc+'" title="One score from chat, sound, picture and AI. Higher is better."><b>Score '+c.points+'</b></span>'
@@ -383,7 +423,10 @@ function cardHtml(c){
    +'<div><label class="f">Title, version B</label><input type="text" name="title_b" value="'+esc(c.title_b)+'"></div></div>'
    +'<label class="f">Description</label><textarea name="description">'+esc(c.description)+'</textarea>'
    +'<label class="f">Hashtags (separated by spaces)</label><input type="text" name="tags" value="'+esc((c.tags||[]).join(' '))+'"></details>'
-   +'<details class="sec"><summary>Fine-tune <small>where it starts and ends, framing, ad label</small></summary>'
+   +(c.has_words?'<details class="sec" ontoggle="if(this.open)initWords(\''+k+'\')"><summary>Captions <small>fix a wrong word, or empty a box to remove it</small></summary>'
+     +'<div class="words"></div><div class="btns"><button class="btn" onclick="saveWords(\''+k+'\')">Save captions</button></div></details>':'')
+   +'<details class="sec" ontoggle="if(this.open)initTrim(\''+k+'\')"><summary>Fine-tune <small>where it starts and ends, framing, ad label</small></summary>'
+   +'<div class="trim"></div>'
    +'<div class="three"><div><label class="f">Start (seconds into the stream)</label><input type="number" step="0.5" name="cut_start_s" value="'+esc(c.cut_start_s??c.start_s)+'"></div>'
    +'<div><label class="f">End</label><input type="number" step="0.5" name="cut_end_s" value="'+esc(c.cut_end_s??c.end_s)+'"></div>'
    +'<div><label class="f">Framing</label><select name="layout">'+lay+'</select></div></div>'
@@ -421,7 +464,7 @@ async function loadClips(){
   for(const c of clips){
     let el=$(domId(c.key));
     if(!el){el=document.createElement('div');el.className='card clip';el.id=domId(c.key);el.dataset.status=c.status;el.dataset.m=c.mtime;el.innerHTML=cardHtml(c);
-      el.addEventListener('input',()=>{el.dataset.dirty='1';const s=el.querySelector('.saved');s.textContent='Unsaved changes';s.className='saved warn'});
+      el.addEventListener('input',()=>{el.dataset.dirty='1';const s=el.querySelector('.acts .saved');s.textContent='Unsaved changes';s.className='saved warn'});
       if(prev)prev.after(el);else box.prepend(el)}
     else if(String(c.mtime)!==el.dataset.m&&!busy(el)){el.dataset.status=c.status;el.dataset.m=c.mtime;el.innerHTML=cardHtml(c)}
     prev=el;
@@ -469,6 +512,77 @@ async function delRejected(n){
   toast(r.deleted+' clip'+(r.deleted===1?'':'s')+' deleted ('+r.mb+' MB freed)'); loadClips();
 }
 async function clearErr(key){if(await post('/api/clip/'+key+'/clear-error')){const el=$(domId(key));el.dataset.m='';loadClips()}}
+function showVid(key,name,btn){const el=$(domId(key)),v=el.querySelector('.vid video');const c=known.find(x=>x.key===key)||{};
+  v.src='/media/'+key+'/'+name+'?v='+c.mtime;for(const b of btn.parentElement.children)b.classList.toggle('on',b===btn);v.play().catch(()=>{})}
+async function makeB(key,btn){btn.disabled=true;btn.textContent='Making B…';
+  if(await post('/api/clip/'+key+'/render-b')){const el=$(domId(key));el.dataset.m='';toast('Version B is ready');loadClips()}else{btn.disabled=false;btn.textContent='Make B preview'}}
+
+/* ---------- trimmer: drag the start and end over the sound wave ---------- */
+async function initTrim(key){
+  const el=$(domId(key)), box=el.querySelector('.trim'), c=known.find(x=>x.key===key);
+  if(!box||box.dataset.ready||!c||!(c.videos||[]).includes('source.mp4'))return;
+  box.dataset.ready='1'; box.innerHTML='<p class="help">Loading the sound wave…</p>';
+  let w;try{const r=await fetch('/api/clip/'+key+'/wave');if(!r.ok){box.innerHTML='<p class="help">The trimmer is not available: '+esc(await r.text())+'</p>';return}w=await r.json()}
+  catch(e){box.innerHTML='<p class="help">The trimmer could not load ('+esc(e)+').</p>';return}
+  box.innerHTML='<video controls preload="metadata" src="/media/'+key+'/source.mp4?v='+c.mtime+'"></video>'
+    +'<div class="tl"><canvas></canvas><div class="sel"></div><div class="ph"></div><div class="h hs" title="Drag: where the clip starts"></div><div class="h he" title="Drag: where the clip ends"></div></div>'
+    +'<div class="btns" style="margin-top:8px"><button class="btn" data-a="play">Play selection</button><span class="tinfo" style="font-size:12.5px;color:var(--muted)"></span></div>'
+    +'<p class="help" style="margin-top:6px">Drag the two handles, or click the wave to listen from there. This is the raw download, without captions. Press Save changes when it is right.</p>';
+  const total=w.seconds, base=Number(c.fetch_start_s)||0, tl=box.querySelector('.tl'), cv=tl.querySelector('canvas'), v=box.querySelector('video');
+  const iS=el.querySelector('[name=cut_start_s]'), iE=el.querySelector('[name=cut_end_s]');
+  const get=()=>[Math.max(0,parseFloat(iS.value)-base),Math.min(total,parseFloat(iE.value)-base)];
+  function draw(){const [a,b]=get(), W=tl.clientWidth, H=tl.clientHeight, dpr=window.devicePixelRatio||1;
+    cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+    const css=getComputedStyle(document.documentElement), on=css.getPropertyValue('--accent').trim(), off=css.getPropertyValue('--muted').trim();
+    const n=w.peaks.length, bw=W/n;for(let i=0;i<n;i++){const t=i/n*total, h=Math.max(1,w.peaks[i]*(H-8));g.fillStyle=(t>=a&&t<=b)?on:off;g.globalAlpha=(t>=a&&t<=b)?1:.45;g.fillRect(i*bw,(H-h)/2,Math.max(1,bw-.6),h)}
+    const sel=tl.querySelector('.sel');sel.style.left=(a/total*100)+'%';sel.style.width=((b-a)/total*100)+'%';
+    tl.querySelector('.hs').style.left=(a/total*100)+'%';tl.querySelector('.he').style.left=(b/total*100)+'%';
+    box.querySelector('.tinfo').textContent='Clip length: '+(b-a).toFixed(1)+' s (downloaded: '+total.toFixed(0)+' s)'}
+  function setVal(inp,t){inp.value=(Math.round((base+t)*2)/2).toFixed(1);inp.dispatchEvent(new Event('input',{bubbles:true}))}
+  function drag(which){return e=>{e.preventDefault();e.stopPropagation();
+    const move=ev=>{const r=tl.getBoundingClientRect(), t=Math.max(0,Math.min(total,(ev.clientX-r.left)/r.width*total)), [a,b]=get();
+      if(which==='s')setVal(iS,Math.min(t,b-3));else setVal(iE,Math.max(t,a+3));draw()};
+    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};
+    window.addEventListener('pointermove',move);window.addEventListener('pointerup',up)}}
+  tl.querySelector('.hs').addEventListener('pointerdown',drag('s'));tl.querySelector('.he').addEventListener('pointerdown',drag('e'));
+  tl.addEventListener('click',e=>{if(e.target.classList.contains('h'))return;const r=tl.getBoundingClientRect();v.currentTime=(e.clientX-r.left)/r.width*total;v.play().catch(()=>{})});
+  let stopAt=null;const ph=tl.querySelector('.ph');
+  v.addEventListener('timeupdate',()=>{ph.style.display='block';ph.style.left=(v.currentTime/total*100)+'%';if(stopAt!=null&&v.currentTime>=stopAt){v.pause();stopAt=null}});
+  box.querySelector('[data-a=play]').addEventListener('click',()=>{const [a,b]=get();v.currentTime=a;stopAt=b;v.play().catch(()=>{})});
+  iS.addEventListener('input',draw);iE.addEventListener('input',draw);window.addEventListener('resize',draw);draw();
+}
+
+/* ---------- captions: edit the words ---------- */
+async function initWords(key){
+  const el=$(domId(key)), box=el.querySelector('.words'), c=known.find(x=>x.key===key);
+  if(!box||box.dataset.ready||!c)return; box.dataset.ready='1';
+  let words;try{const r=await fetch('/api/clip/'+key+'/words');if(!r.ok){box.textContent='The captions could not be read: '+await r.text();return}words=await r.json()}catch(e){box.textContent='The captions could not be read ('+e+').';return}
+  el._words=words; const base=Number(c.fetch_start_s)||0, a=(c.cut_start_s??c.start_s)-base-0.5, b=(c.cut_end_s??c.end_s)-base+0.5;
+  box.innerHTML=words.map((w,i)=>(w.start>=a&&w.start<=b)?'<input type="text" data-i="'+i+'" value="'+esc(w.word)+'" size="'+Math.max(2,String(w.word).length)+'" aria-label="caption word">':'').join('')
+    ||'<span class="help">No words were heard in this part of the clip.</span>';
+}
+async function saveWords(key){
+  const el=$(domId(key)); if(!el._words){toast('Open the captions first.',true);return}
+  for(const inp of el.querySelectorAll('.words input'))el._words[+inp.dataset.i].word=inp.value;
+  let r;try{r=await fetch('/api/clip/'+key+'/words',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({words:el._words})})}catch(e){toast('The program is not answering: '+e,true);return}
+  if(!r.ok){toast('Captions not saved: '+await r.text(),true);return}
+  el.dataset.dirty='';el.dataset.m='';if(document.activeElement)document.activeElement.blur();
+  toast('Captions saved. The draft is made again when you press Make videos, or use "Make B preview".');loadClips();
+}
+
+/* ---------- keyboard ---------- */
+let cur=null;
+function shownCards(){return [...$('clips').children].filter(e=>e.offsetParent!==null)}
+function setCur(el){if(cur)cur.classList.remove('cur');cur=el||null;if(cur){cur.classList.add('cur');cur.scrollIntoView({block:'center',behavior:'smooth'})}}
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary,[contenteditable]')))return;
+  const cards=shownCards(), i=cards.indexOf(cur), k=e.key.toLowerCase();
+  if(k==='j'||k==='arrowdown'){setCur(cards[Math.min(cards.length-1,i+1)]);e.preventDefault()}
+  else if(k==='k'||k==='arrowup'){setCur(cards[Math.max(0,i<0?0:i-1)]);e.preventDefault()}
+  else if(cur&&(k==='a'||k==='r')){const key=cur.id.slice(2).replace('--','/'), next=cards[i+1]||cards[i-1]||null;
+    save(key,{status:k==='a'?'approved':'rejected'});setCur(next);e.preventDefault()}
+  else if(cur&&k===' '){const v=cur.querySelector('.vid video');if(v){v.paused?v.play().catch(()=>{}):v.pause()}e.preventDefault()}
+});
 async function clipLoop(){await loadClips();setTimeout(clipLoop,8000)}
 $('scope').textContent=__TITLE__;
 if(HAS_PANEL)poll();else $('side').remove();

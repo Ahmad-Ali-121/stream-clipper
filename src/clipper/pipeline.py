@@ -238,7 +238,7 @@ def all_works(cfg: Config) -> list[Path]:
 
 
 def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = None,
-                 problems: list[str] | None = None) -> list[tuple[Path, bool]]:
+                 problems: list[str] | None = None, progress=None) -> list[tuple[Path, bool]]:
     """Render every approved clip that lacks an up-to-date render, then export it with a post sheet.
 
     Works across every stream, or one if ``url`` is given. Clips already exported
@@ -250,8 +250,11 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
     works = [open_work(url, cfg)[1]] if url else all_works(cfg)
     brief = load_brief(brief_path) if brief_path else None
     results: list[tuple[Path, bool]] = []
-    for work in works:
-        for d in select_clips(work, status="approved"):
+    todo = [(work, d) for work in works for d in select_clips(work, status="approved")]
+    for n, (work, d) in enumerate(todo):
+        if progress:
+            progress(n, len(todo), f"{read_json(d / 'clip.json', {}).get('channel', '')} {d.name}")
+        if True:
             from .watch import note_error
 
             try:
@@ -262,6 +265,8 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
                 note_error(d, f"finish failed: {e}")
                 if problems is not None:
                     problems.append(f"{work.name}/{d.name}: {e}")
+    if progress:
+        progress(len(todo), len(todo), "")
     return results
 
 
@@ -282,7 +287,8 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
     state = write_clip_copy(d, state, cfg)  # no-op unless its text was written without AI and AI is reachable now
     ab = cfg.render.ab_versions
     # A render made before the opening effects were switched on (or off) no longer matches the settings.
-    fresh = not done(d / "final.mp4") or bool(state.get("opening_used")) != bool(cfg.render.opening)
+    fresh = (not done(d / "final.mp4") or bool(state.get("opening_used")) != bool(cfg.render.opening)
+             or state.get("style_used", "bold") != cfg.captions.preset)  # a render in another caption style is stale too
     if fresh:
         render_clip(d, cfg, force=True)
         for name in ("explained.mp4", "explained_b.mp4", "final_b.mp4"):  # made with the old settings too

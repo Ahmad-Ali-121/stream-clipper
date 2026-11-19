@@ -107,7 +107,7 @@ src/clipper/
   streamread.py  AI reads a whole stream's speech
   health.py      setup check, repair, update
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           133 unit tests (uv run pytest -q)
+tests/           136 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about
