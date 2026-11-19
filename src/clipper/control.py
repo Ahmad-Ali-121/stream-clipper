@@ -145,6 +145,7 @@ class Control:
         self.run_problem = ""
         self.maint = {"name": "", "running": False, "lines": []}  # the one maintenance job: full check, repair or update
         self.health_started = False
+        self.update_asked = 0.0  # when GitHub was last asked for a newer version
         self.exit_code = 0  # 42 asks the launcher to start the program again (after an update)
         self.shutdown = None  # set by the server: stops it so the program can exit
         self.ai_checking = False
@@ -234,6 +235,22 @@ class Control:
         if stale and not self.health_started and not self.maint["running"]:
             self.health_started = True
             self.start_full_check()  # once per session, when nothing recent is known
+        # GitHub is asked at the start and then every half hour, so the Update button appears by itself soon after a
+        # new version is published. It used to be asked once a day, with the full check.
+        if time.time() - self.update_asked > 1800 and not self.maint["running"]:
+            self.update_asked = time.time()
+
+            def ask() -> None:
+                from . import health as h
+
+                try:
+                    state = h.check_update(self.cfg)
+                    if state.get("behind"):
+                        log.info("a newer version is on GitHub: %s change(s) behind%s", state["behind"], f" ({state['why']})" if state.get("why") else "")
+                except Exception as e:
+                    log.error("GitHub could not be asked for a newer version: %s", e, exc_info=True)
+
+            threading.Thread(target=ask, daemon=True).start()
         upd = saved.get("update") or {}
         return {"items": items, "summary": health.summary(items), "maint": {**self.maint, "lines": self.maint["lines"][-200:]},
                 "can_update": bool(upd.get("can")), "launcher": bool(os.environ.get("CLIPPER_LAUNCHER"))}

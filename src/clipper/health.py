@@ -65,6 +65,16 @@ def update_state(fetch: bool = False) -> dict:
         return {"can": False, "behind": 0, "why": f"git could not be used ({e})"}
 
 
+def check_update(cfg: Config) -> dict:
+    """Ask GitHub for the newest version (a few seconds, nothing else is checked) and remember the answer."""
+    path = cfg.data_dir / "health.json"
+    state = update_state(fetch=True)
+    saved = read_json(path, {}) or {}
+    saved["update"], saved["update_at"] = state, time.time()
+    write_json(path, saved)
+    return state
+
+
 def quick_checks(cfg: Config) -> list[dict]:
     from . import hw, llm
     from .tools import ToolError, find_tool
@@ -129,7 +139,7 @@ def quick_checks(cfg: Config) -> list[dict]:
     elif upd:
         out.append(_item("update", "Program version", "ok", upd.get("why") or "up to date"))
     else:
-        out.append(_item("update", "Program version", "todo", "not compared with GitHub yet", "Press 'Run the full check'."))
+        out.append(_item("update", "Program version", "todo", "not compared with GitHub yet", "It is compared by itself within a minute of starting."))
     return out
 
 
