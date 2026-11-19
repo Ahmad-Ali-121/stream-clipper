@@ -14,6 +14,7 @@ The answer is cached in <data_dir>/hardware.json. Delete that file (or run
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -108,7 +109,7 @@ def describe_exit(code: int) -> str:
     return f"it crashed: exit code {code} (0x{unsigned:08X}, {CRASH_CODES.get(unsigned, 'killed, or a crash inside a native library')})"
 
 
-def trial_load(model: str, device: str, compute_type: str, models_dir: str) -> tuple[bool, str]:
+def trial_load(model: str, device: str, compute_type: str, models_dir: str, env: dict[str, str] | None = None) -> tuple[bool, str]:
     """Load the speech model and transcribe a second of silence in a separate process: (worked, everything it said).
 
     A damaged model file or missing GPU libraries kill the process inside native code, with no Python error.
@@ -118,12 +119,81 @@ def trial_load(model: str, device: str, compute_type: str, models_dir: str) -> t
         proc = subprocess.run(
             [sys.executable, "-X", "faulthandler", "-c", _CUDA_TRIAL.replace('"cuda"', "sys.argv[4]"), model, compute_type, models_dir, device],
             capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=3600,
+            env={**os.environ, **(env or {})},
         )
     except Exception as e:
         return False, f"could not start the trial: {e}"
     if "CUDA-OK" in proc.stdout:
         return True, ""
     return False, (describe_exit(proc.returncode) + "\n" + proc.stderr.strip()[-1500:]).strip()
+
+
+def machine_facts() -> list[str]:
+    """Lines describing this computer and the speech library, for a problem report."""
+    import platform
+
+    facts = [f"system: {platform.platform()}", f"processor: {platform.processor()} ({os.cpu_count()} threads)", f"python: {sys.version.split()[0]}"]
+    try:
+        import ctypes
+
+        class Mem(ctypes.Structure):
+            _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong)] + [(n, ctypes.c_ulonglong) for n in ("total", "free", "a", "b", "c", "d", "e")]
+
+        m = Mem()
+        m.length = ctypes.sizeof(Mem)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+        facts.append(f"memory: {m.total / 2**30:.1f} GB installed, {m.free / 2**30:.1f} GB free")
+    except Exception as e:
+        facts.append(f"memory: could not be read ({e})")
+    try:
+        import ctranslate2
+        import faster_whisper
+
+        facts.append(f"speech library: ctranslate2 {ctranslate2.__version__}, faster-whisper {faster_whisper.__version__}")
+        facts.append(f"processor number formats: {sorted(ctranslate2.get_supported_compute_types('cpu'))}")
+        facts.append(f"NVIDIA cards the library sees: {ctranslate2.get_cuda_device_count()}")
+    except Exception as e:
+        facts.append(f"speech library: could not be read ({e})")
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"],
+                             capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=20).stdout.strip()
+        facts.append(f"nvidia-smi: {out or 'no answer'}")
+    except Exception as e:
+        facts.append(f"nvidia-smi: not available ({e})")
+    return facts
+
+
+# (label, model, device, compute type, extra environment) tried by ``clipper doctor``, each in its own process.
+SPEECH_TRIALS = [
+    ("tiny model, processor", "tiny", "cpu", "int8", {}),
+    ("usual model, processor, int8 (the default)", None, "cpu", "int8", {}),
+    ("usual model, processor, float32", None, "cpu", "float32", {}),
+    ("usual model, processor, int8, one thread", None, "cpu", "int8", {"OMP_NUM_THREADS": "1"}),
+    ("usual model, processor, int8, AVX2 only", None, "cpu", "int8", {"CT2_FORCE_CPU_ISA": "AVX2"}),
+    ("usual model, processor, int8, plain instructions", None, "cpu", "int8", {"CT2_FORCE_CPU_ISA": "GENERIC"}),
+    ("usual model, processor, int8, without Intel MKL", None, "cpu", "int8", {"CT2_USE_MKL": "0"}),
+    ("usual model, NVIDIA card, int8_float16", None, "cuda", "int8_float16", {}),
+]
+
+
+def doctor(cfg: Config) -> bool:
+    """Print this computer's facts and try loading the speech model several ways. True when the default way works."""
+    models = cfg.data_dir / "models"
+    models.mkdir(parents=True, exist_ok=True)
+    for line in machine_facts():
+        print(line)
+    print(f"models folder: {models}")
+    print("\nTrying speech-to-text several ways, each in its own process (a few minutes; nothing here can crash this window):")
+    default_ok = False
+    for label, model, device, compute_type, env in SPEECH_TRIALS:
+        ok, why = trial_load(model or cfg.transcribe.model, device, compute_type, str(models), env)
+        print(f"\n[{'WORKS' if ok else 'FAILS'}] {label}" + (f"  {env}" if env else ""))
+        if not ok:
+            print("    " + why.replace("\n", "\n    "))
+        if label.endswith("(the default)"):
+            default_ok = ok
+    print("\nCopy everything above when reporting a problem.")
+    return default_ok
 
 
 def confirm_cuda(cfg: Config, model: str, compute_type: str, models_dir: str) -> tuple[str, str]:

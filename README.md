@@ -73,6 +73,7 @@ The code is plain Python and FFmpeg, so it should run on macOS and Linux, but th
 | `tags SEED...` | Hashtags that well-viewed YouTube Shorts on a topic use right now |
 | `status URL` | List a stream's clips and what exists for each |
 | `hardware [--refresh]` | Show which GPU or CPU paths are in use |
+| `doctor` | Describe this computer and try speech-to-text several ways, to find why it fails |
 | `clean [--dry-run]` | Delete the video files of rejected clips |
 | `find`, `fetch`, `transcribe`, `render`, `post` | The single stages of `run` and `finish` |
 | `check-brief BRIEF CLIP` | Check one clip's JSON against a campaign brief |

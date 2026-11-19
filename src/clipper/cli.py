@@ -183,6 +183,12 @@ def _cmd_hardware(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    from . import hw
+
+    return 0 if hw.doctor(load_config(args.config)) else 1
+
+
 def _cmd_finish(args: argparse.Namespace) -> int:
     from .pipeline import stage_finish
 
@@ -312,6 +318,9 @@ def build_parser() -> argparse.ArgumentParser:
     hwp = sub.add_parser("hardware", help="show which GPU or CPU paths are used; --refresh re-detects")
     hwp.add_argument("--refresh", action="store_true")
     hwp.set_defaults(func=_cmd_hardware)
+
+    doc = sub.add_parser("doctor", help="describe this computer and try speech-to-text several ways, to find why it fails")
+    doc.set_defaults(func=_cmd_doctor)
 
     fi = sub.add_parser("finish", help="render and export every approved clip, across all streams")
     fi.add_argument("url", nargs="?", help="limit to one stream")
