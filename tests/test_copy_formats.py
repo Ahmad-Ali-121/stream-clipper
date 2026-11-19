@@ -45,7 +45,7 @@ def test_clean_copy_normalises_model_output():
 def test_fallback_copy_without_ai():
     state = {"channel": "Lacy", "transcript": "headshot two three yo how many bullets do you need to kill"}
     out = llm.fallback_copy(state, ["#gta", "#lacy", "#luciacaminos"], max_tags=3)
-    assert out["keep"] and out["hook"] == "headshot two three yo how many bullets"
+    assert out["keep"] and out["hook"] == "Wait for it" and out["title"] == "Lacy stream moment"  # general on purpose, never half a sentence
     assert out["tags"] == ["#Lacy", "#gta", "#luciacaminos"]  # streamer first, no duplicate of it
     quiet = llm.fallback_copy({"channel": "Lacy", "transcript": "ok"}, [])
     assert not quiet["keep"] and "speech" in quiet["reason"]
@@ -82,7 +82,7 @@ def test_text_typed_by_a_person_is_never_replaced(tmp_path, monkeypatch):
     # Text written automatically earlier may be rewritten; and a new hook makes the old render stale.
     auto_state = {**read_json(d / "clip.json"), "hook": "", "copy_at": None}
     out2 = pipeline.write_clip_copy(d, auto_state, Config())
-    assert out2["hook"] == "one two three four five six seven" and not (d / "final.mp4").exists()
+    assert out2["hook"] == "Wait for it" and not (d / "final.mp4").exists()
 
 
 # ---- narration timing and hardware choices ----
@@ -142,3 +142,28 @@ def test_forced_settings_skip_detection():
     cfg.render.encoder = "libx264"
     cfg.transcribe.device, cfg.transcribe.compute_type = "cpu", "auto"
     assert hw.encoder(cfg) == "libx264" and hw.whisper_device(cfg) == ("cpu", "int8")
+
+
+def test_plain_text_is_redone_once_ai_is_available(tmp_path, monkeypatch):
+    from clipper import pipeline
+    from clipper.config import load_config
+    from clipper.work import write_json
+
+    cfg = load_config()
+    cfg.trends.enabled = False
+    d = tmp_path / "c"
+    d.mkdir()
+    state = {"id": "c", "channel": "Lacy", "transcript": "one two three four five six seven", "start_s": 0, "end_s": 30}
+    write_json(d / "clip.json", state)
+    monkeypatch.setattr(llm, "available", lambda cfg: False)
+    monkeypatch.setattr(llm, "write_copy", lambda *a: (_ for _ in ()).throw(llm.LlmUnavailable("no key here")))
+    state = pipeline.write_clip_copy(d, state, cfg)
+    assert state["copy_source"] == "plain" and state["copy_problem"] == "no key here" and state["hook"] == "Wait for it"
+    state["hook_b"] = "typed by a person"
+    state["copy_auto"] = [k for k in state["copy_auto"] if k != "hook_b"]
+    # A key appears: the next call replaces the placeholders, but not what a person typed.
+    monkeypatch.setattr(llm, "available", lambda cfg: True)
+    monkeypatch.setattr(llm, "write_copy", lambda *a: llm.clean_copy({"hook": "He misses every shot", "hook_b": "ai b", "title": "T", "tags": ["x"]}))
+    state = pipeline.write_clip_copy(d, state, cfg)
+    assert state["hook"] == "He misses every shot" and state["hook_b"] == "typed by a person"
+    assert state["copy_source"] != "plain" and "copy_problem" not in state

@@ -191,11 +191,11 @@ class Control:
             self.run_problem, self.run_seen = "", True
             self.run_log_path.parent.mkdir(parents=True, exist_ok=True)
             out = self.run_log_path.open("w", encoding="utf-8")
-            out.write(f"{time.strftime('%H:%M:%S')} analysing {source.url}: the best {top} moments, found by {signals}\n")
+            out.write(f"{time.strftime('%H:%M:%S')} analysing {source.url}: the best {top} moments, found by {signals}{' + AI reading the speech' if raw.get('ai') else ''}\n")
             out.flush()
             self.run_proc = subprocess.Popen(
                 [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())",
-                 "run", source.url, "--top", str(top), "--signals", signals],
+                 "run", source.url, "--top", str(top), "--signals", signals] + (["--ai"] if raw.get("ai") else []),
                 stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(PROJECT_ROOT),
             )
         return self.status()

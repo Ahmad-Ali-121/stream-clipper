@@ -247,6 +247,15 @@ def machine_facts() -> list[str]:
     except Exception as e:
         facts.append(f"speech library: could not be read ({e})")
     try:
+        from .config import load_env
+
+        load_env()
+        facts.append("keys in .env on this computer: " + ", ".join(
+            f"{name} {'set' if os.environ.get(key) else 'NOT set'}"
+            for name, key in (("Claude (ANTHROPIC_API_KEY)", "ANTHROPIC_API_KEY"), ("ElevenLabs", "ELEVENLABS_API_KEY"), ("Groq", "GROQ_API_KEY"))))
+    except Exception as e:
+        facts.append(f"keys: could not be read ({e})")
+    try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"],
                              capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=20).stdout.strip()
         facts.append(f"nvidia-smi: {out or 'no answer'}")

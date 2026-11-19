@@ -145,6 +145,15 @@ class LlmSettings:
 
 
 @dataclass
+class AiSettings:
+    """AI that reads a whole finished stream's speech and picks moments from the words (run --ai)."""
+
+    model: str = "claude-haiku-5-5"  # reads the whole stream's text: a few cents. "claude-opus-5-5" chooses better, about $0.30 a stream
+    speech_model: str = "auto"  # auto = the usual model on an NVIDIA card, "small" on a processor (several times faster)
+    max_hours: float = 0.0  # read only the first hours of a stream; 0 = all of it
+
+
+@dataclass
 class VoiceSettings:
     backend: str = "kokoro"  # "kokoro" = free, runs on this machine; "elevenlabs" = paid, needs ELEVENLABS_API_KEY
     kokoro_voice: str = "am_michael"
@@ -178,6 +187,7 @@ class Config:
     transcribe: TranscribeSettings = field(default_factory=TranscribeSettings)
     render: RenderSettings = field(default_factory=RenderSettings)
     watch: WatchSettings = field(default_factory=WatchSettings)
+    ai: AiSettings = field(default_factory=AiSettings)
     trends: TrendSettings = field(default_factory=TrendSettings)
     llm: LlmSettings = field(default_factory=LlmSettings)
     voice: VoiceSettings = field(default_factory=VoiceSettings)

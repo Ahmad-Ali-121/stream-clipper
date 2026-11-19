@@ -129,6 +129,8 @@ uv run clipper run https://www.twitch.tv/videos/123456789 --top 8 --signals B
 
 This reads the stream's lowest-quality version once to measure it (about 100 MB per stream hour for sound, 130 MB with picture) and saves none of it. You get the 8 best chat moments, each marked where sound or picture agree, plus up to 4 moments that only sound or picture found.
 
+**Let AI read the stream.** Add `--ai` (or switch on "Let AI read the whole stream" on the page). The whole stream's speech is turned into text and Claude picks moments from what was said, which finds funny lines that chat and loudness miss. It needs a Claude key in `.env`. On a processor it reads about 8 times faster than the stream plays, so a 4-hour stream takes about half an hour; it costs about a cent per stream with the default model. If you stop it, the next run carries on where it stopped.
+
 Then do steps 2 to 4 above. This also works with a YouTube stream recording, if that video has chat replay.
 
 ### C. Commentary videos (for your own channel)

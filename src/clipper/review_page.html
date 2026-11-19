@@ -149,9 +149,10 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
             <option value="video">Chat + picture (about 130 MB per stream hour)</option>
             <option value="all">Chat + sound + picture (about 130 MB per stream hour)</option>
           </select>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="r-ai"><span><b>Let AI read the whole stream</b>Turns all the speech into text and has Claude pick moments from what was said. Slow on a processor (a 4-hour stream can take an hour) and costs a few cents. Needs a Claude key.</span></label>
           <label class="f" for="r-top">How many clips</label>
           <select id="r-top"><option>5</option><option selected>8</option><option>12</option><option>20</option></select>
-          <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig')})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="act('/api/run/stop',{})">Stop</button></div>
+          <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig'),ai:$('r-ai').checked})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="act('/api/run/stop',{})">Stop</button></div>
           <div class="note" id="r-note">Nothing running.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="rlog"></pre></details>
         </div>
@@ -252,6 +253,7 @@ function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
   if(t.includes('chat'))parts.push('Chat spike ×'+c.score);
   if(t.includes('audio'))parts.push('Loud moment');
   if(t.includes('video'))parts.push('Fast action');
+  if(t==='ai')parts.push('Found by AI from the speech');
   return parts.length?parts:[t]}
 function cardHtml(c){
   const k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
@@ -259,13 +261,17 @@ function cardHtml(c){
     :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
   const chips=foundBy(c).map(x=>'<span class="chip">'+esc(x)+'</span>').join('')
     +(c.activity!=null?'<span class="chip">'+esc(c.activity)+' chatters</span>':'')
-    +(c.ai_judged?'<span class="chip '+(c.ai_keep?'good':'meh')+'">'+(c.ai_keep?'AI: worth posting':'AI: probably filler')+'</span>':'')
+    +(c.ai_pick?'<span class="chip good">AI pick</span>':'')
+    +(c.ai_judged?(c.copy_source==='plain'?'<span class="chip meh">Text written without AI</span>'
+        :'<span class="chip '+(c.ai_keep?'good':'meh')+'">'+(c.ai_keep?'AI: worth posting':'AI: probably filler')+'</span>'):'')
     +(c.exported?'<span class="chip good">Videos made</span>':'');
   const lay=[['','Automatic'],['split','Split: facecam over gameplay'],['crop','Centre crop']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
   return '<div class="vid">'+vid+'</div><div class="info">'
    +'<div class="chead"><h3>'+esc(c.channel||'Unknown streamer')+'</h3><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[c.status]+'</span></div>'
    +'<div class="chips">'+chips+'</div>'
-   +(c.ai_judged&&c.ai_reason?'<div class="ai">'+esc(c.ai_reason)+'</div>':'')
+   +(c.ai_pick?'<div class="ai"><b>Why AI picked it:</b> '+esc(c.ai_pick)+'</div>':'')
+   +(c.ai_judged&&c.copy_source==='plain'?'<div class="ai"><b>The opening text and titles below are placeholders,</b> because AI was not used: '+esc(c.copy_problem||'no reason recorded')+'. Type your own, or press "Write text with AI".</div>'
+     :(c.ai_judged&&c.ai_reason?'<div class="ai">'+esc(c.ai_reason)+'</div>':''))
    +(c.error?'<div class="cliperr"><b>This clip has an error:</b> '+esc(c.error)+'</div>':'')
    +(c.notes?'<div class="ai"><b>Note:</b> '+esc(c.notes)+'</div>':'')
    +'<div class="said">'+(c.transcript?'“'+esc(c.transcript)+'”':'<span style="color:var(--muted)">No transcript yet.</span>')+'</div>'
@@ -290,6 +296,7 @@ function cardHtml(c){
    +'<div class="acts"><button class="btn ok" onclick="save(\''+k+'\',{status:\'approved\'})">Approve</button>'
    +'<button class="btn bad" onclick="save(\''+k+'\',{status:\'rejected\'})">Reject</button>'
    +'<button class="btn" onclick="save(\''+k+'\')">Save changes</button>'
+   +'<button class="btn" onclick="rewrite(\''+k+'\',this)">Write text with AI</button>'
    +(c.status!=='candidate'?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\'})">Back to review</button>':'')
    +'<span class="saved"></span></div></div>';
 }
@@ -337,6 +344,15 @@ async function save(key,extra){
   const v=el.querySelector('video');if(v)v.pause();
   toast(extra&&extra.status?({approved:'Approved',rejected:'Rejected',candidate:'Moved back to review'}[s.status]):'Saved');
   loadClips();
+}
+async function rewrite(key,btn){
+  const el=$(domId(key));
+  if(el.dataset.dirty==='1'&&!confirm('You have unsaved changes on this clip. Text you typed and saved is kept; unsaved typing is lost. Continue?'))return;
+  btn.disabled=true;btn.textContent='Writing…';
+  let r;try{r=await fetch('/api/clip/'+key+'/rewrite',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})}catch(e){toast('The program is not answering: '+e,true);btn.disabled=false;btn.textContent='Write text with AI';return}
+  if(!r.ok){toast(await r.text(),true);btn.disabled=false;btn.textContent='Write text with AI';return}
+  el.dataset.dirty='';el.dataset.m='';if(document.activeElement)document.activeElement.blur();const v=el.querySelector('video');if(v)v.pause();
+  toast('Text written by AI');loadClips();
 }
 async function clipLoop(){await loadClips();setTimeout(clipLoop,8000)}
 $('scope').textContent=__TITLE__;

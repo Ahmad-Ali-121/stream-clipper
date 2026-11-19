@@ -94,6 +94,11 @@ llm:                      # writes hooks, titles, descriptions and narration. Ne
   model: claude-opus-5-5  # claude-haiku-5-5 costs about 40 times less and is usually enough for this job
   effort: low
 
+ai:                       # "AI reads the stream": transcribes a finished stream's speech and lets Claude pick moments. Needs ANTHROPIC_API_KEY
+  model: claude-haiku-5-5 # a few cents per stream. claude-opus-5-5 chooses better and costs about $0.30 per stream
+  speech_model: auto      # auto = the usual model on an NVIDIA card, "small" on a processor (several times faster, good enough to find moments)
+  max_hours: 0            # read only the first hours of a stream; 0 = all of it
+
 voice:                    # narration for the "explained" and "top moments" formats
   backend: kokoro         # kokoro = free, runs on this machine; elevenlabs = paid, needs ELEVENLABS_API_KEY in .env
   kokoro_voice: am_michael

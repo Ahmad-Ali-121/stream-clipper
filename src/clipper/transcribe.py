@@ -50,32 +50,39 @@ def _decode_audio(path: Path, cfg: Config):
     return np.frombuffer(proc.stdout, dtype=np.int16).astype(np.float32) / 32768.0
 
 
-def _local(path: Path, cfg: Config) -> list[dict]:
+def load_model(cfg: Config, name: str | None = None):
+    """The speech model, loaded once per program. ``name`` defaults to transcribe.model."""
     global _model, _model_key
     t = cfg.transcribe
+    name = name or t.model
     from . import hw
 
     hw.add_nvidia_dirs()
     device, compute_type = hw.whisper_device(cfg)
     if device == "cuda" and t.device == "auto":
         device, compute_type = hw.confirm_cuda(cfg, t.model, compute_type, str(cfg.data_dir / "models"))
-    key = (t.model, device, compute_type)
+    key = (name, device, compute_type)
     if _model is None or _model_key != key:
         from faster_whisper import WhisperModel  # imported late: it is slow to import and not needed by other stages
 
         models = cfg.data_dir / "models"
         models.mkdir(parents=True, exist_ok=True)
-        log.info("loading whisper model %s (%s, %s); the first run downloads it", t.model, device, compute_type)
-        ok, why = hw.trial_load(t.model, device, compute_type, str(models))
+        log.info("loading whisper model %s (%s, %s); the first run downloads it", name, device, compute_type)
+        ok, why = hw.trial_load(name, device, compute_type, str(models))
         if not ok:
             raise ToolError(
                 f"the speech-to-text model could not be loaded ({device}, {compute_type}). What the trial said:\n{why}\n"
                 f"If nothing above explains it, the model file may be damaged: delete the folders starting with 'models--' in {models} "
-                "and try again (it downloads again, about 1.6 GB)."
+                "and try again (it downloads again)."
             )
-        _model = WhisperModel(t.model, device=device, compute_type=compute_type, download_root=str(models))
+        _model = WhisperModel(name, device=device, compute_type=compute_type, download_root=str(models))
         _model_key = key
-    segments, _info = _model.transcribe(
+    return _model
+
+
+def _local(path: Path, cfg: Config) -> list[dict]:
+    t = cfg.transcribe
+    segments, _info = load_model(cfg).transcribe(
         _decode_audio(path, cfg),
         language=t.language,
         beam_size=5,

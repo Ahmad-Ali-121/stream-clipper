@@ -12,6 +12,7 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **Optionally listens and looks too.** Modes B, C and D also measure loudness and on-screen motion from the stream's lowest-quality feed, to catch moments chat missed.
 - **Never downloads a whole stream.** Only the clip ranges are fetched, at full quality. For streams Twitch is not recording, a rolling copy of the last ten minutes of the live feed stands in for the recording.
 - **Listens to finished streams too.** `--signals B` (or the choice on the page) measures a finished stream's sound or picture and adds moments chat missed.
+- **AI can read a finished stream.** `--ai` turns all of its speech into text and has Claude pick moments from what was said (needs a Claude key; a few cents a stream).
 - **Works live or on finished streams.** `watch` follows several live Twitch channels at once; `run` processes a finished Twitch VOD (or a YouTube recording with chat replay).
 - **Frames the clip by itself.** Detects a full-screen camera or a small facecam over gameplay, and measures each streamer's facecam box from the picture.
 - **Captions.** Local Whisper speech-to-text, word-by-word highlighted captions burned in.
@@ -103,8 +104,9 @@ src/clipper/
   llm.py         text by Claude             trends.py    hashtags from YouTube
   tts.py         narration voice            compose.py   explained and top-N videos
   post.py        export and upload text     brief.py     campaign rule checks
+  streamread.py  AI reads a whole stream's speech
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           113 unit tests (uv run pytest -q)
+tests/           118 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

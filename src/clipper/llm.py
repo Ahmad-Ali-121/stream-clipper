@@ -96,21 +96,20 @@ def clip_prompt(state: dict, trend_tags: list[str]) -> str:
     )
 
 
-def write_copy(state: dict, trend_tags: list[str], cfg: Config) -> dict:
-    """Ask Claude for this clip's text. Raises LlmUnavailable when there is no key or the call fails."""
+def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str) -> dict:
+    """One question to Claude with a JSON answer in the given shape. Raises LlmUnavailable with the reason when it cannot."""
     if not available(cfg):
-        raise LlmUnavailable("no ANTHROPIC_API_KEY in .env (or llm.enabled is false)")
+        raise LlmUnavailable("there is no ANTHROPIC_API_KEY in the .env file on this computer (or llm.enabled is false)")
     import anthropic
 
     client = anthropic.Anthropic()
-    model = cfg.llm.model
     kwargs: dict[str, Any] = dict(
         model=model,
         max_tokens=16000,
-        # The instructions are identical for every clip, so they are cached; only the clip itself varies.
-        system=[{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": clip_prompt(state, trend_tags)}],
-        output_config={"effort": cfg.llm.effort, "format": {"type": "json_schema", "schema": SCHEMA}},
+        # The instructions are identical for every call of one kind, so they are cached; only the material varies.
+        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+        messages=[{"role": "user", "content": user}],
+        output_config={"effort": cfg.llm.effort, "format": {"type": "json_schema", "schema": schema}},
     )
     try:
         if model in FALLBACK_MODELS:
@@ -126,17 +125,21 @@ def write_copy(state: dict, trend_tags: list[str], cfg: Config) -> dict:
         raise LlmUnavailable(f"Claude API error {e.status_code}: {e.message}") from e
     except anthropic.APIConnectionError as e:
         raise LlmUnavailable("could not reach the Claude API (connection problem)") from e
-    _log_usage(cfg, model, response.usage, f"copy for clip {state.get('id')}")
+    _log_usage(cfg, model, response.usage, what)
     if response.stop_reason == "refusal":
-        raise LlmUnavailable("Claude declined to write text for this clip")
+        raise LlmUnavailable("Claude declined this request")
     if response.stop_reason == "max_tokens":
         raise LlmUnavailable("Claude's reply was cut off")
     text = next((b.text for b in response.content if b.type == "text"), "")
     try:
-        data = json.loads(text)
+        return json.loads(text)
     except json.JSONDecodeError as e:
         raise LlmUnavailable("Claude's reply was not valid JSON") from e
-    return clean_copy(data)
+
+
+def write_copy(state: dict, trend_tags: list[str], cfg: Config) -> dict:
+    """Ask Claude for this clip's text. Raises LlmUnavailable when there is no key or the call fails."""
+    return clean_copy(ask(cfg, cfg.llm.model, SYSTEM, clip_prompt(state, trend_tags), SCHEMA, f"copy for clip {state.get('id')}"))
 
 
 def clean_copy(data: dict) -> dict:
@@ -165,7 +168,9 @@ def fallback_copy(state: dict, trend_tags: list[str], max_tags: int = 6) -> dict
     """Plain text built without an LLM, so the pipeline still produces something usable."""
     words = (state.get("transcript") or "").split()
     channel = state.get("channel") or "Stream"
-    hook = " ".join(words[:7]) if len(words) >= 4 else f"{channel} moment"
+    # Without AI nothing here understands the clip, so the text stays general on purpose:
+    # the first few words of the speech, cut off, read as nonsense on screen.
+    hook = "Wait for it" if len(words) >= 4 else f"{channel} moment"
     tags = ["#" + "".join(ch for ch in channel if ch.isalnum())] + [t for t in trend_tags if t]
     seen, uniq = set(), []
     for t in tags:
@@ -174,10 +179,10 @@ def fallback_copy(state: dict, trend_tags: list[str], max_tags: int = 6) -> dict
             uniq.append(t)
     return {
         "keep": len(words) >= 6,
-        "reason": "no AI key: kept if the clip has speech" if len(words) >= 6 else "almost no speech in this clip",
+        "reason": "not judged by AI: kept because the clip has speech" if len(words) >= 6 else "almost no speech in this clip",
         "hook": hook,
         "hook_b": f"Watch what {channel} does next" if len(words) >= 4 else "",
-        "title": f"{channel}: {' '.join(words[:10])}".strip(": ")[:100],
+        "title": f"{channel} stream moment",
         "title_b": "",
         "description": "",
         "tags": uniq[:max_tags],

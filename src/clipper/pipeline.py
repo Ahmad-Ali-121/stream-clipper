@@ -55,6 +55,7 @@ def stage_find(
     mode: str | None = None,
     refresh_chat: bool = False,
     signals: str | None = None,
+    ai: bool = False,
 ) -> tuple[Path, list[dict]]:
     """Download metadata and chat, score moments, and create a clip folder per moment.
 
@@ -93,6 +94,17 @@ def stage_find(
             agree = sum(1 for m in found if "+" in m["trigger"])
             log.info("sound and picture: %d unusual moment(s); %d agree with chat, %d added that chat missed (at most %d)",
                      sum(len(v) for v in peaks.values()), agree, sum(1 for m in found if not m["trigger"].startswith("chat")), extra)
+    if ai:
+        if live:
+            log.warning("this stream is still live, so AI does not read it here; run it again when the stream has ended")
+        else:
+            from .streamread import add_ai_moments, ai_moments
+
+            picks = ai_moments(source.url, work, meta, cfg, settings.top)
+            before = len(found)
+            found = add_ai_moments(found, picks)
+            log.info("AI picked %d moment(s) from the speech: %d agree with ones already found, %d are new",
+                     len(picks), len(picks) - (len(found) - before), len(found) - before)
     write_json(work / "moments.json", found)
 
     # Clips already reviewed keep their folder and status; ranks of the rest are refreshed.
@@ -114,6 +126,7 @@ def stage_find(
                 "messages": m["messages"],
                 "trigger": m["trigger"],
                 "signals": m.get("signals", {}),
+                "ai_pick": m.get("ai_pick", ""),
                 "peak_s": m["peak_s"],
                 "start_s": m["start_s"],
                 "end_s": m["end_s"],
@@ -265,6 +278,7 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
 
         log.info("clip %s/%s: the draft was never completed; completing it now", work.name, d.name)
         state = prepare_clip(d, state, cfg)
+    state = write_clip_copy(d, state, cfg)  # no-op unless its text was written without AI and AI is reachable now
     ab = cfg.render.ab_versions
     # A render made before the opening effects were switched on (or off) no longer matches the settings.
     fresh = not done(d / "final.mp4") or bool(state.get("opening_used")) != bool(cfg.render.opening)
@@ -311,7 +325,9 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
     from . import llm
     from .trends import trending
 
-    if state.get("copy_at") and not force:
+    # Text written without AI (no key then, or the call failed) is redone once AI can be reached.
+    redo_plain = state.get("copy_source") == "plain" and llm.available(cfg)
+    if state.get("copy_at") and not force and not redo_plain:
         return state
     tags: list[str] = []
     if cfg.trends.enabled:
@@ -324,10 +340,12 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
     try:
         copy = llm.write_copy(state, tags, cfg)
         state["copy_source"] = cfg.llm.model
+        state.pop("copy_problem", None)
     except llm.LlmUnavailable as e:
-        log.info("clip %s: writing plain text without AI (%s)", d.name, e)
+        log.warning("clip %s: text written WITHOUT AI: %s", d.name, e)
         copy = llm.fallback_copy(state, tags, cfg.trends.max_tags)
         state["copy_source"] = "plain"
+        state["copy_problem"] = str(e)  # shown on the review page
     auto = set(state.get("copy_auto") or [])
     before = {k: state.get(k) for k in SHOWS}
     for key in COPY_FIELDS:
@@ -453,9 +471,9 @@ def stage_clean(cfg: Config, dry_run: bool = False) -> tuple[int, float]:
 
 
 def stage_run(url: str, cfg: Config, top: int | None = None, mode: str | None = None, refresh_chat: bool = False,
-              signals: str | None = None) -> Path:
+              signals: str | None = None, ai: bool = False) -> Path:
     """find -> fetch -> transcribe -> render drafts, ready for review."""
-    work, _clips = stage_find(url, cfg, top=top, mode=mode, refresh_chat=refresh_chat, signals=signals)
+    work, _clips = stage_find(url, cfg, top=top, mode=mode, refresh_chat=refresh_chat, signals=signals, ai=ai)
     stage_fetch(url, cfg)
     stage_transcribe(url, cfg)
     stage_render(url, cfg)

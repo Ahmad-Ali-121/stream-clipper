@@ -38,7 +38,7 @@ def clip_view(d: Path) -> dict:
     out = {k: c.get(k) for k in (
         "channel", "start_s", "end_s", "cut_start_s", "cut_end_s", "trigger", "score", "activity", "layout", "layout_reason",
         "transcript", "hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags", "explainer", "disclosure",
-        "ai_keep", "ai_reason", "error", "notes", "stream_title",
+        "ai_keep", "ai_reason", "error", "notes", "stream_title", "copy_source", "copy_problem", "ai_pick",
     )}
     out.update(
         key=f"{d.parent.parent.name}/{c['id']}",  # work folder / clip id: unique across streams
@@ -217,6 +217,21 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     return self._send(400, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(result).encode(), "application/json")
             refresh()
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/rewrite", self.path)
+            if m and m.group(1) in by_name and cfg is not None:
+                from . import llm
+                from .pipeline import write_clip_copy
+
+                d = by_name[m.group(1)] / "clips" / m.group(2)
+                if not (d / "clip.json").exists():
+                    return self._send(404, b"no such clip", "text/plain")
+                if not llm.available(cfg):
+                    return self._send(400, "AI is not available: there is no ANTHROPIC_API_KEY in the .env file on this computer "
+                                           "(or llm.enabled is false in the settings).".encode(), "text/plain")
+                state = write_clip_copy(d, read_json(d / "clip.json"), cfg, force=True)
+                if state.get("copy_source") == "plain":
+                    return self._send(400, f"AI could not write the text: {state.get('copy_problem')}".encode(), "text/plain")
+                return self._send(200, json.dumps({"status": state.get("status")}).encode(), "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)", self.path)
             if not m or m.group(1) not in by_name:
                 return self._send(404, b"not found", "text/plain")
