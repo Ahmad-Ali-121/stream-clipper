@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import progress
 from .config import Config, load_env
 from .tools import ToolError, find_tool, run
 
@@ -102,6 +103,8 @@ def _local(path: Path, cfg: Config) -> list[dict]:
     )
     words: list[dict] = []
     for seg in segments:
+        if _info.duration:
+            progress.sub(seg.end / _info.duration)
         for w in seg.words or []:
             text = w.word.strip()
             if text and w.probability >= t.min_word_prob:

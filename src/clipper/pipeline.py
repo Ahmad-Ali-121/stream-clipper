@@ -12,6 +12,7 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
+from . import progress
 from .chat import load_chat
 from .config import Config
 from .fetch import fetch_chat, fetch_meta, fetch_range, probe
@@ -81,6 +82,7 @@ def stage_find(
                                 "or use \"Your own clip\" to pick the range yourself")
         messages = []
     else:
+        progress.stage("chat")
         chat_path = fetch_chat(source, work, cfg, refresh=refresh_chat)
         messages = load_chat(chat_path)
         if not messages:
@@ -103,6 +105,7 @@ def stage_find(
         if live:
             log.warning("this stream is still live, so its sound and picture are not measured here; use watch for that")
         else:
+            progress.stage("measure")
             path = measure_vod(source.url, work, cfg, audio, video)
             peaks = signal_peaks(path, cfg, since_s=settings.skip_start_s)
             peaks = {k: v for k, v in peaks.items() if (k == "audio" and audio) or (k == "video" and video)}
@@ -117,6 +120,7 @@ def stage_find(
         else:
             from .streamread import add_ai_moments, ai_moments
 
+            progress.stage("read")
             picks = ai_moments(source.url, work, meta, cfg, settings.top)
             before = len(found)
             found = add_ai_moments(found, picks)
@@ -277,6 +281,7 @@ def stage_range(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None
         for f in d.iterdir():
             if f.is_file():
                 f.unlink()
+        progress.stage("download", f"{format_time(b - a)} of video")
         log.info("downloading %s to %s of %s (%s) for the cutting board", format_time(a), format_time(b), meta.get("title") or source.url, format_time(b - a))
         t0 = time.monotonic()
         fetch_range(source, a, b, out, cfg)
@@ -368,7 +373,10 @@ def stage_fetch(url: str, cfg: Config, only: list[str] | None = None, failed: li
     """Download each selected clip's range (plus padding) as source.mp4."""
     source, work = open_work(url, cfg)
     fetched: list[Path] = []
-    for d in select_clips(work, only):
+    dirs = select_clips(work, only)
+    progress.stage("download")
+    for n, d in enumerate(dirs):
+        progress.item(n, len(dirs), f"clip {n + 1} of {len(dirs)}")
         try:
             out = _fetch_one(source, d, cfg)
         except PipelineError:
@@ -424,7 +432,10 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
 
     _source, work = open_work(url, cfg)
     count = 0
-    for d in select_clips(work, only):
+    dirs = select_clips(work, only)
+    progress.stage("captions")
+    for n, d in enumerate(dirs):
+        progress.item(n, len(dirs), f"clip {n + 1} of {len(dirs)}")
         state = read_json(d / "clip.json")
         if state.get("status") in ("rejected", "deleted") or not done(d / "source.mp4"):
             continue
@@ -457,7 +468,10 @@ def stage_render(url: str, cfg: Config, only: list[str] | None = None, force: bo
 
     _source, work = open_work(url, cfg)
     rendered: list[Path] = []
-    for d in select_clips(work, only, status="approved" if approved_only else None):
+    dirs = select_clips(work, only, status="approved" if approved_only else None)
+    progress.stage("draft")
+    for n, d in enumerate(dirs):
+        progress.item(n, len(dirs), f"clip {n + 1} of {len(dirs)}")
         state = read_json(d / "clip.json")
         if state.get("status") in ("rejected", "deleted") or not done(d / "source.mp4"):
             continue
@@ -632,8 +646,11 @@ def stage_write(cfg: Config, url: str | None = None, only: list[str] | None = No
     """Write text for every clip that has a transcript and is not rejected."""
     works = [open_work(url, cfg)[1]] if url else all_works(cfg)
     count = 0
-    for work in works:
-        for d in select_clips(work, only if url else None):
+    todo = [d for work in works for d in select_clips(work, only if url else None)]
+    progress.stage("text")
+    for n, d in enumerate(todo):
+        if True:
+            progress.item(n, len(todo), f"clip {n + 1} of {len(todo)}")
             state = read_json(d / "clip.json")
             if state.get("status") in ("rejected", "deleted") or "transcript" not in state:
                 continue

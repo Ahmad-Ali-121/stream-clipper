@@ -15,6 +15,7 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **AI can read a finished stream.** `--ai` turns all of its speech into text and has Claude pick moments from what was said (needs a Claude key; a few cents a stream).
 - **Works live or on finished streams, on Twitch and YouTube.** `watch` follows several live channels at once (Twitch names, YouTube handles like `@channel`); `run` processes a finished Twitch VOD or a YouTube recording with chat replay.
 - **Your own clips.** Give a YouTube or Twitch video link, or a video file such as a screen recording, with a start and an end; get one clip, or the range split into parts labelled "Part 1", "Part 2" on screen.
+- **A percentage on every job.** Downloads, finding moments, captions, text, drafts, final videos, the setup check and file copies show how far they are ("41% · Step 2 of 4: Downloading the clips · clip 3 of 8") and roughly how long is left.
 - **Cutting board.** Download the part of a video you chose once, then mark the cuts on a timeline with the sound wave, see how many clips that gives and how long each is, and make them.
 - **Face box and video box.** On any clip, drag two boxes over the stream picture to choose what is shown on top (the face) and below (the video); a small preview shows the result. Can be kept for a streamer's next clips.
 - **Urdu and Hindi streams.** Speech-to-text in Urdu or Hindi, captions in the language's own letters or in Latin letters ("bhai ne kamaal kar diya"), and opening text and titles in English, Roman Urdu, Hinglish, Urdu or Hindi.
@@ -116,7 +117,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           175 unit tests (uv run pytest -q)
+tests/           179 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

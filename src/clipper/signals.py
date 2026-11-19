@@ -255,9 +255,16 @@ def measure_vod(url: str, work: Path, cfg: Config, audio: bool, video: bool) -> 
              threading.Thread(target=pump, args=(proc.stderr, "v"), daemon=True)]
     for p in pumps:
         p.start()
+    from . import progress
+    from .work import read_json as _read
+
+    length = float((_read(work / "meta.json", {}) or {}).get("duration_s") or 0)
     t0 = last_note = time.time()
     while proc.poll() is None:
         time.sleep(2)
+        if length:
+            at = max((parse_feed_lines(v[-6:]) or [(0.0, 0.0)])[-1][0] for v in lines.values())
+            progress.sub(at / length, f"up to {int(at) // 3600}:{int(at) % 3600 // 60:02d}:{int(at) % 60:02d} of the stream")
         if time.time() - last_note > 60:
             last_note = time.time()
             reached = max((parse_feed_lines(v[-6:]) or [(0.0, 0.0)])[-1][0] for v in lines.values())

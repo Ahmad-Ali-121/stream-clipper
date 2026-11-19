@@ -41,6 +41,54 @@ def find_tool(name: str, data_dir: Path) -> str:
     return path
 
 
+def _run_watched(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, on_line) -> subprocess.CompletedProcess[str]:
+    """Run a command while passing every line it prints to ``on_line`` (for a percentage on the page).
+
+    Output and errors come back together as ``stdout``; lines that only report progress are left out of it,
+    so an error message still ends with the tool's real last words.
+    """
+    import re
+    import threading
+
+    from .progress import is_progress_line
+
+    proc = subprocess.Popen(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(cwd) if cwd else None)
+    kept: list[str] = []
+
+    def pump() -> None:
+        buf, warned = b"", False
+        while True:
+            data = proc.stdout.read1(8192)
+            if not data:
+                break
+            *lines, buf = re.split(rb"[\r\n]", buf + data)  # progress lines end with a carriage return, not a new line
+            for raw in lines:
+                line = raw.decode("utf-8", errors="replace")
+                if not line.strip():
+                    continue
+                if not is_progress_line(line):
+                    kept.append(line)
+                try:
+                    on_line(line)
+                except Exception as e:  # a progress reading must never stop the work itself; say so once
+                    if not warned:
+                        warned = True
+                        log.warning("progress could not be read from a tool's output (%s); the work goes on without a percentage", e)
+        if buf.strip():
+            kept.append(buf.decode("utf-8", errors="replace"))
+
+    reader = threading.Thread(target=pump, daemon=True)
+    reader.start()
+    try:
+        proc.wait(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        reader.join(timeout=5)
+        raise
+    reader.join(timeout=10)
+    return subprocess.CompletedProcess(list(cmd), proc.returncode, "\n".join(kept), "")
+
+
 def run(
     cmd: Sequence[str],
     *,
@@ -49,6 +97,7 @@ def run(
     retry_wait_s: float = 5.0,
     what: str = "",
     cwd: Path | None = None,
+    on_line=None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command, capture its output, retry on failure, raise ToolError with the tail of stderr.
 
@@ -60,7 +109,7 @@ def run(
     for attempt in range(retries + 1):
         started = time.monotonic()
         try:
-            proc = subprocess.run(
+            proc = _run_watched(cmd, timeout_s, cwd, on_line) if on_line else subprocess.run(
                 list(cmd),
                 capture_output=True,
                 text=True,

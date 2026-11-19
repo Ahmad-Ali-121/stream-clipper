@@ -151,7 +151,7 @@ def summary(items: list[dict]) -> dict:
     return {"bad": bad, "warn": warn, "todo": todo, "text": text}
 
 
-def full_check(cfg: Config) -> None:
+def full_check(cfg: Config, step=None) -> None:
     """The slow part: really load the speech model, and ask GitHub for the newest version. Results go to health.json."""
     from . import hw
 
@@ -167,6 +167,8 @@ def full_check(cfg: Config) -> None:
     ok, why = hw.trial_load(cfg.transcribe.model, device, compute_type, str(models))
     saved["speech"] = {"ok": ok, "at": time.time(),
                        "detail": f"works on {'the NVIDIA card' if device == 'cuda' else 'the processor'}" if ok else why.splitlines()[0][:400]}
+    if step:
+        step("asking GitHub for the newest version")
     saved["update"] = update_state(fetch=True)
     saved["checked_at"] = time.time()
     saved["python"] = sys.version.split()[0]

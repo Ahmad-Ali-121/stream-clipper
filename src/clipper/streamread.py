@@ -140,6 +140,10 @@ def transcribe_stream(url: str, work: Path, cfg: Config, duration_s: float | Non
             speed = (at - done_s) / max(time.time() - t0, 1)
             left = f", about {max(0, (target - at) / speed / 60):.0f} min left" if target else ""
             log.info("  speech read up to %s (%.1f times faster than the stream%s)", format_time(at), speed, left)
+            if target:
+                from . import progress
+
+                progress.sub(0.95 * at / target, f"speech read up to {format_time(at)}")
             if len(raw) < want:
                 break
     finally:

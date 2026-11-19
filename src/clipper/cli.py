@@ -218,9 +218,17 @@ def _cmd_post(args: argparse.Namespace) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
+    from . import progress
     from .pipeline import stage_run
+    from .signals import MODES, parse_mode
 
+    cfg = load_config(args.config)
+    measured = any(MODES[parse_mode(args.signals or cfg.moments.signals)])
+    progress.begin([("chat", "Downloading the chat", 10), ("measure", "Measuring the sound and picture", 25 if measured else 0),
+                    ("read", "AI reading the whole stream", 60 if args.ai else 0), ("download", "Downloading the clips", 25),
+                    ("captions", "Writing the captions", 20), ("text", "Writing the text", 8), ("draft", "Making the draft videos", 12)])
     work = stage_run(args.url, load_config(args.config), top=args.top, mode=args.mode, refresh_chat=args.refresh, signals=args.signals, ai=args.ai)
+    progress.finish()
     print(f"drafts ready in {work}. Next: clipper review {args.url}")
     return 0
 
@@ -230,7 +238,11 @@ def _cmd_range(args: argparse.Namespace) -> int:
 
     start = parse_clock(args.start)
     end = parse_clock(args.end) if args.end else (start + parse_clock(args.length) if args.length else None)
+    from . import progress
+
+    progress.begin([("download", "Downloading the part", 1)])
     out = stage_range(args.source, load_config(args.config), start_s=start, end_s=end)
+    progress.finish()
     print(f"READY  {out}")
     print("Open the Cutting board on the review page to mark the cuts.")
     return 0
@@ -239,21 +251,29 @@ def _cmd_range(args: argparse.Namespace) -> int:
 def _cmd_cut(args: argparse.Namespace) -> int:
     from .pipeline import parse_clock, stage_cut
 
+    from . import progress
+
     if args.range:
         from .pipeline import stage_cut_range
 
         if not args.pieces:
             raise ValueError("--range needs --pieces, for example --pieces 0-45,45-110")
         pieces = [p.split("-", 1) for p in args.pieces.split(",") if p.strip()]
+        progress.begin([("download", "Cutting the pieces out", 20), ("captions", "Writing the captions", 40),
+                        ("text", "Writing the text", 15), ("draft", "Making the draft videos", 25)])
         made = stage_cut_range(args.source, load_config(args.config), args.range, pieces, part_label=not args.no_part_label)
+        progress.finish()
         for video in made:
             print(f"DRAFT  {video}")
         print(f"{len(made)} draft(s) ready. Review them on the page.")
         return 0
     start = parse_clock(args.start)
     end = parse_clock(args.end) if args.end else (start + parse_clock(args.length) if args.length else None)
+    progress.begin([("download", "Downloading the clips", 45), ("captions", "Writing the captions", 25),
+                    ("text", "Writing the text", 10), ("draft", "Making the draft videos", 20)])
     made = stage_cut(args.source, load_config(args.config), start_s=start, end_s=end, parts=args.parts,
                      part_s=parse_clock(args.part_seconds) if args.part_seconds else None, part_label=not args.no_part_label)
+    progress.finish()
     for video in made:
         print(f"DRAFT  {video}")
     print(f"{len(made)} draft(s) ready. Review them on the page.")

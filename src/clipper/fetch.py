@@ -13,6 +13,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from . import progress
 from .config import Config
 from .sources import Source
 from .tools import ToolError, find_tool, run
@@ -99,6 +100,7 @@ def fetch_chat(source: Source, work: Path, cfg: Config, refresh: bool = False) -
             retries=cfg.fetch.retries,
             retry_wait_s=cfg.fetch.retry_wait_s,
             what="Twitch chat download",
+            on_line=progress.from_tool(label="{pct}% of the chat"),
         )
     else:
         stem = work / "chat_dl"
@@ -136,10 +138,10 @@ def fetch_range(source: Source, start_s: float, end_s: float, out: Path, cfg: Co
     ffmpeg = find_tool("ffmpeg", cfg.data_dir)
     if source.platform == "local":
         # Re-encoded rather than copied: screen recordings have few key frames, and a copy could start seconds off.
-        run([ffmpeg, "-hide_banner", "-v", "error", "-y", "-ss", f"{start_s:.3f}", "-i", source.url, "-t", f"{end_s - start_s:.3f}",
+        run([ffmpeg, "-hide_banner", "-v", "error", "-stats", "-y", "-ss", f"{start_s:.3f}", "-i", source.url, "-t", f"{end_s - start_s:.3f}",
              "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "16", "-pix_fmt", "yuv420p",
              "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(part)],
-            timeout_s=cfg.fetch.timeout_s, what="cutting the range out of the video file")
+            timeout_s=cfg.fetch.timeout_s, what="cutting the range out of the video file", on_line=progress.from_tool(end_s - start_s))
         if not done(part):
             raise ToolError("cutting the range out of the video file produced nothing")
         os.replace(part, out)
@@ -166,7 +168,8 @@ def fetch_range(source: Source, start_s: float, end_s: float, out: Path, cfg: Co
         ]
         what = "YouTube range download"
     (cfg.data_dir / "tmp").mkdir(parents=True, exist_ok=True)
-    run(cmd, timeout_s=cfg.fetch.timeout_s, retries=cfg.fetch.retries, retry_wait_s=cfg.fetch.retry_wait_s, what=what)
+    run(cmd, timeout_s=cfg.fetch.timeout_s, retries=cfg.fetch.retries, retry_wait_s=cfg.fetch.retry_wait_s, what=what,
+        on_line=progress.from_tool(end_s - start_s))
     if not done(part):
         raise ToolError(f"{what} produced no file")
     os.replace(part, out)

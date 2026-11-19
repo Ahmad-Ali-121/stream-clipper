@@ -146,6 +146,10 @@ class Control:
         self.maint = {"name": "", "running": False, "lines": []}  # the one maintenance job: full check, repair or update
         self.health_started = False
         self.update_asked = 0.0  # when GitHub was last asked for a newer version
+        # Jobs started from the page say how far they are in this file (see progress.py); the page shows it as a percentage.
+        self.progress_path = cfg.data_dir / "progress.json"
+        self.finish_progress_path = cfg.data_dir / "progress-finish.json"
+        os.environ["CLIPPER_PROGRESS"] = str(self.progress_path)
         self.exit_code = 0  # 42 asks the launcher to start the program again (after an update)
         self.shutdown = None  # set by the server: stops it so the program can exit
         self.ai_checking = False
@@ -177,6 +181,8 @@ class Control:
             "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
             "finishing": self.finishing, "finish_log": self.finish_lines[-200:],
             "running": self.running(), "run_log": self._run_tail(), "run_problem": self.run_problem,
+            "run_progress": self._progress(self.progress_path, self.running()),
+            "finish_percent": self._progress(self.finish_progress_path, self.finishing),
             "ai": self._ai_status(),
             "health": self._health_status(),
         }
@@ -259,11 +265,20 @@ class Control:
         with self._lock:
             if self.maint["running"]:
                 raise ValueError(f"'{self.maint['name']}' is still running; wait for it to finish")
-            self.maint = {"name": name, "running": True, "lines": [f"{time.strftime('%H:%M:%S')} {name} started"]}
+            self.maint = {"name": name, "running": True, "lines": [f"{time.strftime('%H:%M:%S')} {name} started"], "step": None}
+
+        def say(line: str) -> None:
+            self.maint["lines"].append(line)
+
+        def step(index: int, count: int, text: str) -> None:  # step number (from 1) of how many, and what it is
+            self.maint["step"] = [index, count, text]
+            say(f"step {index} of {count}: {text}")
+
+        say.step = step
 
         def run() -> None:
             try:
-                work(self.maint["lines"].append)
+                work(say)
                 self.maint["lines"].append(f"{time.strftime('%H:%M:%S')} {name} finished")
             except Exception as e:
                 import traceback
@@ -290,8 +305,8 @@ class Control:
         from . import health
 
         def work(say) -> None:
-            say("loading the speech model in a separate process, and asking GitHub for the newest version...")
-            health.full_check(self.reload())
+            say.step(1, 2, "loading the speech model in a separate process (the slow part)")
+            health.full_check(self.reload(), step=lambda text: say.step(2, 2, text))
 
         return self._maintain("Full check", work)
 
@@ -312,6 +327,7 @@ class Control:
         from . import health
 
         def work(say) -> None:
+            say.step(1, 4, "asking GitHub what is new")
             state = health.update_state(fetch=True)
             if not state["can"]:
                 # Not a failure: there is simply nothing to do, or this copy must not be changed. Say so plainly.
@@ -319,11 +335,13 @@ class Control:
                 health.full_check(self.reload())
                 return
             say(f"{state['behind']} change(s) to take from GitHub")
-            for cmd in (["git", "merge", "--ff-only", "origin/main"],
-                        ["uv", "sync", "--frozen"] + (["--extra", "gpu"] if (PROJECT_ROOT / ".venv/Lib/site-packages/nvidia/cublas").exists() else [])):
+            for n, cmd in enumerate((["git", "merge", "--ff-only", "origin/main"],
+                                     ["uv", "sync", "--frozen"] + (["--extra", "gpu"] if (PROJECT_ROOT / ".venv/Lib/site-packages/nvidia/cublas").exists() else []))):
+                say.step(n + 2, 4, ("taking the new version", "installing what it needs")[n])
                 say("> " + " ".join(cmd))
                 if (code := self._run_logged(cmd, say, str(PROJECT_ROOT))) != 0:
                     raise ValueError(f"'{' '.join(cmd)}' ended with exit code {code}; the lines above say why")
+            say.step(4, 4, "checking that everything still works")
             health.full_check(self.reload())
             if os.environ.get("CLIPPER_LAUNCHER") and self.shutdown:
                 say("updated. Restarting the program now; this page reconnects by itself.")
@@ -410,6 +428,15 @@ class Control:
 
     # ---- a finished stream ----
 
+    def _new_job(self) -> None:
+        """Forget the last job's percentage, so a new job never starts by showing the old one's."""
+        self.progress_path.unlink(missing_ok=True)
+
+    def _progress(self, path: Path, active: bool) -> dict | None:
+        from . import progress
+
+        return progress.read(path) if active else None
+
     def running(self) -> bool:
         return self.run_proc is not None and self.run_proc.poll() is None
 
@@ -444,6 +471,7 @@ class Control:
             out = self.run_log_path.open("w", encoding="utf-8")
             out.write(f"{time.strftime('%H:%M:%S')} analysing {source.url}: the best {top} moments, found by {signals}{' + AI reading the speech' if raw.get('ai') else ''}\n")
             out.flush()
+            self._new_job()
             self.run_proc = subprocess.Popen(
                 [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())",
                  "run", source.url, "--top", str(top), "--signals", signals] + (["--ai"] if raw.get("ai") else []),
@@ -460,6 +488,7 @@ class Control:
             out = self.run_log_path.open("w", encoding="utf-8")
             out.write(f"{time.strftime('%H:%M:%S')} {first_line}\n")
             out.flush()
+            self._new_job()
             self.run_proc = subprocess.Popen(
                 [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())", *cmd],
                 stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(PROJECT_ROOT),
@@ -527,6 +556,7 @@ class Control:
             out = self.run_log_path.open("w", encoding="utf-8")
             out.write(f"{time.strftime('%H:%M:%S')} making your own clip(s) from {source.url}\n")
             out.flush()
+            self._new_job()
             self.run_proc = subprocess.Popen(
                 [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())", *cmd],
                 stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(PROJECT_ROOT),
@@ -563,8 +593,17 @@ class Control:
             problems: list[str] = []
             self.finish_progress = {"done": 0, "total": 0, "now": ""}
 
+            from . import progress as report
+
+            report.begin([("draft", "Making the videos", 1)], path=self.finish_progress_path)
+            report.stage("draft")
+
             def progress(done: int, total: int, now: str) -> None:
                 self.finish_progress = {"done": done, "total": total, "now": now}
+                if done < total:
+                    report.item(done, total, f"clip {done + 1} of {total}: {now}".strip())
+                else:
+                    report.finish()
 
             cfg = self.reload()
             brief = str(PROJECT_ROOT / "briefs" / f"{cfg.render.campaign}.yaml") if cfg.render.campaign else None

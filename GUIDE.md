@@ -127,6 +127,16 @@ The drafts appear at the top of the list, in order. Review, approve and make the
 
 A part can be between 8 seconds and 5 minutes long. A video file can also be searched automatically: in the **Finished stream** tab paste its path and choose sound, picture or AI reading (a file has no chat).
 
+### How far is it? The percentage bars
+
+Every job on the page has a bar with a line under it, for example **41% · Step 2 of 4: Downloading the clips · clip 3 of 8 · roughly 3 minutes left**.
+
+- The percentage is for the whole job, not just the step it is on.
+- A download counts the video it has really received, so the bar moves while it works.
+- "Roughly ... left" is an estimate from the time taken so far. It is least reliable at the start.
+- Two steps move only once per clip: writing captions for a short clip, and writing the text. The bar waits there and then jumps.
+- A live watch has no bar: it runs until you stop it.
+
 ### Face box and video box: choose what the clip shows
 
 Works on every clip: live Twitch and YouTube drafts, finished streams and your own clips.

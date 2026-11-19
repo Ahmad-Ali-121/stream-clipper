@@ -322,14 +322,16 @@ def render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str 
     video = hw.encoder_args(enc, r.crf, r.preset)
     part = f"{stem}.part.mp4"
     cmd = (
-        [ffmpeg, "-y", "-hide_banner", "-v", "error"] + inputs
+        [ffmpeg, "-y", "-hide_banner", "-v", "error", "-stats"] + inputs
         + ["-filter_complex", graph, "-map", last, "-map", "[a]"]
         + video
         + ["-profile:v", "high", "-pix_fmt", "yuv420p", "-r", str(r.fps), "-g", str(r.fps * 2),
            "-c:a", "aac", "-b:a", r.audio_bitrate, "-ar", "48000", "-t", f"{duration:.3f}", "-movflags", "+faststart", part]
     )
     t0 = time.monotonic()
-    run(cmd, timeout_s=1800, what=f"render of clip {clip_dir.name}", cwd=clip_dir)
+    from . import progress
+
+    run(cmd, timeout_s=1800, what=f"render of clip {clip_dir.name}", cwd=clip_dir, on_line=progress.from_tool(duration))
     if not done(clip_dir / part):
         raise ToolError(f"render of clip {clip_dir.name} produced no file")
     os.replace(clip_dir / part, out)

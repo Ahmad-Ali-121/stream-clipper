@@ -80,7 +80,8 @@ pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid
 .tl .ph{position:absolute;top:0;bottom:0;width:1px;background:var(--text);pointer-events:none;display:none}
 .words{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
 .words input{width:auto;padding:4px 6px;font-size:13px;border-radius:6px}
-.bar{height:6px;background:var(--surface2);border-radius:99px;overflow:hidden;margin-top:8px}
+.pct{font-size:12.5px;color:var(--muted);margin-top:5px}.pct b{color:var(--text);font-size:14px}
+.bar{height:8px;background:var(--surface2);border-radius:99px;overflow:hidden;margin-top:8px}
 .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
 .bar.indet i{width:30%;animation:slide 1.3s infinite linear}
 @keyframes slide{from{margin-left:-30%}to{margin-left:100%}}
@@ -205,7 +206,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
             <button class="btn" id="b-hrepair" onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. Continue?')">Repair</button>
             <button class="btn primary" id="b-hupdate" hidden onclick="hAct('/api/health/update','Update takes the newest version from GitHub. Your clips, settings and keys are not touched. Continue?')">Update</button>
           </div>
-          <div class="bar indet" id="h-bar" hidden><i></i></div>
+          <div class="bar indet" id="h-bar" hidden><i></i></div><div class="pct" id="h-pct" hidden></div>
           <div class="note" id="h-note" hidden></div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="hlog"></pre></details>
         </div>
@@ -257,7 +258,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <label class="check" id="m-labelrow" hidden><input type="checkbox" id="m-label" checked> Show "Part 1", "Part 2"… on the video, and "Part 2 next" at the end</label>
           <p class="help" id="m-hint" style="margin-top:8px"></p>
           <div class="btns"><button class="btn" id="b-own" onclick="makeOwn()">Make the clip</button></div></details>
-          <div class="bar indet" id="m-bar" hidden><i></i></div>
+          <div class="bar indet" id="m-bar" hidden><i></i></div><div class="pct" id="m-pct" hidden></div>
           <div class="note" id="m-note">Nothing running.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="mlog"></pre></details>
         </div>
@@ -276,7 +277,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <label class="f" for="r-top">How many clips</label>
           <select id="r-top"><option>5</option><option selected>8</option><option>12</option><option>20</option></select>
           <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig'),ai:$('r-ai').checked})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="act('/api/run/stop',{})">Stop</button></div>
-          <div class="bar indet" id="r-bar" hidden><i></i></div>
+          <div class="bar indet" id="r-bar" hidden><i></i></div><div class="pct" id="r-pct" hidden></div>
           <div class="note" id="r-note">Nothing running.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="rlog"></pre></details>
         </div>
@@ -317,7 +318,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
         <select id="o-cap" onchange="saveOpts()"></select>
         <div class="capprev" id="capprev" aria-hidden="true"></div>
         <div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button></div>
-        <div class="bar" id="f-bar" hidden><i></i></div>
+        <div class="bar" id="f-bar" hidden><i></i></div><div class="pct" id="f-pct" hidden></div>
         <div class="note" id="f-note">Nothing made yet in this session.</div>
         <ul class="ready" id="f-ready"></ul>
         <details class="log"><summary>Activity log</summary><pre class="log" id="flog"></pre></details>
@@ -346,7 +347,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <div id="cb-rows"></div>
           <label class="check"><input type="checkbox" id="cb-label" checked> Show "Part 1", "Part 2"… on the videos, and "Part 2 next" at the end</label>
           <div class="btns"><button class="btn primary" id="cb-make">Make the clips</button><button class="btn bad" id="cb-stop" onclick="act('/api/run/stop',{})">Stop</button><button class="btn quiet" id="cb-drop">Delete this download</button></div>
-          <div class="bar indet" id="cb-bar" hidden><i></i></div>
+          <div class="bar indet" id="cb-bar" hidden><i></i></div><div class="pct" id="cb-pct" hidden></div>
           <div class="note" id="cb-note">Nothing running.</div>
         </div>
       </div>
@@ -424,6 +425,15 @@ function isBad(l){return /ERROR|FAILED|NOT MADE|Traceback|Error:|fatal exception
 function logTo(id,lines){const el=$(id);const stick=el.scrollTop+el.clientHeight>=el.scrollHeight-30;el.textContent='';
   for(const l of lines){const d=document.createElement('div');d.textContent=l||' ';if(isBad(l))d.className='lerr';else if(/WARNING/.test(l))d.className='lwarn';el.appendChild(d)}
   if(stick)el.scrollTop=el.scrollHeight}
+/* A bar with a real percentage once the job reports one; the moving stripe only until then. */
+function setBar(id,active,p){
+  const bar=$(id+'-bar'),t=$(id+'-pct');bar.hidden=!active;t.hidden=!active;if(!active)return;
+  if(!p){bar.classList.add('indet');bar.firstElementChild.style.width='';t.textContent='Starting…';return}
+  bar.classList.remove('indet');bar.firstElementChild.style.width=Math.max(1,Math.min(100,p.percent))+'%';
+  const el=p.at-p.started, left=p.percent>=5&&p.percent<100&&el>20?el*(100-p.percent)/p.percent:0;
+  t.innerHTML=(p.steps?'':'<b>'+Math.floor(p.percent)+'%</b> · ')+(p.stages>1&&p.stage_no?'Step '+p.stage_no+' of '+p.stages+': ':'')+esc(p.stage)+(p.text?' · '+esc(p.text):'')
+    +(left?' · roughly '+(left<90?'a minute':Math.round(left/60)+' minutes')+' left':'');
+}
 function lastLine(lines){for(let i=lines.length-1;i>=0;i--){if(lines[i].trim())return lines[i]}return ''}
 
 function show(s){
@@ -468,9 +478,10 @@ function show(s){
   if(document.activeElement!==$('o-camp'))$('o-camp').value=s.campaign||'';
   const cc=(s.campaigns||[]).find(c=>c.id===s.campaign);
   $('camp-rules').textContent=cc?(cc.problem?'This campaign file cannot be read: '+cc.problem:'Rules: '+(cc.rules||'none that can be checked automatically')+'. Rule files are in the briefs folder.'):'Pick a campaign to have its length, tag and label rules checked on every clip. Rule files are in the briefs folder.';
-  const fp=s.finish_progress||{done:0,total:0,now:''}; $('f-bar').hidden=!s.finishing;
-  $('f-bar').firstElementChild.style.width=(fp.total?Math.round(100*fp.done/fp.total):0)+'%';
-  $('r-bar').hidden=!s.running; $('h-bar').hidden=!(s.health&&s.health.maint.running);
+  const fp=s.finish_progress||{done:0,total:0,now:''};
+  setBar('f',s.finishing,s.finish_percent); setBar('r',s.running,s.run_progress); setBar('m',s.running,s.run_progress); setBar('cb',s.running,s.run_progress);
+  const hm=s.health?s.health.maint:null, hs=hm&&hm.step;
+  setBar('h',!!(hm&&hm.running),hs?{percent:(hs[0]-.5)/hs[1]*100,stage:hs[2],stage_no:hs[0],stages:hs[1],text:'',at:0,started:0,steps:true}:null);
   const pw=$('p-watch'); pw.className='pill'+(s.watching?' live':''); pw.lastElementChild.textContent=s.watching?'Watching '+(s.channels||'').split(' ').filter(Boolean).join(', '):'Not watching';
   $('b-start').disabled=s.watching; $('b-stop').disabled=!s.watching;
   $('w-note').innerHTML=s.watching?'<b>Watching.</b> Drafts appear on the right as moments happen. '+esc(lastLine(s.watch_log)):(s.watch_problem?'<b>Stopped with a problem.</b> Open the activity log.':'Not watching.');
@@ -490,10 +501,10 @@ function show(s){
   /* One banner line per distinct error, without counts, so closing it once keeps it closed. */
   setErr(probs.concat(bad.length?['An activity log has an error, shown in red there. Latest: '+bad[bad.length-1]]:[]));
   if(s.running&&curTab==='live')tab('vod');
-  $('b-own').disabled=s.running; $('b-ownstop').disabled=!s.running; $('m-bar').hidden=!s.running;
+  $('b-own').disabled=s.running; $('b-ownstop').disabled=!s.running;
   $('m-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?'<b>Done.</b> '+esc(lastLine(s.run_log)):'Nothing running.'));
   logTo('mlog',s.run_log);
-  $('b-board').disabled=s.running; $('cb-bar').hidden=!s.running; $('cb-stop').disabled=!s.running; $('cb-note').innerHTML=$('m-note').innerHTML;
+  $('b-board').disabled=s.running; $('cb-stop').disabled=!s.running; $('cb-note').innerHTML=$('m-note').innerHTML;
   cbRunning=s.running; if(CB)cbRows();
   /* A job started from this page has ended: go where its result is. */
   if(cbWasRunning&&!s.running&&cbJob){const job=cbJob;cbJob='';
@@ -549,10 +560,13 @@ function makeOwn(){
 }
 async function uploadFile(inp){
   const f=inp.files[0]; if(!f)return; const st=$('m-up'); st.className='saved'; st.textContent='Copying '+f.name+' ('+Math.round(f.size/1e6)+' MB)…';
-  try{const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f});
-    if(!r.ok){st.textContent='';toast('The file was not taken: '+await r.text(),true);return}
-    const d=await r.json(); $('m-src').value=d.path; st.textContent='Ready: '+f.name}
-  catch(e){st.textContent='';toast('The file could not be copied: '+e,true)}
+  /* Sent with a request that reports how much has gone, so the copy shows a percentage. */
+  try{const d=await new Promise((ok,bad)=>{const x=new XMLHttpRequest();x.open('POST','/api/upload?name='+encodeURIComponent(f.name));
+      x.upload.onprogress=e=>{if(e.lengthComputable)st.textContent='Copying '+f.name+': '+Math.floor(100*e.loaded/e.total)+'% of '+Math.round(f.size/1e6)+' MB'};
+      x.onload=()=>{if(x.status===200){try{ok(JSON.parse(x.responseText))}catch(e){bad('the answer could not be read')}}else bad(x.responseText||('error '+x.status))};
+      x.onerror=()=>bad('the program is not answering');x.send(f)});
+    $('m-src').value=d.path; st.textContent='Ready: '+f.name}
+  catch(e){st.textContent='';toast('The file was not taken: '+e,true)}
   inp.value='';
 }
 function saveLang(){
@@ -569,7 +583,7 @@ async function poll(){
   catch(e){setErr('THE PROGRAM IS NOT ANSWERING. It has stopped or crashed: look at the terminal window where you started it; the reason is printed there.')}
   /* Drawing is kept apart from fetching: a fault in the page itself must not be reported as the program having stopped. */
   if(s){try{show(s)}catch(e){setErr('THE PAGE HIT A FAULT OF ITS OWN while drawing ('+e+'). The program is still running. Reload the page; if this stays, restart the program and report this line.')}}
-  setTimeout(poll,5000)}
+  setTimeout(poll,(s&&(s.running||s.finishing||(s.health&&s.health.maint.running)))?1500:5000)}
 
 /* ---------- clips ---------- */
 const STATUS_TEXT={candidate:'To review',approved:'Approved, videos not made yet',done:'Done: videos made',rejected:'Rejected'};
