@@ -64,6 +64,11 @@ function Get-Tool($name, $urls, $folder) {
 }
 
 Write-Host '== External tools =='
+# Speech-to-text crashes ("access violation") on a Windows C++ runtime older than 14.40. Say so now rather than later.
+$vc = Join-Path $env:SystemRoot 'System32\msvcp140.dll'
+$vcOld = $true
+if (Test-Path $vc) { $v = (Get-Item $vc).VersionInfo; $vcOld = ($v.FileMajorPart -lt 14) -or ($v.FileMajorPart -eq 14 -and $v.FileMinorPart -lt 40) }
+
 Get-Tool 'ffmpeg' $FfmpegUrl 'ffmpeg'
 Get-Tool 'TwitchDownloaderCLI' $TdUrl 'twitchdownloader'
 $models = Join-Path $DataDir 'models'
@@ -109,3 +114,11 @@ Write-Host ''
 uv run clipper hardware --refresh
 Write-Host ''
 Write-Host 'Ready. Read GUIDE.md, or try:  uv run clipper watch <channel name>'
+
+if ($vcOld) {
+    Write-Host ""
+    Write-Host "IMPORTANT: this computer's Microsoft Visual C++ runtime is missing or too old." -ForegroundColor Red
+    Write-Host "Speech-to-text (captions) will crash until it is updated. Install the x64 version from" -ForegroundColor Red
+    Write-Host "  https://aka.ms/vs/17/release/vc_redist.x64.exe" -ForegroundColor Red
+    Write-Host "or run:  winget install Microsoft.VCRedist.2015+.x64   then restart the computer." -ForegroundColor Red
+}

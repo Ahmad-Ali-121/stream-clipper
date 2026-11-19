@@ -92,8 +92,58 @@ print("CUDA-OK")
 """
 
 
+VC_NEEDED = (14, 40)  # libraries built with Visual Studio 2022 17.10 or later crash inside an older msvcp140.dll
+VC_DOWNLOAD = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+
+
+def vc_runtime_version(path: str | None = None) -> tuple[int, ...] | None:
+    """Version of Windows' shared C++ runtime (msvcp140.dll), which the speech library uses; None if absent or not Windows."""
+    if sys.platform != "win32":
+        return None
+    path = path or os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "msvcp140.dll")
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        ver = ctypes.WinDLL("version")
+        ver.GetFileVersionInfoSizeW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(wintypes.DWORD)]
+        ver.GetFileVersionInfoW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p]
+        ver.VerQueryValueW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(wintypes.UINT)]
+        size = ver.GetFileVersionInfoSizeW(path, None)
+        if not size:
+            return None
+        data = ctypes.create_string_buffer(size)
+        if not ver.GetFileVersionInfoW(path, 0, size, data):
+            return None
+        block, length = ctypes.c_void_p(), wintypes.UINT()
+        if not ver.VerQueryValueW(data, "\\", ctypes.byref(block), ctypes.byref(length)):
+            return None
+        fixed = ctypes.cast(block, ctypes.POINTER(wintypes.DWORD * 13)).contents  # VS_FIXEDFILEINFO
+        ms, ls = fixed[2], fixed[3]
+        return (ms >> 16, ms & 0xFFFF, ls >> 16, ls & 0xFFFF)
+    except Exception as e:
+        log.warning("could not read the version of msvcp140.dll (%s)", e)
+        return None
+
+
+def runtime_problem(version: tuple[int, ...] | None = None, check: bool = True) -> str:
+    """What is wrong with Windows' C++ runtime for the speech library and how to fix it; "" when it is fine."""
+    if sys.platform != "win32":
+        return ""
+    if check:
+        version = vc_runtime_version()
+    fix = (f"Install the current 'Microsoft Visual C++ Redistributable (x64)' from {VC_DOWNLOAD} "
+           "(or run: winget install Microsoft.VCRedist.2015+.x64), restart the computer, then try again.")
+    if version is None:
+        return "Windows' C++ runtime (msvcp140.dll) is missing, and the speech-to-text library needs it. " + fix
+    if version[:2] < VC_NEEDED:
+        return (f"Windows' C++ runtime (msvcp140.dll) on this computer is version {'.'.join(map(str, version))}, which is too old: "
+                f"the speech-to-text library needs {VC_NEEDED[0]}.{VC_NEEDED[1]} or newer and crashes with an 'access violation' on older ones. " + fix)
+    return ""
+
+
 CRASH_CODES = {
-    0xC0000005: "access violation: it read memory it should not, which usually means a damaged model file",
+    0xC0000005: "access violation: a crash inside the speech library",
     0xC000001D: "illegal instruction: this processor lacks something the speech library needs",
     0xC0000135: "a required system library (DLL) is missing",
     0xC0000409: "the speech library aborted",
@@ -136,7 +186,8 @@ def trial_load(model: str, device: str, compute_type: str, models_dir: str, env:
         return False, f"could not start the trial: {e}"
     if "CUDA-OK" in proc.stdout:
         return True, ""
-    return False, (describe_exit(proc.returncode) + "\n" + proc.stderr.strip()[-1500:]).strip()
+    cause = runtime_problem()
+    return False, ((f"LIKELY CAUSE: {cause}\n" if cause else "") + describe_exit(proc.returncode) + "\n" + proc.stderr.strip()[-1500:]).strip()
 
 
 def machine_facts() -> list[str]:
@@ -163,6 +214,10 @@ def machine_facts() -> list[str]:
         facts.append(f"speech library: ctranslate2 {ctranslate2.__version__}, faster-whisper {faster_whisper.__version__}")
         facts.append(f"processor number formats: {sorted(ctranslate2.get_supported_compute_types('cpu'))}")
         facts.append(f"NVIDIA cards the library sees: {ctranslate2.get_cuda_device_count()}")
+        if sys.platform == "win32":
+            v = vc_runtime_version()
+            facts.append(f"Windows C++ runtime (msvcp140.dll): {'.'.join(map(str, v)) if v else 'MISSING'}; needs {VC_NEEDED[0]}.{VC_NEEDED[1]} or newer"
+                         f" -> {'TOO OLD' if runtime_problem() else 'fine'}")
     except Exception as e:
         facts.append(f"speech library: could not be read ({e})")
     try:
@@ -196,6 +251,8 @@ def doctor(cfg: Config) -> bool:
     models.mkdir(parents=True, exist_ok=True)
     for line in machine_facts():
         print(line)
+    if runtime_problem():
+        print(f"\n*** {runtime_problem()} ***")
     print(f"models folder: {models}")
     print("\nTrying speech-to-text several ways, each in its own process (a few minutes; nothing here can crash this window):")
     default_ok, seen = False, []
