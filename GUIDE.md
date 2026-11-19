@@ -16,7 +16,9 @@ You need a Windows PC with about 5 GB free. Do these in order.
    - Node.js (LTS): https://nodejs.org/
 2. **Get the project folder onto the PC.** Copy the whole `Clipping` folder from this laptop (USB stick or a private GitHub repository). You do not need to copy `D:\clipper-data`.
 3. **Open a terminal in the folder.** In File Explorer, open the `Clipping` folder, click the address bar, type `powershell` and press Enter.
-4. **Run the setup script.** Pick a drive with free space for the data folder:
+4. **Install it.** The easy way: in the folder, double-click **`Install-Stream-Clipper.cmd`**. It asks where to keep the clips (press Enter for the suggestion), downloads everything, and puts a **Stream Clipper** shortcut on the desktop. If the PC has no `uv` yet, it offers to install it. You can run it again any time; it only fetches what is missing.
+
+   The same thing from a terminal, if you prefer. Pick a drive with free space for the data folder:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File setup.ps1 -DataDir D:\clipper-data

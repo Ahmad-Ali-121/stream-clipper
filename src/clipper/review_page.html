@@ -157,7 +157,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
     <span class="pill" id="p-count">0 to review</span>
   </div>
 </div>
-<div id="errbox"><span id="errtext"></span><button class="x" title="Close this message" aria-label="Close this message" onclick="closeErr()">×</button></div>
+<div id="errbox"><span id="errtext"></span> <button class="btn" id="b-restart" hidden onclick="restartNow()" style="margin-left:8px">Restart now</button><button class="x" title="Close this message" aria-label="Close this message" onclick="closeErr()">×</button></div>
 
 <div class="layout">
   <aside class="side" id="side">
@@ -294,10 +294,16 @@ const MODES={chat:['A','Chat only','Clips when chat suddenly erupts. Uses almost
   all:['D','Chat + sound + picture','Uses all three. About 100 MB an hour per channel.']};
 let drawn=false, toastTimer=0, last={};
 
-let errShown='', errClosed='';
-/* The red banner can be closed. It comes back only when there is something new to say. */
-function setErr(text){errShown=text;$('errtext').textContent=text;$('errbox').style.display=(text&&text!==errClosed)?'block':'none'}
-function closeErr(){errClosed=errShown;$('errbox').style.display='none'}
+let errShown=[]; const errClosed=new Set();
+/* The red banner can be closed. Each message is remembered once closed, so it stays closed;
+   only a message that was not there before brings the banner back. */
+function setErr(lines){if(typeof lines==='string')lines=lines?[lines]:[];errShown=lines;
+  const open=lines.filter(l=>!errClosed.has(l));
+  $('errtext').textContent=open.join(NL);$('errbox').style.display=open.length?'block':'none';
+  $('b-restart').hidden=!(open.some(l=>l.startsWith('THE PROGRAM NEEDS A RESTART'))&&last.health&&last.health.launcher)}
+function closeErr(){for(const l of errShown)errClosed.add(l);$('errbox').style.display='none'}
+async function restartNow(){const r=await send('/api/restart');if(r.error){toast(r.error,true);return}
+  toast('Restarting… this page reconnects by itself.');setTimeout(()=>location.reload(),6000)}
 function toast(msg,err){const t=$('toast');$('toasttext').textContent=msg;t.className=err?'err':'';t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',err?9000:2500)}
 function tab(name){for(const n of ['live','vod']){$('tab-'+n).hidden=n!==name;$('t-'+n).className=n===name?'on':''}}
 function mode(){return (document.querySelector('[name=o-mode]:checked')||{}).value}
@@ -364,8 +370,10 @@ function show(s){
   logTo('flog',s.finish_log);
   if(s.health)drawHealth(s.health);
   const bad=s.watch_log.concat(s.finish_log,s.run_log,(s.health&&s.health.maint.lines)||[]).filter(isBad), probs=[s.watch_problem,s.run_problem].filter(Boolean);
-  if(s.stamp!==PAGE_STAMP)probs.unshift('THE PROGRAM NEEDS A RESTART. Its files were updated, but the copy that is running is still the old one, so some buttons will not work. Go to the terminal window where you started it, press Ctrl+C, and start it again with:  uv run clipper review');
-  setErr(probs.concat(bad.length?[bad.length+' error line(s) in the activity logs, shown in red. Latest: '+bad[bad.length-1]]:[]).join(NL));
+  if(s.stamp!==PAGE_STAMP)probs.unshift('THE PROGRAM NEEDS A RESTART. Its files were updated, but the copy that is running is still the old one, so some buttons will not work. '
+    +(s.health&&s.health.launcher?'Press Restart now.':'Close its window (or press Ctrl+C in it), then double-click Stream-Clipper.cmd to start it again.'));
+  /* One banner line per distinct error, without counts, so closing it once keeps it closed. */
+  setErr(probs.concat(bad.length?['An activity log has an error, shown in red there. Latest: '+bad[bad.length-1]]:[]));
   if(s.running)tab('vod');
 }
 async function act(url,body){

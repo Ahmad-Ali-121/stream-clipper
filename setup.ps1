@@ -6,7 +6,8 @@
 
 # Add -Gpu on a PC with an NVIDIA card to also install NVIDIA's libraries (about 1 GB), so speech-to-text runs on the card.
 # Add -NoShortcut to skip the "Stream Clipper" shortcut on the desktop.
-param([string]$DataDir = "data", [switch]$Gpu, [switch]$NoShortcut)
+# Leave -DataDir out on a PC that is already set up: the folder it uses now is kept.
+param([string]$DataDir = "", [switch]$Gpu, [switch]$NoShortcut)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -23,6 +24,12 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 if ($args.Count -gt 0) {
     throw "Did not understand '$($args -join ' ')'. If the data folder's name has a space in it, put it in quotes: -DataDir `"D:\my folder`""
 }
+$saved = ''
+if (Test-Path config.local.yaml) {
+    $line = Get-Content config.local.yaml | Where-Object { $_ -match '^\s*data_dir\s*:\s*(.+?)\s*$' } | Select-Object -First 1
+    if ($line -and $line -match '^\s*data_dir\s*:\s*(.+?)\s*$') { $saved = $Matches[1].Trim('"', "'") }
+}
+if (-not $DataDir) { $DataDir = if ($saved) { $saved } else { 'data' } }
 $DataDir = [System.IO.Path]::GetFullPath($DataDir)
 # The program reads its data folder from config.local.yaml. Installing the tools anywhere else would leave it unable to find them.
 if (Test-Path config.local.yaml) {

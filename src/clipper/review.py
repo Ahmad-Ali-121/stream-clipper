@@ -25,8 +25,18 @@ PAGE_FILE = Path(__file__).with_name("review_page.html")
 
 
 def code_stamp() -> str:
-    """Changes whenever the program's files on disk change (an update)."""
-    return str(int(max(f.stat().st_mtime for f in Path(__file__).parent.glob("*.py"))))
+    """Changes only when the program's code really changes (an update).
+
+    It is made from what the files contain, not from their dates: a file that is merely touched,
+    re-saved unchanged or checked out again must not make the page ask for a restart.
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    for f in sorted(Path(__file__).parent.glob("*.py")):
+        h.update(f.name.encode())
+        h.update(f.read_bytes().replace(b"\r\n", b"\n"))  # the same code with other line endings is the same code
+    return h.hexdigest()[:16]
 
 
 RUNNING_STAMP = code_stamp()  # the code this running program was started with
@@ -380,7 +390,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 return self._send(403, b"not allowed from another site", "text/plain")
             actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch",
                        "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/ai/check": "start_ai_check",
-                       "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update"}
+                       "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
+                       "/api/restart": "restart"}
             if control and self.path in actions:
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")

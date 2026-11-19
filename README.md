@@ -37,9 +37,9 @@ Needs [Git](https://git-scm.com/download/win), [uv](https://docs.astral.sh/uv/ge
 
 ```powershell
 git clone https://github.com/Ahmad-Ali-121/stream-clipper.git
-cd stream-clipper
-powershell -ExecutionPolicy Bypass -File setup.ps1 -DataDir D:\clipper-data
 ```
+
+Then open the `stream-clipper` folder and **double-click `Install-Stream-Clipper.cmd`**. It asks where to keep the clips, downloads what is needed, and puts a "Stream Clipper" shortcut on the desktop. Double-click that shortcut to start. (The same from a terminal: `powershell -ExecutionPolicy Bypass -File setup.ps1 -DataDir D:\clipper-data`.)
 
 The setup script downloads FFmpeg, TwitchDownloaderCLI and the face and voice models, installs the Python packages and runs the tests. Then:
 
@@ -108,7 +108,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           140 unit tests (uv run pytest -q)
+tests/           142 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

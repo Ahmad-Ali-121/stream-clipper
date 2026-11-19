@@ -38,3 +38,30 @@ def test_a_speech_model_that_cannot_load_is_an_error_not_a_crash(tmp_path, monke
     monkeypatch.setattr(hw, "trial_load", lambda *a, **k: (False, "it crashed: exit code -1073741819"))
     with pytest.raises(ToolError, match="could not be loaded"):
         transcribe.load_model(cfg)
+
+
+def test_restart_warning_follows_the_code_not_file_dates(tmp_path, monkeypatch):
+    import os
+    import time
+
+    from clipper import review
+
+    before = review.code_stamp()
+    target = next(iter(sorted(review.Path(review.__file__).parent.glob("*.py"))))
+    old = target.stat()
+    try:
+        os.utime(target, (time.time(), time.time()))  # touched, not changed
+        assert review.code_stamp() == before
+    finally:
+        os.utime(target, (old.st_atime, old.st_mtime))
+
+
+def test_a_copy_started_from_a_terminal_says_how_to_restart(tmp_path, monkeypatch):
+    from clipper.config import load_config
+    from clipper.control import Control
+
+    cfg = load_config()
+    cfg.paths.data_dir = str(tmp_path)
+    monkeypatch.delenv("CLIPPER_LAUNCHER", raising=False)
+    with pytest.raises(ValueError, match="Stream-Clipper.cmd"):
+        Control(cfg).restart()

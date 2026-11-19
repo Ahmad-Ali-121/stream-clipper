@@ -282,7 +282,10 @@ class Control:
         def work(say) -> None:
             state = health.update_state(fetch=True)
             if not state["can"]:
-                raise ValueError(state["why"] or "this copy is already up to date")
+                # Not a failure: there is simply nothing to do, or this copy must not be changed. Say so plainly.
+                say("No update was made: " + (state["why"] or "this copy is already the newest version") + ".")
+                health.full_check(self.reload())
+                return
             say(f"{state['behind']} change(s) to take from GitHub")
             for cmd in (["git", "merge", "--ff-only", "origin/main"],
                         ["uv", "sync", "--frozen"] + (["--extra", "gpu"] if (PROJECT_ROOT / ".venv/Lib/site-packages/nvidia/cublas").exists() else [])):
@@ -298,6 +301,17 @@ class Control:
                 say("updated. Now close the program (Ctrl+C in its terminal) and start it again.")
 
         return self._maintain("Update", work)
+
+    def restart(self) -> dict:
+        """Start the program again (only possible when it was started with the launcher, which waits for this)."""
+        if not (os.environ.get("CLIPPER_LAUNCHER") and self.shutdown):
+            raise ValueError("this copy was started from a terminal, so it cannot restart itself. Press Ctrl+C there and start it again, "
+                             "or start it with Stream-Clipper.cmd next time")
+        if self.watching() or self.running() or self.finishing or self.maint["running"]:
+            raise ValueError("something is still running (watching, a finished stream, making videos or a check). Stop it or wait, then restart")
+        self.exit_code = 42
+        threading.Timer(0.8, self.shutdown).start()
+        return {"restarting": True}
 
     def save(self, raw: dict) -> dict:
         save_local(clean_options(raw))
