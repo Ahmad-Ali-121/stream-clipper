@@ -27,7 +27,7 @@ Everything in the core works with no paid service. Optional keys add nicer text 
 
 | Add-on | Key in `.env` | What it adds | Rough cost |
 |---|---|---|---|
-| Claude | `ANTHROPIC_API_KEY` | Writes hooks, titles, descriptions, narration; flags filler clips | about $0.01 per clip |
+| Claude | `ANTHROPIC_API_KEY`, or no key: the Claude Code command signed in with your own Claude plan (`llm.backend: claude-code`) | Writes hooks, titles, descriptions, narration; flags filler clips; can read a whole stream and pick moments | about $0.01 per clip with a key; with a plan it uses your usage limits |
 | ElevenLabs | `ELEVENLABS_API_KEY` | More natural narrator voice (set `voice.backend: elevenlabs`) | from $6 a month |
 | Groq | `GROQ_API_KEY` | Faster speech-to-text on their servers (untested) | about $0.04 per audio hour |
 
@@ -106,7 +106,7 @@ src/clipper/
   post.py        export and upload text     brief.py     campaign rule checks
   streamread.py  AI reads a whole stream's speech
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           119 unit tests (uv run pytest -q)
+tests/           121 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

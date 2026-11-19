@@ -253,6 +253,9 @@ def machine_facts() -> list[str]:
         facts.append("keys in .env on this computer: " + ", ".join(
             f"{name} {'set' if os.environ.get(key) else 'NOT set'}"
             for name, key in (("Claude (ANTHROPIC_API_KEY)", "ANTHROPIC_API_KEY"), ("ElevenLabs", "ELEVENLABS_API_KEY"), ("Groq", "GROQ_API_KEY"))))
+        import shutil as _shutil
+
+        facts.append(f"Claude Code command (for llm.backend: claude-code): {_shutil.which('claude') or 'not installed'}")
     except Exception as e:
         facts.append(f"keys: could not be read ({e})")
     try:

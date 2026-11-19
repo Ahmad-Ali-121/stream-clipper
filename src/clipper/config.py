@@ -139,7 +139,8 @@ class TrendSettings:
 
 @dataclass
 class LlmSettings:
-    enabled: bool = True  # only takes effect when ANTHROPIC_API_KEY is in .env
+    enabled: bool = True  # only takes effect when the chosen backend can be reached
+    backend: str = "api"  # "api" = Claude API key in .env, paid per use; "claude-code" = the Claude Code command on this PC, using your own Claude plan
     model: str = "claude-opus-5-5"  # "claude-haiku-5-5" costs about 40 times less and is usually enough here
     effort: str = "low"
 

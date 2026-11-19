@@ -167,3 +167,55 @@ def test_plain_text_is_redone_once_ai_is_available(tmp_path, monkeypatch):
     state = pipeline.write_clip_copy(d, state, cfg)
     assert state["hook"] == "He misses every shot" and state["hook_b"] == "typed by a person"
     assert state["copy_source"] != "plain" and "copy_problem" not in state
+
+
+def _cli_cfg(tmp_path):
+    from clipper.config import load_config
+
+    cfg = load_config()
+    cfg.paths.data_dir = str(tmp_path)
+    cfg.llm.backend = "claude-code"
+    return cfg
+
+
+def test_claude_code_backend_runs_the_command_without_the_api_key(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    cfg = _cli_cfg(tmp_path)
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(cmd=cmd, env=kw["env"], user=kw["input"], cwd=kw["cwd"])
+        reply = {"is_error": False, "structured_output": {"answer": "7"}, "usage": {"input_tokens": 5, "output_tokens": 2}, "total_cost_usd": 0.001}
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(reply) + "\n", stderr="")
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-not-to-be-passed-on")
+    monkeypatch.setattr(llm.shutil, "which", lambda name: r"C:\bin\claude.exe")
+    monkeypatch.setattr(llm.subprocess, "run", fake_run)
+    assert llm.why_unavailable(cfg) == ""
+    out = llm.ask(cfg, "claude-haiku-5-5", "be brief", "which is bigger", {"type": "object"}, "a test")
+    assert out == {"answer": "7"} and seen["user"] == "which is bigger"
+    assert "ANTHROPIC_API_KEY" not in seen["env"]  # or the command would bill the API instead of using the plan
+    assert seen["cmd"][:4] == [r"C:\bin\claude.exe", "-p", "--model", "claude-haiku-5-5"] and "--json-schema" in seen["cmd"]
+    assert "tmp" in seen["cwd"]  # an empty folder, not the project
+    logged = (tmp_path / "usage.jsonl").read_text(encoding="utf-8")
+    assert "claude-code" in logged and "a test" in logged
+
+
+def test_claude_code_backend_explains_what_is_wrong(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    import pytest
+
+    cfg = _cli_cfg(tmp_path)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: None)
+    assert "Install Claude Code" in llm.why_unavailable(cfg)
+    with pytest.raises(llm.LlmUnavailable, match="was not found"):
+        llm.ask(cfg, "claude-haiku-5-5", "s", "u", {}, "t")
+    monkeypatch.setattr(llm.shutil, "which", lambda name: "claude")
+    monkeypatch.setattr(llm.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 1, stdout=json.dumps({"is_error": True, "result": "Not logged in · Please run /login"}), stderr=""))
+    with pytest.raises(llm.LlmUnavailable, match="Not logged in"):
+        llm.ask(cfg, "claude-haiku-5-5", "s", "u", {}, "t")

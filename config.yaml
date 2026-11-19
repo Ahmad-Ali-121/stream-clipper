@@ -91,6 +91,8 @@ trends:
 
 llm:                      # writes hooks, titles, descriptions and narration. Needs ANTHROPIC_API_KEY in .env
   enabled: true
+  backend: api            # api = Claude API key in .env, paid per use. claude-code = the official Claude Code command on this PC,
+                          # signed in with your own Claude plan: no API bill, but it uses your plan's usage limits
   model: claude-opus-5-5  # claude-haiku-5-5 costs about 40 times less and is usually enough for this job
   effort: low
 

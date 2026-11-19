@@ -45,6 +45,13 @@ The clipper works with none of these. Create a file named `.env` in the `Clippin
 | `ELEVENLABS_API_KEY` | A more natural narrator voice (set `voice.backend: elevenlabs`) | Starter plan $6 a month | elevenlabs.io |
 | `GROQ_API_KEY` | Faster transcription (set `transcribe.backend: groq`) | About $0.04 per hour of audio | console.groq.com |
 
+**Claude without an API key.** If you pay for a Claude plan (Pro or Max), the clipper can use it instead of an API key:
+
+1. Install Claude Code from https://claude.com/claude-code, open a terminal, run `claude` once and sign in with your own account.
+2. On the review page, in the **Claude** box, set "How to reach Claude" to **Claude Code on this computer**. The box says "Ready" when it works.
+
+Nothing is billed per use, but each request counts towards your plan's usage limits, the same limits as your normal Claude chats. Reading a whole stream with a large model uses a lot of them. Every person does this on their own PC with their own account; the clipper only runs the `claude` command and never sees your sign-in. The same box chooses the model for clip text and for reading streams.
+
 Every paid call is written to `D:\clipper-data\usage.jsonl` with its cost, so you can see what a day cost.
 
 ## Part 3: Daily use

@@ -1,7 +1,12 @@
 """Claude writes the words: hook, title, description, hashtags and narration lines.
 
-Needs ANTHROPIC_API_KEY in .env. Without a key every caller falls back to
-plain text built from the transcript, so the pipeline never depends on it.
+Two ways to reach Claude, chosen with ``llm.backend``:
+  api          the Claude API, paid per use. Needs ANTHROPIC_API_KEY in .env.
+  claude-code  the official Claude Code command (``claude -p``) installed on this computer and signed in
+               with this person's own Claude plan. No API bill; it uses the plan's usage limits instead.
+               This program only runs that command. It never reads, stores or passes on anyone's Claude sign-in.
+
+Without either, every caller falls back to plain text, so the pipeline never depends on it.
 Each call is logged to <data_dir>/usage.jsonl with its token counts and cost.
 """
 
@@ -10,6 +15,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
+import subprocess
 import time
 from typing import Any
 
@@ -61,13 +68,78 @@ SCHEMA = {
 }
 
 
+BACKENDS = {"api": "Claude API key (paid per use)", "claude-code": "Claude Code on this computer (uses your Claude plan)"}
+
+
 class LlmUnavailable(RuntimeError):
     pass
 
 
-def available(cfg: Config) -> bool:
+def why_unavailable(cfg: Config) -> str:
+    """Why AI cannot be used on this computer right now, in words a person can act on; "" when it can."""
+    if not cfg.llm.enabled:
+        return "AI is switched off (llm.enabled is false in the settings)"
+    if cfg.llm.backend == "claude-code":
+        if not shutil.which("claude"):
+            return ("the Claude Code command was not found on this computer. Install Claude Code, run `claude` once in a terminal "
+                    "and sign in with your own Claude plan, then try again")
+        return ""
+    if cfg.llm.backend != "api":
+        return f"llm.backend must be one of {', '.join(BACKENDS)}, not {cfg.llm.backend!r}"
     load_env()
-    return bool(cfg.llm.enabled and os.environ.get("ANTHROPIC_API_KEY"))
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return "there is no ANTHROPIC_API_KEY in the .env file on this computer"
+    return ""
+
+
+def available(cfg: Config) -> bool:
+    return not why_unavailable(cfg)
+
+
+def _ask_claude_code(cfg: Config, model: str, system: str, user: str, schema: dict, what: str) -> dict:
+    """The same question through the Claude Code command, signed in with this person's own plan."""
+    exe = shutil.which("claude")
+    folder = cfg.data_dir / "tmp" / "claude-code"  # an empty folder: no project files, settings or hooks get picked up
+    folder.mkdir(parents=True, exist_ok=True)
+    prompt_file = folder / "system.txt"
+    prompt_file.write_text(system, encoding="utf-8")
+    cmd = [exe, "-p", "--model", model, "--output-format", "json", "--json-schema", json.dumps(schema),
+           "--system-prompt-file", str(prompt_file), "--tools", "", "--no-session-persistence",
+           "--strict-mcp-config", "--setting-sources", ""]
+    # With an API key in the environment the command would bill the API instead of using the plan.
+    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+    try:
+        proc = subprocess.run(cmd, input=user, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              cwd=str(folder), env=env, timeout=1200)
+    except subprocess.TimeoutExpired as e:
+        raise LlmUnavailable("Claude Code did not answer within 20 minutes") from e
+    except OSError as e:
+        raise LlmUnavailable(f"Claude Code could not be started: {e}") from e
+    try:
+        reply = json.loads(proc.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError) as e:
+        tail = (proc.stderr or proc.stdout).strip()[-400:]
+        raise LlmUnavailable(f"Claude Code gave no usable answer (exit code {proc.returncode}): {tail or 'nothing was printed'}") from e
+    if reply.get("is_error") or proc.returncode != 0:
+        raise LlmUnavailable(f"Claude Code reported a problem: {str(reply.get('result') or reply.get('subtype') or proc.stderr)[:400]}. "
+                             "If it mentions signing in, run `claude` in a terminal and sign in; if it mentions a limit, your plan's usage limit is reached")
+    usage = reply.get("usage") or {}
+    entry = {
+        "time": time.strftime("%Y-%m-%d %H:%M:%S"), "service": "claude-code (your Claude plan, not billed per use)", "model": model, "what": what,
+        "input_tokens": sum(int(usage.get(k) or 0) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")),
+        "output_tokens": int(usage.get("output_tokens") or 0), "list_price_usd": reply.get("total_cost_usd"),
+    }
+    path = cfg.data_dir / "usage.jsonl"
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry) + "\n")
+    log.info("AI use through your Claude plan: %s", entry)
+    data = reply.get("structured_output")
+    if isinstance(data, dict):
+        return data
+    try:
+        return json.loads(str(reply.get("result") or ""))
+    except json.JSONDecodeError as e:
+        raise LlmUnavailable("Claude Code's reply was not in the expected form") from e
 
 
 def _log_usage(cfg: Config, model: str, usage: Any, what: str) -> None:
@@ -98,8 +170,11 @@ def clip_prompt(state: dict, trend_tags: list[str]) -> str:
 
 def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str) -> dict:
     """One question to Claude with a JSON answer in the given shape. Raises LlmUnavailable with the reason when it cannot."""
-    if not available(cfg):
-        raise LlmUnavailable("there is no ANTHROPIC_API_KEY in the .env file on this computer (or llm.enabled is false)")
+    problem = why_unavailable(cfg)
+    if problem:
+        raise LlmUnavailable(problem)
+    if cfg.llm.backend == "claude-code":
+        return _ask_claude_code(cfg, model, system, user, schema, what)
     import anthropic
 
     client = anthropic.Anthropic()

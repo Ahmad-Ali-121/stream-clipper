@@ -163,6 +163,20 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
     </section>
 
     <section class="card">
+      <header><span class="step" style="background:var(--surface2);color:var(--text);border:1px solid var(--line)">AI</span><h2>Claude (optional)</h2></header>
+      <div class="body">
+        <p class="help">Claude writes the opening text and titles, judges each clip, and can read a whole stream. Without it everything still works, with placeholder text.</p>
+        <label class="f" for="a-backend">How to reach Claude</label>
+        <select id="a-backend" onchange="saveAi()"></select>
+        <div class="two">
+          <div><label class="f" for="a-model">Model for clip text</label><select id="a-model" onchange="saveAi()"></select></div>
+          <div><label class="f" for="a-stream">Model for reading streams</label><select id="a-stream" onchange="saveAi()"></select></div>
+        </div>
+        <div class="note" id="a-note"></div>
+      </div>
+    </section>
+
+    <section class="card">
       <header><span class="step">3</span><h2>Make the videos</h2></header>
       <div class="body">
         <p class="help">Turns every approved clip into finished 9:16 videos with their upload text. Nothing is posted.</p>
@@ -219,7 +233,15 @@ function show(s){
     $('o-modes').innerHTML=Object.keys(s.modes).map(k=>{const m=MODES[k]||['?',k,s.modes[k]];
       return '<label class="mode" data-k="'+k+'"><input type="radio" name="o-mode" value="'+k+'" onchange="pickMode()"><b>'+m[0]+'</b><span>'+m[1]+'</span><em>'+m[2]+'</em></label>'}).join('');
     $('o-channels').value=s.channels; drawn=true;
+    $('a-backend').innerHTML=Object.entries(s.ai.backends).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('');
+    const names={'claude-haiku-5-5':'Haiku (fastest, cheapest)','claude-sonnet-5-5':'Sonnet (balanced)','claude-opus-5-5':'Opus (best judgement)','claude-fable-5-2':'Fable (most capable)'};
+    const opts=s.ai.models.map(m=>'<option value="'+m+'">'+esc(names[m]||m)+'</option>').join('');
+    $('a-model').innerHTML=opts; $('a-stream').innerHTML=opts;
   }
+  if(!document.querySelector('#a-backend:focus,#a-model:focus,#a-stream:focus')){$('a-backend').value=s.ai.backend;$('a-model').value=s.ai.model;$('a-stream').value=s.ai.stream_model}
+  $('a-note').innerHTML=s.ai.problem?'<b>Claude cannot be used yet:</b> '+esc(s.ai.problem)+'.'
+    :(s.ai.backend==='claude-code'?'<b>Ready.</b> Uses the Claude Code command with your own Claude plan. Nothing is billed per use, but it counts towards your plan\'s usage limits.'
+      :'<b>Ready.</b> Uses your API key. Each use is billed and written to the usage log.');
   const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!r.checked&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
   for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);
   $('o-ab').checked=s.ab_versions; $('o-opening').checked=s.opening;
@@ -246,6 +268,7 @@ async function act(url,body){
 }
 function startWatch(){act('/api/watch/start',{channels:val('o-channels'),mode:mode()})}
 function pickMode(){for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);saveOpts()}
+function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_model:val('a-model'),ai_model:val('a-stream')})}
 function saveOpts(){act('/api/options',{mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked})}
 async function poll(){
   try{const r=await fetch('/api/options');if(r.ok)show(await r.json());else setErr('The page could not read the program state: '+r.status+' '+await r.text())}

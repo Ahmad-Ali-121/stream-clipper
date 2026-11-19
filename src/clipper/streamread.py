@@ -219,7 +219,7 @@ def ai_moments(url: str, work: Path, meta: dict, cfg: Config, top: int) -> list[
     from . import llm
 
     if not llm.available(cfg):
-        raise ToolError("AI reading needs a Claude key: add ANTHROPIC_API_KEY to the .env file on this computer (and keep llm.enabled true).")
+        raise ToolError(f"AI cannot read the stream: {llm.why_unavailable(cfg)}.")
     transcribe_stream(url, work, cfg, meta.get("duration_s"))
     try:
         return pick_moments(work, meta, cfg, top)

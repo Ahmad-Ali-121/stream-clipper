@@ -47,6 +47,18 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if not isinstance(value, bool):
                 raise ValueError(f"{key} must be on or off")
             out.setdefault("render", {})[key] = value
+        elif key == "llm_backend":
+            from .llm import BACKENDS
+
+            if value not in BACKENDS:
+                raise ValueError(f"the AI connection must be one of: {', '.join(BACKENDS)}")
+            out.setdefault("llm", {})["backend"] = value
+        elif key in ("llm_model", "ai_model"):
+            from .llm import PRICES
+
+            if value not in PRICES:
+                raise ValueError(f"unknown model {value!r}; choose one of: {', '.join(PRICES)}")
+            out.setdefault("llm" if key == "llm_model" else "ai", {})["model"] = value
         elif key == "channels":
             from .watch import channel_name
 
@@ -92,7 +104,15 @@ class Control:
             "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
             "finishing": self.finishing, "finish_log": self.finish_lines[-200:],
             "running": self.running(), "run_log": self._run_tail(), "run_problem": self.run_problem,
+            "ai": self._ai_status(),
         }
+
+    def _ai_status(self) -> dict:
+        from . import llm
+
+        cfg = self.cfg
+        return {"backend": cfg.llm.backend, "backends": llm.BACKENDS, "model": cfg.llm.model, "stream_model": cfg.ai.model,
+                "models": list(llm.PRICES), "problem": llm.why_unavailable(cfg)}
 
     def save(self, raw: dict) -> dict:
         save_local(clean_options(raw))

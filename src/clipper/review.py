@@ -266,8 +266,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 if not (d / "clip.json").exists():
                     return self._send(404, b"no such clip", "text/plain")
                 if not llm.available(cfg):
-                    return self._send(400, "AI is not available: there is no ANTHROPIC_API_KEY in the .env file on this computer "
-                                           "(or llm.enabled is false in the settings).".encode(), "text/plain")
+                    return self._send(400, f"AI is not available: {llm.why_unavailable(cfg)}.".encode(), "text/plain")
                 state = write_clip_copy(d, read_json(d / "clip.json"), cfg, force=True)
                 if state.get("copy_source") == "plain":
                     return self._send(400, f"AI could not write the text: {state.get('copy_problem')}".encode(), "text/plain")
