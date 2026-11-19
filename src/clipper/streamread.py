@@ -42,6 +42,8 @@ For each moment give:
 supports: quote or paraphrase its actual words. You cannot see the chat or the screen, so do not say how chat 
 reacted or what was shown. Call the streamer "the streamer" or by name; do not guess he or she.
 
+The speech may be in Hindi or Urdu, often mixed with English. Judge it as a viewer who speaks that language would, \nand write every reason in English.
+
 Order them best first."""
 
 SCHEMA = {
@@ -120,7 +122,7 @@ def transcribe_stream(url: str, work: Path, cfg: Config, duration_s: float | Non
             if not raw:
                 break
             audio = np.frombuffer(raw[: len(raw) // 2 * 2], dtype=np.int16).astype(np.float32) / 32768.0
-            segments, _info = model.transcribe(audio, language=cfg.transcribe.language, beam_size=1, vad_filter=False,
+            segments, _info = model.transcribe(audio, language=None if cfg.transcribe.language == "auto" else cfg.transcribe.language, beam_size=1, vad_filter=False,
                                                condition_on_previous_text=False, word_timestamps=False)
             with out.open("a", encoding="utf-8") as fh:
                 for seg in segments:

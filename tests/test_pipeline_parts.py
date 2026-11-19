@@ -492,3 +492,139 @@ def test_finish_reports_progress_and_carries_on_past_a_bad_clip(tmp_path, monkey
     pipeline.stage_finish(cfg, problems=problems, progress=lambda done, total, now: seen.append((done, total)))
     assert seen == [(0, 2), (1, 2), (2, 2)]
     assert len(problems) == 2 and "never downloaded" in problems[0]  # both reported, neither stopped the other
+
+
+def test_approving_an_untouched_clip_keeps_its_draft_video(tmp_path):
+    from clipper.review import apply_edit
+
+    d = _clip(tmp_path, hook="A hook")
+    (d / "final.mp4").write_bytes(b"draft")
+    # The page always sends the cut and layout back, even when nothing was changed.
+    apply_edit(d.parent.parent, "0h01m00s", {"status": "approved", "hook": "A hook", "layout": "", "disclosure": False, "cut_start_s": 40.0, "cut_end_s": 70.0})
+    assert (d / "final.mp4").exists()
+    apply_edit(d.parent.parent, "0h01m00s", {"cut_start_s": 42.0, "cut_end_s": 70.0})
+    assert not (d / "final.mp4").exists()  # a real change still makes the old video stale
+
+
+def test_an_automatic_step_cannot_undo_what_a_person_decided(tmp_path):
+    from clipper.review import apply_edit
+    from clipper.work import read_json, save_clip
+
+    d = _clip(tmp_path)
+    stale = read_json(d / "clip.json")              # the watcher read the clip while making its draft...
+    apply_edit(d.parent.parent, "0h01m00s", {"status": "approved", "explainer": True})   # ...then the person approved it
+    stale["transcript"] = "new words"
+    save_clip(d / "clip.json", stale)                # ...and the watcher wrote its older copy back
+    now = read_json(d / "clip.json")
+    assert now["status"] == "approved" and now["explainer"] is True and now["transcript"] == "new words"
+
+
+def test_the_watcher_never_remakes_a_clip_a_person_decided_about(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from clipper import watch
+    from clipper.config import load_config
+    from clipper.work import write_json
+
+    cfg = load_config()
+    work = tmp_path / "twitch_1"
+    moments = [{"peak_s": 1000.0 + 600 * i, "start_s": 980.0 + 600 * i, "end_s": 1010.0 + 600 * i, "score": 5.0, "activity": 9, "messages": 9, "hype": 0} for i in range(4)]
+    states = [{"status": "approved"}, {"status": "candidate", "draft_done": True}, {"status": "candidate", "exported": "x.mp4"}, {"status": "candidate"}]
+    for m, st in zip(moments, states):
+        write_json(work / "clips" / watch.clip_id(m["peak_s"]) / "clip.json", st)   # none of them has a final.mp4
+    monkeypatch.setattr(watch, "load_chat", lambda p: [])
+    monkeypatch.setattr(watch, "done", lambda p: p.name == "chat.json")
+    monkeypatch.setattr(watch, "pick_moments", lambda *a: [SimpleNamespace(to_dict=lambda m=m: dict(m)) for m in moments])
+    monkeypatch.setattr(watch, "load_chat", lambda p: [SimpleNamespace(t=5000.0)])
+    monkeypatch.setattr(watch, "bucket_chat", lambda *a, **k: [])
+    monkeypatch.setattr(watch, "score_buckets", lambda *a: [])
+    w = SimpleNamespace(work=work, watch_from=0.0, meta={"started_at": 0.0}, feed=None)
+    got = watch.new_moments(w, cfg)
+    assert [m["peak_s"] for m in got] == [2800.0]  # only the clip nobody has touched and no draft was finished for
+
+
+def test_done_means_videos_made_and_not_edited_since(tmp_path):
+    from clipper.review import videos_made
+
+    d = _clip(tmp_path)
+    state = {"status": "approved", "exported": "x.mp4"}
+    assert not videos_made(d, state)                      # the draft video was deleted by an edit: make it again
+    (d / "final.mp4").write_bytes(b"x")
+    assert videos_made(d, state)
+    assert not videos_made(d, {**state, "explainer": True})   # explainer ticked after the videos were made
+    (d / "explained.mp4").write_bytes(b"x")
+    assert videos_made(d, {**state, "explainer": True})
+    assert not videos_made(d, {"status": "candidate", "exported": "x.mp4"})
+
+
+def test_a_silent_clip_does_not_break_the_loudness_step(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from clipper import render
+
+    silent = '{"input_i" : "-inf", "input_tp" : "-inf", "input_lra" : "0.00", "input_thresh" : "-inf", "target_offset" : "inf"}'
+    normal = '{"input_i" : "-23.10", "input_tp" : "-4.20", "input_lra" : "6.00", "input_thresh" : "-33.50", "target_offset" : "0.30"}'
+    monkeypatch.setattr(render, "run", lambda *a, **k: SimpleNamespace(stderr="noise\n" + silent))
+    assert render._measure_loudness("ffmpeg", "source.mp4", 0, 30, -14, tmp_path) is None  # falls back to the one-pass form
+    monkeypatch.setattr(render, "run", lambda *a, **k: SimpleNamespace(stderr=normal))
+    assert render._measure_loudness("ffmpeg", "source.mp4", 0, 30, -14, tmp_path)["input_i"] == "-23.10"
+
+
+def test_one_clip_that_cannot_be_drawn_does_not_stop_the_others(tmp_path, monkeypatch):
+    from clipper import pipeline, render
+    from clipper.config import load_config
+    from clipper.tools import ToolError
+    from clipper.work import read_json, write_json
+
+    cfg = load_config()
+    work = tmp_path / "twitch_1"
+    for name in ("0h01m00s", "0h02m00s"):
+        d = work / "clips" / name
+        d.mkdir(parents=True)
+        write_json(d / "clip.json", {"id": name, "status": "candidate", "start_s": 40, "end_s": 70})
+        (d / "source.mp4").write_bytes(b"x")
+
+    def fake_render(d, cfg, force=False, **k):
+        if d.name == "0h01m00s":
+            raise ToolError("render failed: example")
+        return d / "final.mp4"
+
+    monkeypatch.setattr(pipeline, "open_work", lambda url, cfg: (None, work))
+    monkeypatch.setattr(render, "render_clip", fake_render)
+    failed: list[str] = []
+    made = pipeline.stage_render("x", cfg, failed=failed)
+    assert [p.parent.name for p in made] == ["0h02m00s"] and failed == ["0h01m00s"]
+    assert "example" in read_json(work / "clips" / "0h01m00s" / "clip.json")["error"]
+
+
+def test_a_stream_watched_live_is_read_again_once_it_has_ended(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from clipper import pipeline
+    from clipper.config import load_config
+    from clipper.work import read_json, write_json
+
+    cfg = load_config()
+    work = tmp_path / "twitch_9"
+    work.mkdir()
+    write_json(work / "meta.json", {"is_live": True, "duration_s": 100})
+    (work / "chat.json").write_text('{"t": 5.0, "author": "a", "text": "hi"}\n', encoding="utf-8")   # collected by the watcher
+    asked = []
+
+    def fake_meta(source, w, cfg):
+        asked.append("meta" if not (w / "meta.json").exists() else "cached")
+        return {"is_live": False, "duration_s": 9000, "channel": "Someone"}
+
+    def fake_chat(source, w, cfg, refresh=False):
+        asked.append("chat" if not (w / "chat.json").exists() else "kept")
+        (w / "chat.json").write_text("[]", encoding="utf-8")
+        return w / "chat.json"
+
+    monkeypatch.setattr(pipeline, "open_work", lambda url, cfg: (SimpleNamespace(url="u", platform="twitch", key="twitch_9"), work))
+    monkeypatch.setattr(pipeline, "fetch_meta", fake_meta)
+    monkeypatch.setattr(pipeline, "fetch_chat", fake_chat)
+    monkeypatch.setattr(pipeline, "load_chat", lambda p: [SimpleNamespace(t=10.0)])
+    monkeypatch.setattr(pipeline, "find_moments", lambda *a, **k: [])
+    pipeline.stage_find("u", cfg)
+    assert asked == ["meta", "chat"]                       # both asked for afresh, not taken from the live session
+    assert (work / "chat.watched.json").exists()           # the watcher's partial chat is kept aside, not lost

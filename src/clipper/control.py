@@ -56,6 +56,20 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if not isinstance(value, bool):
                 raise ValueError(f"{key} must be on or off")
             out.setdefault("render", {})[key] = value
+        elif key == "speech_language":
+            if value not in ("en", "ur", "hi", "auto"):
+                raise ValueError("the stream language must be en, ur, hi or auto")
+            out.setdefault("transcribe", {})["language"] = value
+        elif key == "caption_script":
+            if value not in ("native", "roman"):
+                raise ValueError("captions must be native or roman")
+            out.setdefault("captions", {})["script"] = value
+        elif key == "text_language":
+            from .llm import TEXT_LANGUAGES
+
+            if value not in TEXT_LANGUAGES:
+                raise ValueError(f"the text language must be one of: {', '.join(TEXT_LANGUAGES)}")
+            out.setdefault("llm", {})["text_language"] = value
         elif key == "campaign":
             value = str(value or "")
             if value and not (PROJECT_ROOT / "briefs" / f"{value}.yaml").is_file():
@@ -155,6 +169,7 @@ class Control:
             "mode": parse_mode(cfg.watch.mode), "modes": MODE_TEXT, "channels": " ".join(cfg.watch.channels),
             "ab_versions": cfg.render.ab_versions, "opening": cfg.render.opening,
             "campaign": cfg.render.campaign, "campaigns": campaigns(),
+            "speech_language": cfg.transcribe.language, "caption_script": cfg.captions.script, "text_language": cfg.llm.text_language,
             "caption_preset": cfg.captions.preset,
             "caption_presets": {k: {"label": v[0], **v[1]} for k, v in CAPTION_PRESETS.items()},
             "finish_progress": self.finish_progress,

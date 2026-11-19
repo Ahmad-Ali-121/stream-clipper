@@ -68,6 +68,13 @@ def page_html(title: str, has_panel: bool) -> str:
             .replace("__STAMP__", json.dumps(code_stamp())))
 
 
+def videos_made(d: Path, state: dict) -> bool:
+    """True when an approved clip's videos exist as it stands now: made, not edited since, explainer included if ticked."""
+    if state.get("status") != "approved" or not state.get("exported") or not (d / "final.mp4").exists():
+        return False
+    return not state.get("explainer") or (d / "explained.mp4").exists()
+
+
 def clip_view(d: Path, weights: dict | None = None, brief=None) -> dict:
     """What the page needs to draw one clip."""
     from . import scoring
@@ -81,7 +88,7 @@ def clip_view(d: Path, weights: dict | None = None, brief=None) -> dict:
     )}
     out.update(
         key=f"{d.parent.parent.name}/{c['id']}",  # work folder / clip id: unique across streams
-        status=c.get("status", "candidate"), video=video, points=scoring.combined(c, weights),
+        status=c.get("status", "candidate"), video=video, points=scoring.combined(c, weights), made=videos_made(d, c),
         videos=[n for n in ("final.mp4", "final_b.mp4", "explained.mp4", "explained_b.mp4", "source.mp4") if (d / n).exists()],
         fetch_start_s=c.get("fetch_start_s", 0), has_words=(d / "words.json").exists(),
         exported_name=Path(c["exported"]).name if c.get("exported") else "",
@@ -116,7 +123,12 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
     hi = float(state.get("fetch_end_s", state["end_s"]))
     if not (lo <= start < end <= hi):
         raise ValueError(f"cut must stay inside the fetched range {lo:g}-{hi:g} seconds and start before it ends")
-    before = (state.get("hook"), state.get("layout"), state.get("disclosure"), state.get("cut_start_s"), state.get("cut_end_s"))
+    def shown(st: dict) -> tuple:
+        """What is burned into the video, compared by meaning: an unset cut is the moment's own, None and "" are the same."""
+        return (st.get("hook") or "", st.get("layout") or "", bool(st.get("disclosure")),
+                round(float(st.get("cut_start_s", st["start_s"])), 2), round(float(st.get("cut_end_s", st["end_s"])), 2))
+
+    before = shown(state)
     text_before = {k: state.get(k) or ("" if k != "tags" else []) for k in TEXT_FIELDS}
     state.update(edit)
     # Text a person changed here is theirs: the automatic writer must not replace it later.
@@ -124,11 +136,11 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
     if typed:
         state["copy_auto"] = [k for k in state.get("copy_auto") or [] if k not in typed]
     # A choice made by a person is final: automatic layout and cut snapping must not undo it.
-    if "layout" in edit and edit["layout"] != before[1]:
+    after = shown(state)
+    if after[1] != before[1]:
         state["layout_auto"] = False
-    if (state.get("cut_start_s"), state.get("cut_end_s")) != (before[3], before[4]):
+    if after[3:] != before[3:]:
         state["cut_auto"] = False
-    after = (state.get("hook"), state.get("layout"), state.get("disclosure"), state.get("cut_start_s"), state.get("cut_end_s"))
     stale: set[str] = set()
     if before != after:  # the rendered files no longer match; render again
         stale |= {"final.mp4", "final_b.mp4", "body.mp4", "explained.mp4", "explained_b.mp4", "intro_card.mp4", "intro_card_b.mp4", "still.png"}
@@ -250,7 +262,7 @@ def list_clips(works: list[Path], weights: dict | None = None) -> list[Path]:
         status = state.get("status", "candidate")
         # A draft still being made (no video yet) goes after the finished ones, so the top of the list is always watchable.
         ready = (d / "final.mp4").exists() or (d / "source.mp4").exists()
-        first = (-int(ready), -scoring.combined(state, weights)) if status == "candidate" else (0, 0)
+        first = (-int(ready), -scoring.combined(state, weights)) if status == "candidate" else (int(videos_made(d, state)), 0)
         return (order.get(status, 0), *first, -(d / "clip.json").stat().st_mtime)
 
     return sorted(dirs, key=key)
@@ -399,6 +411,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run") else getattr(control, name)()
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
+                if isinstance(result, dict) and "watching" in result:
+                    result = {**result, "stamp": RUNNING_STAMP}  # the same answer the page gets when it polls
                 return self._send(200, json.dumps(result).encode(), "application/json")
             refresh()
             m = re.fullmatch(r"/api/tracker/(add|update|delete|refresh)", self.path)

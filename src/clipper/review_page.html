@@ -16,6 +16,7 @@
   --field:#fff;--shadow:0 1px 2px rgba(20,24,33,.08);
 }}
 *{box-sizing:border-box}
+[hidden]{display:none!important}  /* a hidden button must stay hidden even though buttons set their own display */
 html{color-scheme:light dark}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
 h1,h2,h3,p{margin:0}
@@ -113,7 +114,9 @@ pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid
 .chipbtn i{font-style:normal;opacity:.8;margin-left:4px}
 .clips{display:flex;flex-direction:column;gap:16px}
 .clip{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;padding:16px;border-left:4px solid var(--line)}
-.clip[data-status=approved]{border-left-color:var(--ok)}.clip[data-status=rejected]{border-left-color:var(--bad);opacity:.6}
+.clip[data-status=approved]{border-left-color:var(--ok)}.clip[data-status=done]{border-left-color:var(--accent)}
+.clips[data-filter=done] .clip:not([data-status=done]){display:none}
+.clip[data-status=done] .badge{background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent);color:var(--accent)}.clip[data-status=rejected]{border-left-color:var(--bad);opacity:.6}
 @media (max-width:680px){.clip{grid-template-columns:1fr}}
 .clips[data-filter=candidate] .clip:not([data-status=candidate]),.clips[data-filter=approved] .clip:not([data-status=approved]),.clips[data-filter=rejected] .clip:not([data-status=rejected]){display:none}
 .vid video{width:100%;aspect-ratio:9/16;background:#000;border-radius:10px;display:block}
@@ -184,10 +187,19 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
       <header><span class="step">1</span><h2>Find moments</h2></header>
       <div class="body">
         <div class="tabs"><button id="t-live" class="on" onclick="tab('live')">Live streams</button><button id="t-vod" onclick="tab('vod')">Finished stream</button></div>
+        <details class="log" id="langbox" style="margin:0 0 10px"><summary>Language: <b id="lang-sum">English</b></summary>
+          <label class="f" for="l-speech">What the streamer speaks</label>
+          <select id="l-speech" onchange="saveLang()"><option value="en">English</option><option value="ur">Urdu</option><option value="hi">Hindi</option><option value="auto">Detect it (can guess wrong on mixed speech)</option></select>
+          <label class="f" for="l-script">Captions for Urdu or Hindi speech</label>
+          <select id="l-script" onchange="saveLang()"><option value="roman">Latin letters: "bhai ne kamaal kar diya" (needs Claude)</option><option value="native">Urdu or Hindi letters</option></select>
+          <label class="f" for="l-text">Opening text and titles written in</label>
+          <select id="l-text" onchange="saveLang()"><option>English</option><option>Roman Urdu</option><option>Hinglish</option><option>Urdu</option><option>Hindi</option></select>
+          <p class="help" style="margin-top:6px">Applies to clips made from now on. The narrator in explainer videos speaks English.</p>
+        </details>
         <div id="tab-live">
           <p class="help">Watches the streams while they are live and makes a draft clip each time something happens.</p>
-          <label class="f" for="o-channels">Twitch channels (names, separated by spaces)</label>
-          <input type="text" id="o-channels" placeholder="lacy xqc clix">
+          <label class="f" for="o-channels">Channels, separated by spaces: Twitch names, YouTube handles starting with @</label>
+          <input type="text" id="o-channels" placeholder="lacy xqc @youtubechannel">
           <label class="f">What should find the moments?</label>
           <div class="modes" id="o-modes"></div>
           <div class="btns"><button class="btn primary" id="b-start" onclick="startWatch()">Start watching</button><button class="btn bad" id="b-stop" onclick="act('/api/watch/stop',{})">Stop</button></div>
@@ -350,6 +362,8 @@ function show(s){
       cp.style.fontFamily='"'+p.font+'",Arial,sans-serif'; cp.style.fontWeight=900; cp.style.webkitTextStroke=Math.max(1,p.outline/4)+'px #000'; cp.style.paintOrder='stroke fill';
       cp.innerHTML='<span style="color:#'+p.text_color+'">'+t[0]+' </span><span style="color:#'+p.active_color+';font-size:112%">'+t[1]+'</span><span style="color:#'+p.text_color+'"> '+t[2]+'</span>'}
     else cp.textContent='Custom style from the settings file'}
+  if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'native';$('l-text').value=s.text_language||'English'}
+  $('lang-sum').textContent=({en:'English',ur:'Urdu',hi:'Hindi',auto:'detected automatically'})[s.speech_language||'en']+((s.speech_language||'en')!=='en'?', captions in '+(s.caption_script==='roman'?'Latin letters':'its own letters')+', text in '+(s.text_language||'English'):'');
   if(document.activeElement!==$('o-camp'))$('o-camp').value=s.campaign||'';
   const cc=(s.campaigns||[]).find(c=>c.id===s.campaign);
   $('camp-rules').textContent=cc?(cc.problem?'This campaign file cannot be read: '+cc.problem:'Rules: '+(cc.rules||'none that can be checked automatically')+'. Rule files are in the briefs folder.'):'Pick a campaign to have its length, tag and label rules checked on every clip. Rule files are in the briefs folder.';
@@ -370,7 +384,7 @@ function show(s){
   logTo('flog',s.finish_log);
   if(s.health)drawHealth(s.health);
   const bad=s.watch_log.concat(s.finish_log,s.run_log,(s.health&&s.health.maint.lines)||[]).filter(isBad), probs=[s.watch_problem,s.run_problem].filter(Boolean);
-  if(s.stamp!==PAGE_STAMP)probs.unshift('THE PROGRAM NEEDS A RESTART. Its files were updated, but the copy that is running is still the old one, so some buttons will not work. '
+  if(s.stamp&&s.stamp!==PAGE_STAMP)probs.unshift('THE PROGRAM NEEDS A RESTART. Its files were updated, but the copy that is running is still the old one, so some buttons will not work. '
     +(s.health&&s.health.launcher?'Press Restart now.':'Close its window (or press Ctrl+C in it), then double-click Stream-Clipper.cmd to start it again.'));
   /* One banner line per distinct error, without counts, so closing it once keeps it closed. */
   setErr(probs.concat(bad.length?['An activity log has an error, shown in red there. Latest: '+bad[bad.length-1]]:[]));
@@ -400,6 +414,7 @@ function drawHealth(h){
   logTo('hlog',h.maint.lines);
 }
 async function hAct(url,ask){if(ask&&!confirm(ask))return;act(url,{})}
+function saveLang(){act('/api/options',{speech_language:val('l-speech'),caption_script:val('l-script'),text_language:val('l-text')})}
 function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_prefer:val('a-prefer'),llm_fallback:$('a-fallback').checked,llm_model:val('a-model'),ai_model:val('a-stream')})}
 async function act2(url){if(await post(url))poll1()}
 async function poll1(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){}}
@@ -413,7 +428,9 @@ async function poll(){
   setTimeout(poll,5000)}
 
 /* ---------- clips ---------- */
-const STATUS_TEXT={candidate:'To review',approved:'Approved',rejected:'Rejected'};
+const STATUS_TEXT={candidate:'To review',approved:'Approved, videos not made yet',done:'Done: videos made',rejected:'Rejected'};
+/* Where a clip is listed: an approved clip whose videos are made (and not edited since) is Done. */
+function place(c){return c.made?'done':c.status}
 let filter='candidate';
 function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
   if(t.includes('chat'))parts.push('Chat spike ×'+c.score);
@@ -439,7 +456,7 @@ function cardHtml(c){
     +(c.exported?'<span class="chip good">Videos made</span>':'');
   const lay=[['','Automatic'],['split','Split: facecam over gameplay'],['crop','Centre crop']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
   return '<div class="vid">'+vid+'</div><div class="info">'
-   +'<div class="chead"><h3>'+esc(c.channel||'Unknown streamer')+'</h3><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[c.status]+'</span></div>'
+   +'<div class="chead"><h3>'+esc(c.channel||'Unknown streamer')+'</h3><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[place(c)]+'</span></div>'
    +'<div class="chips">'+chips+'</div>'
    +(c.ai_pick?'<div class="ai"><b>Why AI picked it:</b> '+esc(c.ai_pick)+'</div>':'')
    +(c.ai_judged&&c.copy_source==='plain'?'<div class="ai"><b>The opening text and titles below are placeholders,</b> because AI was not used: '+esc(c.copy_problem||'no reason recorded')+'. Type your own, or press "Write text with AI".</div>'
@@ -487,20 +504,22 @@ function domId(k){return 'c-'+k.replace('/','--')}
 function busy(el){const v=el.querySelector('video');return el.dataset.dirty==='1'||(v&&!v.paused)||el.contains(document.activeElement)}
 function drawFilters(clips){
   const n={candidate:0,approved:0,rejected:0};for(const c of clips)n[c.status]=(n[c.status]||0)+1;
-  $('filters').innerHTML=[['candidate','To review'],['approved','Approved'],['rejected','Rejected'],['all','All']].map(f=>
+  for(const c of clips)if(c.made){n.approved--;n.done=(n.done||0)+1}
+  n.done=n.done||0;
+  $('filters').innerHTML=[['candidate','To review'],['approved','Approved'],['done','Done'],['rejected','Rejected'],['all','All']].map(f=>
     '<button class="chipbtn'+(filter===f[0]?' on':'')+'" onclick="setFilter(\''+f[0]+'\')">'+f[1]+'<i>'+(f[0]==='all'?clips.length:n[f[0]])+'</i></button>').join('');
   if(filter==='rejected'&&n.rejected)$('filters').insertAdjacentHTML('beforeend','<button class="chipbtn" style="color:var(--bad);border-color:var(--bad)" onclick="delRejected('+n.rejected+')">Delete all rejected</button>');
-  $('p-count').textContent=n.candidate+' to review · '+n.approved+' approved';
+  $('p-count').textContent=n.candidate+' to review · '+n.approved+' approved · '+n.done+' done';
   if(HAS_PANEL)$('b-finish').textContent=n.approved?'Make videos for '+n.approved+' approved clip'+(n.approved>1?'s':''):'Make videos (approve a clip first)';
   const shown=filter==='all'?clips.length:n[filter], em=$('empty');
   em.hidden=shown>0;
-  em.innerHTML=clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved yet',rejected:'rejected'}[filter]||'in this list')+'.'
+  em.innerHTML=clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',done:'finished yet. Approve a clip and press the green button',rejected:'rejected'}[filter]||'in this list')+'.'
     :'<b>No clips yet.</b>'+(HAS_PANEL?'Start watching a live stream, or paste a finished stream, in step 1 on the left.':'Run find first.');
 }
 function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
 let known=[];
 /* What a card was drawn from: when any of this changes, the card is drawn again. */
-function sig(c){return [c.mtime,c.status,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
+function sig(c){return [c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
 let loadTurn=0;
 async function loadClips(){
   /* Answers can arrive out of order: a refresh that started before you approved a clip may come back after
@@ -514,10 +533,10 @@ async function loadClips(){
   let prev=null;
   for(const c of clips){
     let el=$(domId(c.key));
-    if(!el){el=document.createElement('div');el.className='card clip';el.id=domId(c.key);el.dataset.status=c.status;el.dataset.m=sig(c);el.innerHTML=cardHtml(c);
+    if(!el){el=document.createElement('div');el.className='card clip';el.id=domId(c.key);el.dataset.status=place(c);el.dataset.m=sig(c);el.innerHTML=cardHtml(c);
       el.addEventListener('input',()=>{el.dataset.dirty='1';const s=el.querySelector('.acts .saved');s.textContent='Unsaved changes';s.className='saved warn'});
       if(prev)prev.after(el);else box.prepend(el)}
-    else if(sig(c)!==el.dataset.m&&!busy(el)){el.dataset.status=c.status;el.dataset.m=sig(c);el.innerHTML=cardHtml(c)}
+    else if(sig(c)!==el.dataset.m&&!busy(el)){el.dataset.status=place(c);el.dataset.m=sig(c);el.innerHTML=cardHtml(c)}
     prev=el;
   }
   drawFilters(clips);

@@ -93,7 +93,7 @@ def _local(path: Path, cfg: Config) -> list[dict]:
     t = cfg.transcribe
     segments, _info = load_model(cfg).transcribe(
         _decode_audio(path, cfg),
-        language=t.language,
+        language=None if t.language == "auto" else t.language,
         beam_size=5,
         vad_filter=t.vad_filter,
         vad_parameters=dict(min_silence_duration_ms=500) if t.vad_filter else None,
@@ -163,10 +163,26 @@ def _log_usage(cfg: Config, entry: dict) -> None:
     log.info("paid API use: %s", entry)
 
 
+def caption_script(words: list[dict], cfg: Config) -> list[dict]:
+    """Urdu or Hindi words in Latin letters when captions.script is "roman"; the heard spelling is kept as "native"."""
+    from .captions import script_font
+
+    if cfg.captions.script != "roman" or not script_font(w["word"] for w in words):
+        return words
+    from . import llm
+
+    try:
+        roman = llm.romanize([w["word"] for w in words], cfg)
+    except llm.LlmUnavailable as e:
+        log.warning("captions stay in their own letters, not Latin letters: %s", e)
+        return words
+    return [{**w, "native": w["word"], "word": r} for w, r in zip(words, roman)]
+
+
 def transcribe_file(path: Path, cfg: Config) -> list[dict]:
     backend = cfg.transcribe.backend
     if backend == "local":
-        return _local(path, cfg)
+        return caption_script(_local(path, cfg), cfg)
     if backend == "groq":
-        return _groq(path, cfg)
+        return caption_script(_groq(path, cfg), cfg)
     raise ToolError(f"transcribe.backend must be 'local' or 'groq', got {backend!r}")

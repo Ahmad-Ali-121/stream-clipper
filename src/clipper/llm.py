@@ -353,9 +353,54 @@ def _with_images(user: str, images: list | None):
     return blocks + [{"type": "text", "text": user}]
 
 
+TEXT_LANGUAGES = {
+    "English": "",
+    "Roman Urdu": "Roman Urdu: Urdu written in Latin letters, the way Pakistani viewers type in chat (for example \"Bhai ne kamaal kar diya\"). "
+                  "Gaming words everyone says in English stay English.",
+    "Hinglish": "Hinglish: Hindi written in Latin letters and mixed with English, the way Indian viewers type in chat "
+                "(for example \"Bhai ne toh kamaal kar diya\").",
+    "Urdu": "Urdu, in Urdu script.",
+    "Hindi": "Hindi, in Devanagari script.",
+}
+
+
+def language_note(cfg: Config) -> str:
+    """Extra lines for the clip prompt when the stream or the audience is not English."""
+    note = ""
+    spoken = {"ur": "Urdu", "hi": "Hindi"}.get(cfg.transcribe.language)
+    if spoken:
+        note += (f"\n\nThe streamer speaks {spoken}, often mixed with English. The transcript may be in {spoken} letters or in Latin letters. "
+                 "Judge the clip as a viewer who speaks that language would.")
+    how = TEXT_LANGUAGES.get(cfg.llm.text_language, cfg.llm.text_language)
+    if how:
+        note += (f"\n\nWrite hook, hook_b, title, title_b and description in {how} Keep hashtags in Latin letters. "
+                 "Write intro, intro_b and rank_line in English: the narrator's voice is English. Write the reason in English.")
+    return note
+
+
 def write_copy(state: dict, trend_tags: list[str], cfg: Config, images: list | None = None) -> dict:
     """Ask Claude for this clip's text and rating. Raises LlmUnavailable when there is no key or the call fails."""
-    return clean_copy(ask(cfg, cfg.llm.model, SYSTEM, clip_prompt(state, trend_tags), SCHEMA, f"copy for clip {state.get('id')}", images))
+    return clean_copy(ask(cfg, cfg.llm.model, SYSTEM, clip_prompt(state, trend_tags) + language_note(cfg), SCHEMA,
+                          f"copy for clip {state.get('id')}", images))
+
+
+ROMAN_SYSTEM = """You are given the words of a speech-to-text transcript of a Hindi or Urdu gaming stream, as a JSON list, in order.
+
+Return a list of exactly the same length. Each item is the same word written in Latin letters, the way people type Hindi or \nUrdu in chat (Roman Urdu, Hinglish): "bhai", "kya", "nahi", "yaar". An English word that was written in Urdu or Devanagari \nletters becomes its normal English spelling ("game", "mission", "police"). A word already in Latin letters stays as it is. \nKeep any punctuation attached to its word. Never merge, split, add, drop or reorder items: item 7 in must be item 7 out."""
+ROMAN_SCHEMA = {"type": "object", "properties": {"words": {"type": "array", "items": {"type": "string"}}}, "required": ["words"], "additionalProperties": False}
+
+
+def romanize(words: list[str], cfg: Config, chunk: int = 150) -> list[str]:
+    """The same words in Latin letters, one for one. Raises LlmUnavailable if Claude cannot be used or returns another count."""
+    out: list[str] = []
+    for i in range(0, len(words), chunk):
+        part = words[i:i + chunk]
+        data = ask(cfg, cfg.llm.model, ROMAN_SYSTEM, json.dumps(part, ensure_ascii=False), ROMAN_SCHEMA, "captions in Latin letters")
+        got = [str(x).strip() for x in (data.get("words") or [])]
+        if len(got) != len(part) or not all(got):
+            raise LlmUnavailable(f"Claude returned {len(got)} words for {len(part)}; the captions stay in their own letters")
+        out += got
+    return out
 
 
 def clean_copy(data: dict) -> dict:

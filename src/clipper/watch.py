@@ -27,7 +27,7 @@ from .fetch import fetch_meta, fetch_range, probe
 from .moments import bucket_chat, format_time, pick_moments, score_buckets
 from .sources import Source, parse_source
 from .tools import ToolError, run
-from .work import clip_dir, clip_id, done, free_gb, read_json, work_dir, write_json
+from .work import clip_dir, clip_id, done, free_gb, read_json, save_clip, work_dir, write_json
 
 log = logging.getLogger(__name__)
 
@@ -36,11 +36,20 @@ _PRIVMSG = re.compile(r"^(?:@\S+ )?:([^!\s]+)!\S+ PRIVMSG #\S+ :(.*)$")
 
 
 def channel_name(value: str) -> str:
-    """'https://www.twitch.tv/Lacy' or 'lacy' -> 'lacy'."""
+    """What a person typed, as the name a channel is watched under.
+
+    Twitch: 'https://www.twitch.tv/Lacy' or 'lacy' -> 'lacy'.
+    YouTube: '@handle' or a channel address -> '@handle'; the address of a live stream -> that address.
+    """
+    from .youtube import channel_spec, is_youtube
+
+    if is_youtube(value):
+        name, url = channel_spec(value)
+        return name if name.startswith("@") else url
     m = re.search(r"twitch\.tv/([A-Za-z0-9_]+)", value)
     name = (m.group(1) if m else value).strip().lower()
     if not re.fullmatch(r"[a-z0-9_]{2,25}", name) or name == "videos":
-        raise ValueError(f"{value!r} is not a Twitch channel name or channel URL")
+        raise ValueError(f"{value!r} is not a channel. Type a Twitch name (like lacy), or a YouTube handle (like @channelname).")
     return name
 
 
@@ -181,7 +190,47 @@ def find_unrecorded(channel: str, cfg: Config) -> tuple[Source, dict] | None:
     return source, meta
 
 
+def start_youtube(channel: str, cfg: Config) -> Watched | None:
+    """Start watching a YouTube channel's live stream: its chat, and a way to cut clips from the live feed."""
+    from .signals import MODES
+    from .youtube import YouTubeChatReader, YouTubeWindow, find_live
+
+    found = find_live(channel, cfg)
+    if not found:
+        return None
+    source, meta = found
+    meta["title"] = re.sub(r"\s*\d{4}-\d\d-\d\d \d\d:\d\d$", "", meta["title"])  # yt-dlp adds the time it looked
+    work = work_dir(cfg.data_dir, source)
+    write_json(work / "meta.json", meta)
+    start = float(meta["started_at"])
+    chat = work / "chat.json"
+    if chat.exists() and not chat.read_text(encoding="utf-8", errors="replace").lstrip().startswith('{"t"'):
+        chat.replace(work / "chat.downloaded.json")
+    reader = YouTubeChatReader(source.url, chat, start, cfg, meta["channel"])
+    reader.start()
+    watch_from = time.time() - start
+    if any(MODES[cfg.watch.mode]):
+        log.warning("%s: sound and picture detection is not available for YouTube yet; moments come from chat only", channel)
+    log.info("%s: live on YouTube (%s), %s in; watching chat from now. Clips are cut from the live stream itself, which keeps "
+             "its last quarter of an hour available", channel, meta["channel"], format_time(watch_from))
+    return Watched(channel, source, meta, work, reader, watch_from, None, YouTubeWindow(source.url, start, cfg, meta["channel"]))
+
+
+def still_live(w: Watched, cfg: Config) -> bool:
+    """Is the broadcast this channel is being watched on still running?"""
+    if w.source.platform == "youtube":
+        from .youtube import find_live
+
+        found = find_live(w.channel, cfg)
+        return bool(found) and found[0].video_id == w.source.video_id
+    return bool(channel_is_live(w.channel, cfg) if w.buffer else find_live_vod(w.channel, cfg))
+
+
 def start_channel(channel: str, cfg: Config) -> Watched | None:
+    from .youtube import is_youtube
+
+    if is_youtube(channel):
+        return start_youtube(channel, cfg)
     found = find_live_vod(channel, cfg)
     unrecorded = False
     if not found and cfg.watch.buffer_when_no_vod:
@@ -246,7 +295,10 @@ def new_moments(w: Watched, cfg: Config) -> list[dict]:
     for m in found:
         d = w.work / "clips" / clip_id(m["peak_s"])
         state = read_json(d / "clip.json", {})
-        if done(d / "final.mp4") or state.get("status") in ("rejected", "deleted") or state.get("attempts", 0) >= 3:
+        # A draft is made once. A clip that was finished, or that a person has decided about, is never made again:
+        # its draft video can be missing for good reasons (an edit, a re-render) and remaking it would wipe their work.
+        if (done(d / "final.mp4") or state.get("draft_done") or state.get("status") in ("approved", "rejected", "deleted")
+                or state.get("exported") or state.get("attempts", 0) >= 3):
             continue
         if m["end_s"] + cfg.fetch.pad_s + cfg.watch.vod_delay_s > live_now:
             continue  # the VOD has not caught up with this moment yet; next poll
@@ -271,9 +323,9 @@ def prepare_clip(d: Path, state: dict, cfg: Config) -> dict:
     write_json(d / "words.json", words)
     state["transcript"] = " ".join(x["word"] for x in words)
     state = apply_snap(state, words, max_shift=cfg.fetch.pad_s)
-    write_json(d / "clip.json", state)
+    save_clip(d / "clip.json", state)
     state = write_clip_copy(d, state, cfg)  # hook, title, hashtags: by Claude when a key is set, plain text otherwise
-    write_json(d / "clip.json", state)
+    save_clip(d / "clip.json", state)
     return state
 
 
@@ -301,11 +353,12 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
     attempts = earlier.get("attempts", 0) + 1
     state = {
         "attempts": attempts,  # a moment whose download keeps failing is given up after three tries
-        "id": d.name, "rank": 0, "status": "candidate", "live": True,
+        "id": d.name, "rank": 0, "status": earlier.get("status", "candidate"), "live": True,
         "score": moment["score"], "activity": moment["activity"], "messages": moment["messages"],
         "trigger": moment.get("trigger", "chat"), "signals": moment.get("signals", {}),
         "peak_s": moment["peak_s"], "start_s": moment["start_s"], "end_s": moment["end_s"],
-        "vod_url": w.source.url, "platform": "twitch", "channel": w.meta.get("channel", w.channel),
+        "vod_url": w.source.url, "platform": w.source.platform, "channel": w.meta.get("channel", w.channel),
+        "channel_handle": w.meta.get("channel_id", ""),
         "source_url": w.meta.get("channel_url") or f"https://www.twitch.tv/{w.channel}",
         "stream_title": w.meta.get("title", ""), "found_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
@@ -314,22 +367,23 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
     if earlier.get("from_live_buffer") and done(d / "source.mp4"):
         # Cut from the live buffer on an earlier try: keep where that file really starts.
         state.update(fetch_start_s=earlier["fetch_start_s"], from_live_buffer=True)
-    write_json(d / "clip.json", state)
+    save_clip(d / "clip.json", state)
     t0 = time.monotonic()
     if getattr(w, "buffer", None):
         if not done(d / "source.mp4"):
             # Whole pieces are joined, so the file starts a second or so before the asked start.
             state["fetch_start_s"] = w.buffer.cut(state["fetch_start_s"], state["fetch_end_s"], d / "source.mp4")
             state["from_live_buffer"] = True
-            write_json(d / "clip.json", state)
+            save_clip(d / "clip.json", state)
     else:
         fetch_range(w.source, state["fetch_start_s"], state["fetch_end_s"], d / "source.mp4", cfg)
     prepare_clip(d, state, cfg)
     render_clip(d, cfg)
     state = read_json(d / "clip.json")
     state["ready_seconds_after_moment"] = round(time.time() - float(w.meta["started_at"]) - state["peak_s"])
+    state["draft_done"] = True  # from here on the watcher leaves this clip alone
     state["draft_seconds"] = round(time.monotonic() - t0, 1)
-    write_json(d / "clip.json", state)
+    save_clip(d / "clip.json", state)
     return d
 
 
@@ -366,7 +420,7 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                     if w is None:
                         w = start_channel(name, cfg)
                         if w is None:
-                            if channel_is_live(name, cfg):
+                            if not name.startswith(("@", "http")) and channel_is_live(name, cfg):
                                 log.warning(NO_RECORDING, name)
                             else:
                                 log.info("%s: not live; will check again", name)
@@ -383,7 +437,7 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                         making[key] = pool.submit(draft_job, w, moment, cfg)
                     if time.time() - w.last_live_check > cfg.watch.live_check_s:
                         w.last_live_check = time.time()
-                        if not (channel_is_live(name, cfg) if w.buffer else find_live_vod(name, cfg)):
+                        if not still_live(w, cfg):
                             log.info("%s: stream ended", name)
                             w.stop()
                             watched.pop(name, None)

@@ -135,6 +135,22 @@ class Overlay:
     pop: bool = False  # the text pops in (grows quickly, then settles) instead of just appearing
 
 
+# Fonts every Windows has for scripts the caption fonts lack. Without one, Urdu or Hindi words would show as empty boxes.
+SCRIPT_FONTS = (((0x0600, 0x06FF), "Segoe UI"), ((0x0750, 0x077F), "Segoe UI"), ((0xFB50, 0xFDFF), "Segoe UI"), ((0xFE70, 0xFEFF), "Segoe UI"),
+                ((0x0900, 0x097F), "Nirmala UI"))
+
+
+def script_font(texts) -> str | None:
+    """The font needed for these texts when they hold Urdu (Arabic-script) or Hindi (Devanagari) letters; None for Latin."""
+    for text in texts:
+        for ch in str(text):
+            code = ord(ch)
+            for (lo, hi), font in SCRIPT_FONTS:
+                if lo <= code <= hi:
+                    return font
+    return None
+
+
 def build_ass(
     words: Sequence[Word],
     settings: CaptionSettings,
@@ -144,6 +160,12 @@ def build_ass(
     hook_margin_v: int = 170,
     progress_s: float = 0.0,
 ) -> str:
+    # Urdu or Hindi letters anywhere (captions, opening text, credit): switch to a font that has them, and never upper-case.
+    font = script_font([w.text for w in words] + [o.text for o in (overlays or [])])
+    if font:
+        from dataclasses import replace as _replace
+
+        settings = _replace(settings, font=font, uppercase=False)
     s = settings
     header = "\n".join(
         [

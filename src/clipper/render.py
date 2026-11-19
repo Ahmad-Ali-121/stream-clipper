@@ -17,7 +17,7 @@ from pathlib import Path
 from .captions import Overlay, build_ass, words_from_json
 from .config import Config, RenderSettings
 from .tools import ToolError, find_tool, run
-from .work import done, read_json, write_json, write_text
+from .work import done, read_json, save_clip, write_json, write_text
 
 log = logging.getLogger(__name__)
 
@@ -86,10 +86,17 @@ def _measure_loudness(ffmpeg: str, src: str, offset: float, duration: float, tar
     m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", proc.stderr or "", re.DOTALL)
     if not m:
         return None
+    keys = ("input_i", "input_tp", "input_lra", "input_thresh", "target_offset")
     try:
         data = json.loads(m.group(0))
-        return data if all(k in data for k in ("input_i", "input_tp", "input_lra", "input_thresh", "target_offset")) else None
-    except json.JSONDecodeError:
+        if not all(k in data for k in keys):
+            return None
+        import math
+
+        # A silent clip measures as "-inf", which the second pass refuses and the whole render fails on.
+        # Without usable figures the render uses the one-pass form, which copes with silence.
+        return data if all(math.isfinite(float(data[k])) for k in keys) else None
+    except (json.JSONDecodeError, ValueError, TypeError):
         return None
 
 
@@ -97,7 +104,11 @@ def credit_text(state: dict) -> str:
     channel = state.get("channel") or ""
     if not channel:
         return ""
-    site = {"twitch": "twitch.tv/", "youtube": "youtube.com/@"}.get(state.get("platform", ""), "")
+    if state.get("platform") == "youtube":
+        handle = str(state.get("channel_handle") or "")
+        # A YouTube address needs the channel's handle; its display name ("Live Insaan") is not one.
+        return f"Clip: youtube.com/{handle}" if handle.startswith("@") else f"Clip: {channel} on YouTube"
+    site = {"twitch": "twitch.tv/"}.get(state.get("platform", ""), "")
     return f"Clip: {site}{channel}" if site else f"Clip: {channel}"
 
 
@@ -251,6 +262,6 @@ def render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str 
     state.update({"render_seconds": round(time.monotonic() - t0, 1), "duration_s": round(duration, 2), "width": r.width, "height": r.height,
                   "layout_used": layout, "encoder_used": enc, "opening_used": bool(r.opening), "style_used": cfg.captions.preset, "caption_words": len(words), "has_disclosure_overlay": bool(state.get("disclosure"))})
     if out_name == "final.mp4":  # variants must not overwrite the main render's record
-        write_json(clip_dir / "clip.json", state)
+        save_clip(clip_dir / "clip.json", state)  # a render takes seconds; a person may have approved the clip meanwhile
     log.info("clip %s: rendered %.0fs %s layout in %.0fs", clip_dir.name, duration, layout, state["render_seconds"])
     return out

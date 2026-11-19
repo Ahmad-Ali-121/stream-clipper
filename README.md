@@ -13,7 +13,8 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **Never downloads a whole stream.** Only the clip ranges are fetched, at full quality. For streams Twitch is not recording, a rolling copy of the last ten minutes of the live feed stands in for the recording.
 - **Listens to finished streams too.** `--signals B` (or the choice on the page) measures a finished stream's sound or picture and adds moments chat missed.
 - **AI can read a finished stream.** `--ai` turns all of its speech into text and has Claude pick moments from what was said (needs a Claude key; a few cents a stream).
-- **Works live or on finished streams.** `watch` follows several live Twitch channels at once; `run` processes a finished Twitch VOD (or a YouTube recording with chat replay).
+- **Works live or on finished streams, on Twitch and YouTube.** `watch` follows several live channels at once (Twitch names, YouTube handles like `@channel`); `run` processes a finished Twitch VOD or a YouTube recording with chat replay.
+- **Urdu and Hindi streams.** Speech-to-text in Urdu or Hindi, captions in the language's own letters or in Latin letters ("bhai ne kamaal kar diya"), and opening text and titles in English, Roman Urdu, Hinglish, Urdu or Hindi.
 - **Frames the clip by itself.** Detects a full-screen camera or a small facecam over gameplay, and measures each streamer's facecam box from the picture.
 - **Captions.** Local Whisper speech-to-text, word-by-word highlighted captions burned in.
 - **A strong first three seconds.** Zoom-in, pop-in hook text, a whoosh and a progress bar.
@@ -97,6 +98,7 @@ src/clipper/
   config.py      settings (config.yaml)
   chat.py        read chat files            moments.py   score chat, pick moments
   watch.py       live watching              signals.py   audio and video measurements
+  youtube.py     live YouTube: chat and clips
   fetch.py       download ranges            transcribe.py speech to text
   layout.py      crop or split, facecam     cuts.py      snap cuts to pauses
   captions.py    caption file (ASS)         render.py    final video with FFmpeg
@@ -108,14 +110,15 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           142 unit tests (uv run pytest -q)
+tests/           157 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about
 
 - Chat spikes also happen for giveaways, greetings and raids. Expect filler among the drafts; that is what the review step is for.
 - The audio and video signals are new and their thresholds are not tuned on many streams.
-- Live YouTube streams are not supported yet.
+- On live YouTube streams moments come from chat only (no sound or picture detection yet), and a clip must be cut within about 15 minutes of its moment, which is how long YouTube keeps a live stream's pieces available.
+- Urdu and Hindi: the narrator in explainer videos speaks English only. Latin-letter captions need Claude.
 - A stream with recordings switched off costs about 3 GB of internet an hour to watch, and moments during advert breaks cannot be clipped.
 - Speech-to-text on an NVIDIA card (`setup.ps1 -Gpu`) is new and has had almost no testing. If it cannot be used, the processor is used instead.
 - The first clip or two of a new streamer may be framed slightly off until the facecam box has been measured twice.

@@ -64,6 +64,7 @@ class MomentSettings:
 @dataclass
 class CaptionSettings:
     preset: str = "bold"  # the look chosen on the page; "custom" when the values below were set by hand
+    script: str = "native"  # for Urdu or Hindi speech: "native" = Urdu or Devanagari letters, "roman" = Latin letters (needs Claude)
     play_res_x: int = 1080
     play_res_y: int = 1920
     font: str = "Arial Black"
@@ -101,7 +102,7 @@ class TranscribeSettings:
     min_word_prob: float = 0.35  # drop words the model itself is unsure of (stray "You" in silence)
     compute_type: str = "auto"  # auto, or int8 / int8_float16 / float16
     device: str = "auto"  # auto = NVIDIA GPU when usable, else CPU; or force "cpu" / "cuda"
-    language: str = "en"  # always set explicitly; auto-detect mislabels mixed-language audio
+    language: str = "en"  # what is spoken on the stream: en, ur (Urdu), hi (Hindi), or auto (detect; can mislabel mixed speech)
     groq_model: str = "whisper-large-v3-turbo"
 
 
@@ -147,6 +148,7 @@ class LlmSettings:
     fallback: bool = True  # with "auto": if the first fails (a plan limit, a rejected key), use the other and say so
     model: str = "claude-opus-5-5"  # "claude-haiku-5-5" costs about 40 times less and is usually enough here
     effort: str = "low"
+    text_language: str = "English"  # what the opening text, titles and description are written in: English, Roman Urdu, Hinglish, Urdu or Hindi
     look_at_frames: bool = True  # also show AI three small frames of each clip, so it can rate what is on screen, not only the words
 
 

@@ -18,7 +18,7 @@ from .fetch import fetch_chat, fetch_meta, fetch_range, probe
 from .moments import find_moments, format_time
 from .sources import Source, parse_source
 from .tools import ToolError
-from .work import clip_dir, clip_dirs, clip_id, done, free_gb, read_json, work_dir, write_json
+from .work import clip_dir, clip_dirs, clip_id, done, free_gb, read_json, save_clip, work_dir, write_json
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +63,16 @@ def stage_find(
     """
     source, work = open_work(url, cfg)
     t0 = time.monotonic()
+    # Details saved while the stream was live say "live" for ever. Ask again: it may have ended since.
+    if (read_json(work / "meta.json", {}) or {}).get("is_live"):
+        (work / "meta.json").unlink(missing_ok=True)
     meta = fetch_meta(source, work, cfg)
+    chat_file = work / "chat.json"
+    if not meta.get("is_live") and chat_file.exists() and chat_file.read_text(encoding="utf-8", errors="replace").lstrip().startswith('{"t"'):
+        # This chat was collected by the live watcher, so it only covers the part that was watched.
+        # The stream has ended: put it aside and download the whole chat replay.
+        chat_file.replace(work / "chat.watched.json")
+        log.info("the stream has ended; downloading its whole chat instead of the part collected while watching")
     chat_path = fetch_chat(source, work, cfg, refresh=refresh_chat)
     messages = load_chat(chat_path)
     if not messages:
@@ -145,39 +154,61 @@ def stage_find(
     return work, out
 
 
-def stage_fetch(url: str, cfg: Config, only: list[str] | None = None) -> list[Path]:
+def _clip_failed(d: Path, step: str, e: Exception, failed: list[str] | None) -> None:
+    """A clip that cannot go through a step keeps its reason, shown on the review page; the other clips carry on."""
+    from .watch import note_error
+
+    log.error("clip %s: %s failed: %s", d.name, step, e, exc_info=not isinstance(e, (ToolError, PipelineError, ValueError)))
+    note_error(d, f"{step} failed: {e}")
+    if failed is not None:
+        failed.append(d.name)
+
+
+def stage_fetch(url: str, cfg: Config, only: list[str] | None = None, failed: list[str] | None = None) -> list[Path]:
     """Download each selected clip's range (plus padding) as source.mp4."""
     source, work = open_work(url, cfg)
     fetched: list[Path] = []
     for d in select_clips(work, only):
-        state = read_json(d / "clip.json")
-        if state.get("status") in ("rejected", "deleted"):
+        try:
+            out = _fetch_one(source, d, cfg)
+        except PipelineError:
+            raise  # the disk is full: no point trying the rest
+        except Exception as e:
+            _clip_failed(d, "download", e, failed)
             continue
-        out = d / "source.mp4"
-        if not done(out):
-            if free_gb(cfg.data_dir) < MIN_FREE_GB:
-                raise PipelineError(
-                    f"less than {MIN_FREE_GB:.0f} GB free on {cfg.data_dir.anchor}; delete old work folders before fetching more"
-                )
-            fetch_start = max(0.0, state["start_s"] - cfg.fetch.pad_s)
-            fetch_end = state["end_s"] + cfg.fetch.pad_s
-            t0 = time.monotonic()
-            fetch_range(source, fetch_start, fetch_end, out, cfg)
-            state["fetch_start_s"] = fetch_start
-            state["fetch_end_s"] = fetch_end
-            state["fetch_seconds"] = round(time.monotonic() - t0, 1)
-            log.info("clip %s: fetched %.0fs of video in %.0fs (%.1f MB)", d.name, fetch_end - fetch_start, state["fetch_seconds"], out.stat().st_size / 1e6)
-        info = probe(out, cfg)
-        state.update({"source_width": info["width"], "source_height": info["height"], "source_duration_s": round(info["duration_s"], 2), "source_fps": round(info["fps"], 2)})
-        from .layout import auto_layout
-
-        state = auto_layout(d, state, cfg)
-        write_json(d / "clip.json", state)
-        fetched.append(out)
+        if out:
+            fetched.append(out)
     return fetched
 
 
-def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force: bool = False) -> int:
+def _fetch_one(source: Source, d: Path, cfg: Config) -> Path | None:
+    state = read_json(d / "clip.json")
+    if state.get("status") in ("rejected", "deleted"):
+        return None
+    out = d / "source.mp4"
+    if not done(out):
+        if free_gb(cfg.data_dir) < MIN_FREE_GB:
+            raise PipelineError(
+                f"less than {MIN_FREE_GB:.0f} GB free on {cfg.data_dir.anchor}; delete old work folders before fetching more"
+            )
+        fetch_start = max(0.0, state["start_s"] - cfg.fetch.pad_s)
+        fetch_end = state["end_s"] + cfg.fetch.pad_s
+        t0 = time.monotonic()
+        fetch_range(source, fetch_start, fetch_end, out, cfg)
+        state["fetch_start_s"] = fetch_start
+        state["fetch_end_s"] = fetch_end
+        state["fetch_seconds"] = round(time.monotonic() - t0, 1)
+        log.info("clip %s: fetched %.0fs of video in %.0fs (%.1f MB)", d.name, fetch_end - fetch_start, state["fetch_seconds"], out.stat().st_size / 1e6)
+    info = probe(out, cfg)
+    state.update({"source_width": info["width"], "source_height": info["height"], "source_duration_s": round(info["duration_s"], 2), "source_fps": round(info["fps"], 2)})
+    from .layout import auto_layout
+
+    state = auto_layout(d, state, cfg)
+    write_json(d / "clip.json", state)
+    return out
+
+
+def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force: bool = False, failed: list[str] | None = None) -> int:
     """Write words.json (word timestamps relative to source.mp4) for each fetched clip."""
     from .transcribe import transcribe_file
 
@@ -191,7 +222,11 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
         if out.exists() and not force:
             continue
         t0 = time.monotonic()
-        words = transcribe_file(d / "source.mp4", cfg)
+        try:
+            words = transcribe_file(d / "source.mp4", cfg)
+        except Exception as e:
+            _clip_failed(d, "captions", e, failed)
+            continue
         write_json(out, words)
         state["transcribe_seconds"] = round(time.monotonic() - t0, 1)
         state["transcript"] = " ".join(w["word"] for w in words)
@@ -205,7 +240,8 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
     return count
 
 
-def stage_render(url: str, cfg: Config, only: list[str] | None = None, force: bool = False, approved_only: bool = False) -> list[Path]:
+def stage_render(url: str, cfg: Config, only: list[str] | None = None, force: bool = False, approved_only: bool = False,
+                 failed: list[str] | None = None) -> list[Path]:
     """Render final.mp4 for each selected clip that has a source."""
     from .render import render_clip
 
@@ -215,7 +251,10 @@ def stage_render(url: str, cfg: Config, only: list[str] | None = None, force: bo
         state = read_json(d / "clip.json")
         if state.get("status") in ("rejected", "deleted") or not done(d / "source.mp4"):
             continue
-        rendered.append(render_clip(d, cfg, force=force))
+        try:
+            rendered.append(render_clip(d, cfg, force=force))
+        except Exception as e:
+            _clip_failed(d, "making the draft video", e, failed)
     return rendered
 
 
@@ -375,7 +414,7 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
         if state.get(key) != before[key]:  # the text is burned in, so the old render is stale
             for name in files:
                 (d / name).unlink(missing_ok=True)
-    write_json(d / "clip.json", state)
+    save_clip(d / "clip.json", state)
     return state
 
 
@@ -490,8 +529,12 @@ def stage_run(url: str, cfg: Config, top: int | None = None, mode: str | None = 
               signals: str | None = None, ai: bool = False) -> Path:
     """find -> fetch -> transcribe -> render drafts, ready for review."""
     work, _clips = stage_find(url, cfg, top=top, mode=mode, refresh_chat=refresh_chat, signals=signals, ai=ai)
-    stage_fetch(url, cfg)
-    stage_transcribe(url, cfg)
+    failed: list[str] = []
+    stage_fetch(url, cfg, failed=failed)
+    stage_transcribe(url, cfg, failed=failed)
     stage_write(cfg, url)  # opening text, titles and the AI rating, before rendering: the opening text is burned into the draft
-    stage_render(url, cfg)
+    made = stage_render(url, cfg, failed=failed)
+    if failed:
+        log.warning("%d draft(s) made; %d clip(s) could not be made and show their reason on the review page: %s",
+                    len(made), len(set(failed)), ", ".join(sorted(set(failed))))
     return work

@@ -88,11 +88,24 @@ The caption look (four styles) is chosen in *Make the videos*. So is the **campa
 
 **Tracker.** After you post a clip by hand, open the clip, use *Posted it? Log it*, and paste the link. The **Tracker** tab (above the clip list) then keeps your posts, views, payouts and rejections together, adds them up per campaign, and warns you before the same clip goes to the same campaign twice.
 
+Once a clip's videos are made it moves to the **Done** list. If you change it afterwards, it goes back to Approved until you press the green button again.
+
 **Delete** on a clip removes it and its files for good; in the Rejected list, **Delete all rejected** clears them all. Videos you already made stay in the ready folder. Red messages can be closed with the × in their corner.
 
 Each step has an "Activity log" you can open to see what the program is doing. Problems are shown in red, at the top of the page and on the clip they belong to.
 
 Keep the terminal open while you use the page. The steps below do the same things from the terminal.
+
+### YouTube streams, and Urdu or Hindi streamers
+
+**YouTube.** In the channels box type the channel's handle with its @, for example `@channelname`, or paste the address of the live stream. Twitch names and YouTube handles can be mixed: `lacy @channelname`. For a live YouTube stream the clips are cut from the stream itself; nothing is recorded in the background. Moments come from chat only on YouTube.
+
+**Urdu or Hindi.** Open **Language** at the top of step 1 and choose:
+- what the streamer speaks: English, Urdu or Hindi;
+- how captions are written: in Latin letters ("bhai ne kamaal kar diya", needs Claude) or in Urdu or Hindi letters;
+- what the opening text and titles are written in: English, Roman Urdu, Hinglish, Urdu or Hindi.
+
+The choice applies to clips made from then on. Set it back to English before watching an English streamer.
 
 ### A. Live streams (the main way)
 

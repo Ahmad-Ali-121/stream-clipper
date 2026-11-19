@@ -68,6 +68,22 @@ def write_json(path: Path, data: Any) -> None:
     os.replace(tmp, path)
 
 
+# What only a person sets, on the review page. An automatic step (the watcher making a draft, a render, the text
+# writer) may be half-way through with an older copy of a clip's state when the person approves it or ticks a box;
+# these keys are therefore always taken from what is on disk at the moment of writing, never from that older copy.
+HUMAN_KEYS = ("status", "explainer", "disclosure", "notes")
+
+
+def save_clip(path: Path, state: dict) -> dict:
+    """Write a clip's state from an automatic step, keeping whatever a person decided in the meantime."""
+    disk = read_json(path, {}) or {}
+    for key in HUMAN_KEYS:
+        if key in disk:
+            state[key] = disk[key]
+    write_json(path, state)
+    return state
+
+
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
