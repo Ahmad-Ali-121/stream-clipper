@@ -162,6 +162,7 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | "live ... but Twitch is not recording this broadcast" | Not an error. The streamer has recordings (VODs) switched off, so the watcher keeps the last 10 minutes of the live stream on disk and cuts clips from that. It uses about 3 GB of internet an hour for that channel, the first minute is lost to Twitch's opening advert, and moments during advert breaks are lost. To skip such streams instead, set `buffer_when_no_vod: false` under `watch:` in `config.yaml` |
 | "no chat replay" | That video cannot be scored from chat. Use a live watch instead |
 | A clip is framed wrong | On the review page, change Layout and save; then run `finish` again |
+| "an NVIDIA card was found but speech-to-text cannot run on it" | Not an error. The card is there but NVIDIA's cuBLAS and cuDNN libraries are not, so speech-to-text runs on the processor (slower, same result). Video encoding still uses the card. After installing those libraries, run `uv run clipper hardware --refresh` to try the card again |
 | Captions miss words | Normal on very noisy moments. The larger model is already the default |
 | Too many clips with nothing in them in mode B, C or D | Raise `audio_level` or `video_level` under `watch:` in `config.yaml` |
 | Anything else | Open an issue on the project's GitHub page, or open Claude Code in this folder and describe it |

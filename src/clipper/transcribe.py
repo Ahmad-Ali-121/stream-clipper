@@ -56,6 +56,8 @@ def _local(path: Path, cfg: Config) -> list[dict]:
     from . import hw
 
     device, compute_type = hw.whisper_device(cfg)
+    if device == "cuda" and t.device == "auto":
+        device, compute_type = hw.confirm_cuda(cfg, t.model, compute_type, str(cfg.data_dir / "models"))
     key = (t.model, device, compute_type)
     if _model is None or _model_key != key:
         from faster_whisper import WhisperModel  # imported late: it is slow to import and not needed by other stages

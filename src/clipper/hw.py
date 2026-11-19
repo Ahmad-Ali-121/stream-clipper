@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import sys
 from pathlib import Path
 
 from .config import Config
@@ -76,6 +77,48 @@ def detect(cfg: Config, refresh: bool = False) -> dict:
     write_json(path, info)
     log.info("hardware: video encoder %s, speech on %s (%s)", info["encoder"], info["whisper_device"], info["whisper_compute_type"])
     return info
+
+
+_CUDA_TRIAL = """
+import sys
+import numpy as np
+from faster_whisper import WhisperModel
+m = WhisperModel(sys.argv[1], device="cuda", compute_type=sys.argv[2], download_root=sys.argv[3])
+segments, _info = m.transcribe(np.zeros(16000, dtype="float32"))
+list(segments)
+print("CUDA-OK")
+"""
+
+
+def confirm_cuda(cfg: Config, model: str, compute_type: str, models_dir: str) -> tuple[str, str]:
+    """(device, compute_type) after proving once that speech really runs on the NVIDIA card.
+
+    Seeing the card is not enough: when NVIDIA's cuBLAS or cuDNN libraries are missing, loading the model
+    kills the whole program without an error message. So the first load is tried in a separate process;
+    if that dies, the answer is recorded and speech runs on the CPU from then on.
+    """
+    path = cfg.data_dir / "hardware.json"
+    info = read_json(path, {}) or {}
+    if info.get("cuda_checked"):
+        return info.get("whisper_device", "cpu"), info.get("whisper_compute_type", "int8")
+    log.info("checking that speech-to-text really runs on the NVIDIA card (once; the first run also downloads the model)")
+    try:
+        proc = subprocess.run([sys.executable, "-c", _CUDA_TRIAL, model, compute_type, models_dir],
+                              capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=3600)
+        ok, why = "CUDA-OK" in proc.stdout, (proc.stderr.strip().splitlines() or [f"it stopped with code {proc.returncode}"])[-1]
+    except Exception as e:
+        ok, why = False, str(e)
+    info["cuda_checked"] = True
+    if ok:
+        log.info("speech-to-text runs on the NVIDIA card")
+    else:
+        info.update(whisper_device="cpu", whisper_compute_type="int8", cuda_problem=why[:300])
+        log.warning(
+            "an NVIDIA card was found but speech-to-text cannot run on it (%s). Using the processor instead, which is slower. "
+            "The usual cause is missing NVIDIA libraries (cuBLAS and cuDNN); see GUIDE.md, 'When something goes wrong'", why[:300],
+        )
+    write_json(path, info)
+    return info.get("whisper_device", "cpu"), info.get("whisper_compute_type", "int8")
 
 
 def encoder(cfg: Config) -> str:
