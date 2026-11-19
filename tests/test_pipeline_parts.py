@@ -417,3 +417,19 @@ def test_sound_returning_after_silence_is_not_a_loud_moment(tmp_path):
     p.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
     peaks = signal_peaks(p, load_config(), since_s=0)["audio"]
     assert [round(t) for t, _z in peaks] == [2005]
+
+
+def test_deleting_a_clip_removes_its_files_and_hides_it(tmp_path):
+    from clipper.review import delete_clip, list_clips
+    from clipper.work import read_json
+
+    d = _clip(tmp_path, error="old")
+    (d / "source.mp4").write_bytes(b"x" * 2_000_000)
+    (d / "final.mp4").write_bytes(b"y" * 1_000_000)
+    work = d.parent.parent
+    assert list_clips([work]) == [d]
+    assert delete_clip(d) == 3.0
+    assert sorted(f.name for f in d.iterdir()) == ["clip.json"]  # kept, so no later run makes the clip again
+    state = read_json(d / "clip.json")
+    assert state["status"] == "deleted" and "error" not in state
+    assert list_clips([work]) == []

@@ -246,7 +246,7 @@ def new_moments(w: Watched, cfg: Config) -> list[dict]:
     for m in found:
         d = w.work / "clips" / clip_id(m["peak_s"])
         state = read_json(d / "clip.json", {})
-        if done(d / "final.mp4") or state.get("status") == "rejected" or state.get("attempts", 0) >= 3:
+        if done(d / "final.mp4") or state.get("status") in ("rejected", "deleted") or state.get("attempts", 0) >= 3:
             continue
         if m["end_s"] + cfg.fetch.pad_s + cfg.watch.vod_delay_s > live_now:
             continue  # the VOD has not caught up with this moment yet; next poll

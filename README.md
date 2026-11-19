@@ -106,7 +106,7 @@ src/clipper/
   post.py        export and upload text     brief.py     campaign rule checks
   streamread.py  AI reads a whole stream's speech
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           118 unit tests (uv run pytest -q)
+tests/           119 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

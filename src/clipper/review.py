@@ -101,10 +101,29 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
     return state
 
 
+def delete_clip(d: Path) -> float:
+    """Delete a clip: every file in its folder goes, megabytes freed are returned.
+
+    clip.json stays, marked "deleted", so the page hides the clip and no later run makes it again.
+    Finished videos already exported to the ready folder are yours and are not touched.
+    """
+    path = d / "clip.json"
+    state = read_json(path)
+    freed = 0
+    for f in d.iterdir():
+        if f.is_file() and f.name != "clip.json":
+            freed += f.stat().st_size
+            f.unlink()
+    state["status"] = "deleted"
+    state.pop("error", None)
+    write_json(path, state)
+    return freed / 1e6
+
+
 def list_clips(works: list[Path]) -> list[Path]:
     """Clip folders of the given streams: waiting ones first (newest first), then approved, then rejected."""
     order = {"candidate": 0, "approved": 1, "rejected": 2}
-    dirs = [d for w in works for d in clip_dirs(w)]
+    dirs = [d for w in works for d in clip_dirs(w) if read_json(d / "clip.json", {}).get("status") != "deleted"]
 
     def key(d: Path):
         return (order.get(read_json(d / "clip.json", {}).get("status", "candidate"), 0), -(d / "clip.json").stat().st_mtime)
@@ -217,6 +236,27 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     return self._send(400, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(result).encode(), "application/json")
             refresh()
+            if self.path == "/api/clips/delete-rejected":
+                gone, mb = 0, 0.0
+                for d in list_clips(list(by_name.values())):
+                    if read_json(d / "clip.json", {}).get("status") == "rejected":
+                        mb += delete_clip(d)
+                        gone += 1
+                log.info("deleted %d rejected clip(s), %.0f MB freed", gone, mb)
+                return self._send(200, json.dumps({"deleted": gone, "mb": round(mb)}).encode(), "application/json")
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(delete|clear-error)", self.path)
+            if m and m.group(1) in by_name:
+                d = by_name[m.group(1)] / "clips" / m.group(2)
+                if not (d / "clip.json").exists():
+                    return self._send(404, b"no such clip", "text/plain")
+                if m.group(3) == "delete":
+                    mb = delete_clip(d)
+                    log.info("deleted clip %s/%s, %.0f MB freed", m.group(1), m.group(2), mb)
+                    return self._send(200, json.dumps({"deleted": 1, "mb": round(mb)}).encode(), "application/json")
+                state = read_json(d / "clip.json")
+                state.pop("error", None)
+                write_json(d / "clip.json", state)
+                return self._send(200, b"{}", "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/rewrite", self.path)
             if m and m.group(1) in by_name and cfg is not None:
                 from . import llm

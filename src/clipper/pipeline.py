@@ -150,7 +150,7 @@ def stage_fetch(url: str, cfg: Config, only: list[str] | None = None) -> list[Pa
     fetched: list[Path] = []
     for d in select_clips(work, only):
         state = read_json(d / "clip.json")
-        if state.get("status") == "rejected":
+        if state.get("status") in ("rejected", "deleted"):
             continue
         out = d / "source.mp4"
         if not done(out):
@@ -184,7 +184,7 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
     count = 0
     for d in select_clips(work, only):
         state = read_json(d / "clip.json")
-        if state.get("status") == "rejected" or not done(d / "source.mp4"):
+        if state.get("status") in ("rejected", "deleted") or not done(d / "source.mp4"):
             continue
         out = d / "words.json"
         if out.exists() and not force:
@@ -212,7 +212,7 @@ def stage_render(url: str, cfg: Config, only: list[str] | None = None, force: bo
     rendered: list[Path] = []
     for d in select_clips(work, only, status="approved" if approved_only else None):
         state = read_json(d / "clip.json")
-        if state.get("status") == "rejected" or not done(d / "source.mp4"):
+        if state.get("status") in ("rejected", "deleted") or not done(d / "source.mp4"):
             continue
         rendered.append(render_clip(d, cfg, force=force))
     return rendered
@@ -370,7 +370,7 @@ def stage_write(cfg: Config, url: str | None = None, only: list[str] | None = No
     for work in works:
         for d in select_clips(work, only if url else None):
             state = read_json(d / "clip.json")
-            if state.get("status") == "rejected" or "transcript" not in state:
+            if state.get("status") in ("rejected", "deleted") or "transcript" not in state:
                 continue
             if state.get("copy_at") and not force:
                 continue
@@ -389,7 +389,7 @@ def stage_explain(url: str, cfg: Config, only: list[str] | None = None, force: b
     out = []
     for d in select_clips(work, only, status=None if only else "approved"):
         state = read_json(d / "clip.json")
-        if state.get("status") == "rejected":
+        if state.get("status") in ("rejected", "deleted"):
             continue
         video = explained(d, cfg, force=force)
         day = cfg.data_dir / "ready" / time.strftime("%Y-%m-%d")
@@ -458,7 +458,7 @@ def stage_clean(cfg: Config, dry_run: bool = False) -> tuple[int, float]:
     count, freed = 0, 0.0
     for work in all_works(cfg):
         for d in clip_dirs(work):
-            if read_json(d / "clip.json", {}).get("status") != "rejected":
+            if read_json(d / "clip.json", {}).get("status") not in ("rejected", "deleted"):
                 continue
             for name in ("source.mp4", "final.mp4", "captions.ass", "source.part.mp4", "final.part.mp4"):
                 f = d / name
