@@ -158,7 +158,7 @@ def list_clips(works: list[Path]) -> list[Path]:
     return sorted(dirs, key=key)
 
 
-def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_stream: bool = False) -> None:
+def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_stream: bool = False, open_browser: bool = False) -> int:
     """Serve the review page for one or more stream work folders (all under the same parent).
 
     With ``cfg`` the page also gets the options panel (watch, versions, finish).
@@ -253,7 +253,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             if origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
                 return self._send(403, b"not allowed from another site", "text/plain")
             actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch",
-                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/ai/check": "start_ai_check"}
+                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/ai/check": "start_ai_check",
+                       "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update"}
             if control and self.path in actions:
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
@@ -318,6 +319,13 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             f"terminal window. Close that one first (Ctrl+C), or start this one on another port:  uv run clipper review --port {port + 1}"
         ) from e
     print(f"Review page: http://127.0.0.1:{port}/   (Ctrl+C to stop)")
+    if control:
+        control.shutdown = server.shutdown
+    if open_browser:
+        import threading
+        import webbrowser
+
+        threading.Timer(0.8, lambda: webbrowser.open(f"http://127.0.0.1:{port}/")).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -327,3 +335,4 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
         if control:
             control.stop_watch()
             control.stop_run()
+    return control.exit_code if control else 0

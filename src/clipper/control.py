@@ -9,6 +9,7 @@ watcher is the same ``clipper watch`` command run as a child process, and
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 import threading
@@ -92,6 +93,10 @@ class Control:
         self.run_proc: subprocess.Popen | None = None  # "analyse a finished stream", the same as `clipper run URL`
         self.run_log_path = cfg.data_dir / "run.log"
         self.run_problem = ""
+        self.maint = {"name": "", "running": False, "lines": []}  # the one maintenance job: full check, repair or update
+        self.health_started = False
+        self.exit_code = 0  # 42 asks the launcher to start the program again (after an update)
+        self.shutdown = None  # set by the server: stops it so the program can exit
         self.ai_checking = False
         self.ai_checked = False  # an automatic check was already started in this session
         self.watch_seen = False
@@ -117,6 +122,7 @@ class Control:
             "finishing": self.finishing, "finish_log": self.finish_lines[-200:],
             "running": self.running(), "run_log": self._run_tail(), "run_problem": self.run_problem,
             "ai": self._ai_status(),
+            "health": self._health_status(),
         }
 
     def _ai_status(self) -> dict:
@@ -156,6 +162,102 @@ class Control:
 
         threading.Thread(target=work, daemon=True, name="ai-check").start()
         return {"checking": True}
+
+    # ---- is this computer ready? ----
+
+    def _health_status(self) -> dict:
+        from . import health
+        from .work import read_json
+
+        try:
+            items = health.quick_checks(self.cfg)
+        except Exception as e:  # the check list must never take the page down with it
+            log.exception("the setup check failed")
+            items = [{"id": "check", "name": "The setup check itself", "state": "bad", "detail": str(e), "fix": "Report this line."}]
+        saved = read_json(self.cfg.data_dir / "health.json", {}) or {}
+        stale = time.time() - float(saved.get("checked_at") or 0) > 24 * 3600
+        if stale and not self.health_started and not self.maint["running"]:
+            self.health_started = True
+            self.start_full_check()  # once per session, when nothing recent is known
+        upd = saved.get("update") or {}
+        return {"items": items, "summary": health.summary(items), "maint": {**self.maint, "lines": self.maint["lines"][-200:]},
+                "can_update": bool(upd.get("can")), "launcher": bool(os.environ.get("CLIPPER_LAUNCHER"))}
+
+    def _maintain(self, name: str, work) -> dict:
+        with self._lock:
+            if self.maint["running"]:
+                raise ValueError(f"'{self.maint['name']}' is still running; wait for it to finish")
+            self.maint = {"name": name, "running": True, "lines": [f"{time.strftime('%H:%M:%S')} {name} started"]}
+
+        def run() -> None:
+            try:
+                work(self.maint["lines"].append)
+                self.maint["lines"].append(f"{time.strftime('%H:%M:%S')} {name} finished")
+            except Exception as e:
+                import traceback
+
+                log.exception("%s failed", name)
+                self.maint["lines"] += [f"FAILED: {name}: {type(e).__name__}: {e}"] + traceback.format_exc().splitlines()
+            finally:
+                self.maint["running"] = False
+
+        threading.Thread(target=run, daemon=True, name=name).start()
+        return self.status()
+
+    @staticmethod
+    def _run_logged(cmd: list[str], say, cwd: str) -> int:
+        """Run a command, passing every line it prints to ``say``. Returns its exit code."""
+        proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                text=True, errors="replace")
+        for line in proc.stdout:
+            if line.strip():
+                say(line.rstrip())
+        return proc.wait()
+
+    def start_full_check(self) -> dict:
+        from . import health
+
+        def work(say) -> None:
+            say("loading the speech model in a separate process, and asking GitHub for the newest version...")
+            health.full_check(self.reload())
+
+        return self._maintain("Full check", work)
+
+    def start_repair(self) -> dict:
+        """Run the setup step again: it downloads whatever is missing and leaves the rest alone."""
+        def work(say) -> None:
+            if sys.platform != "win32":
+                raise ValueError("Repair runs setup.ps1, which is for Windows")
+            code = self._run_logged(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(PROJECT_ROOT / "setup.ps1"),
+                                     "-DataDir", str(self.cfg.data_dir), "-NoShortcut"], say, str(PROJECT_ROOT))
+            if code != 0:
+                raise ValueError(f"the setup step ended with exit code {code}; the lines above say why")
+
+        return self._maintain("Repair", work)
+
+    def start_update(self) -> dict:
+        """Take the newest version from GitHub (fast-forward only), install what it needs, and restart if the launcher can."""
+        from . import health
+
+        def work(say) -> None:
+            state = health.update_state(fetch=True)
+            if not state["can"]:
+                raise ValueError(state["why"] or "this copy is already up to date")
+            say(f"{state['behind']} change(s) to take from GitHub")
+            for cmd in (["git", "merge", "--ff-only", "origin/main"],
+                        ["uv", "sync", "--frozen"] + (["--extra", "gpu"] if (PROJECT_ROOT / ".venv/Lib/site-packages/nvidia/cublas").exists() else [])):
+                say("> " + " ".join(cmd))
+                if (code := self._run_logged(cmd, say, str(PROJECT_ROOT))) != 0:
+                    raise ValueError(f"'{' '.join(cmd)}' ended with exit code {code}; the lines above say why")
+            health.full_check(self.reload())
+            if os.environ.get("CLIPPER_LAUNCHER") and self.shutdown:
+                say("updated. Restarting the program now; this page reconnects by itself.")
+                self.exit_code = 42
+                threading.Timer(1.5, self.shutdown).start()
+            else:
+                say("updated. Now close the program (Ctrl+C in its terminal) and start it again.")
+
+        return self._maintain("Update", work)
 
     def save(self, raw: dict) -> dict:
         save_local(clean_options(raw))

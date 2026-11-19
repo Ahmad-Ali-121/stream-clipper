@@ -26,6 +26,7 @@ GROQ_USD_PER_HOUR = {"whisper-large-v3-turbo": 0.04, "whisper-large-v3": 0.111}
 
 _model: Any = None
 _model_key: tuple | None = None
+_model_lock = __import__("threading").Lock()  # drafts are made in parallel; the model must be loaded once, not once per draft
 
 
 def _decode_audio(path: Path, cfg: Config):
@@ -62,6 +63,14 @@ def load_model(cfg: Config, name: str | None = None):
     if device == "cuda" and t.device == "auto":
         device, compute_type = hw.confirm_cuda(cfg, t.model, compute_type, str(cfg.data_dir / "models"))
     key = (name, device, compute_type)
+    with _model_lock:
+        return _load_locked(cfg, name, device, compute_type, key)
+
+
+def _load_locked(cfg: Config, name: str, device: str, compute_type: str, key: tuple):
+    global _model, _model_key
+    from . import hw
+
     if _model is None or _model_key != key:
         from faster_whisper import WhisperModel  # imported late: it is slow to import and not needed by other stages
 

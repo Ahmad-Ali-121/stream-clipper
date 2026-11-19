@@ -179,6 +179,7 @@ class WatchSettings:
     feed_delay_s: float = 8.0  # how far the low-quality feed runs behind the broadcast
     buffer_when_no_vod: bool = True  # stream not being recorded by Twitch: keep a short rolling copy of the live feed to cut from
     buffer_minutes: float = 10.0  # how much of the live feed that copy holds
+    draft_workers: int = 2  # how many drafts are made at the same time, so a busy stream does not queue
 
 
 @dataclass

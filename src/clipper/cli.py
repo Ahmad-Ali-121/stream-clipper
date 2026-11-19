@@ -127,12 +127,10 @@ def _cmd_review(args: argparse.Namespace) -> int:
     if args.url:
         _source, work = open_work(args.url, cfg)
         meta = read_json(work / "meta.json", {})
-        serve([work], f"{meta.get('channel', '')}: {meta.get('title', work.name)}"[:120], port=args.port, cfg=cfg)
-    else:
-        from .pipeline import all_works
+        return serve([work], f"{meta.get('channel', '')}: {meta.get('title', work.name)}"[:120], port=args.port, cfg=cfg, open_browser=args.open)
+    from .pipeline import all_works
 
-        serve(all_works(cfg), "All streams", port=args.port, cfg=cfg, every_stream=True)
-    return 0
+    return serve(all_works(cfg), "All streams", port=args.port, cfg=cfg, every_stream=True, open_browser=args.open)
 
 
 def _cmd_clean(args: argparse.Namespace) -> int:
@@ -294,6 +292,7 @@ def build_parser() -> argparse.ArgumentParser:
     rv = sub.add_parser("review", help="open the local review page to approve, reject and edit clips")
     rv.add_argument("url", nargs="?", help="one stream's VOD URL; leave out to review clips from every stream")
     rv.add_argument("--port", type=int, default=8765)
+    rv.add_argument("--open", action="store_true", help="open the page in the browser when it is ready")
     rv.set_defaults(func=_cmd_review)
 
     cl = sub.add_parser("clean", help="free disk space: delete the video files of rejected clips")

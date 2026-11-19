@@ -5,7 +5,8 @@
 # The Whisper speech model (about 1.6 GB) downloads by itself on the first transcribe.
 
 # Add -Gpu on a PC with an NVIDIA card to also install NVIDIA's libraries (about 1 GB), so speech-to-text runs on the card.
-param([string]$DataDir = "data", [switch]$Gpu)
+# Add -NoShortcut to skip the "Stream Clipper" shortcut on the desktop.
+param([string]$DataDir = "data", [switch]$Gpu, [switch]$NoShortcut)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -121,7 +122,20 @@ Get-PSDrive -PSProvider FileSystem | Where-Object Free | ForEach-Object {
 Write-Host ''
 uv run clipper hardware --refresh
 Write-Host ''
-Write-Host 'Ready. Read GUIDE.md, or try:  uv run clipper watch <channel name>'
+if (-not $NoShortcut) {
+    try {
+        $desktop = [Environment]::GetFolderPath('Desktop')
+        $link = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'Stream Clipper.lnk'))
+        $link.TargetPath = (Join-Path $PSScriptRoot 'Stream Clipper.cmd')
+        $link.WorkingDirectory = $PSScriptRoot
+        $link.Description = 'Start Stream Clipper and open its page'
+        $link.Save()
+        Write-Host "A 'Stream Clipper' shortcut is on your desktop: double-click it to start."
+    } catch {
+        Write-Host "Could not make the desktop shortcut ($($_.Exception.Message)). Start with:  uv run clipper review --open" -ForegroundColor Yellow
+    }
+}
+Write-Host 'Ready. Double-click "Stream Clipper" on the desktop, or run:  uv run clipper review --open'
 
 if ($vcOld) {
     Write-Host ""

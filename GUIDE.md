@@ -64,6 +64,10 @@ All commands are typed in a terminal opened in the `Clipping` folder.
 uv run clipper review
 ```
 
+Or just double-click **Stream Clipper** on the desktop (setup puts it there): it starts the program and opens the page.
+
+The **Setup check** box at the top of the left side shows whether this computer is ready: a green dot per item, or what is wrong and what to do. **Repair** downloads anything missing. **Update** appears when a newer version exists and installs it.
+
 Open http://127.0.0.1:8765/ in your browser. The page follows three numbered steps:
 
 1. **Find moments** (left side). Two tabs:

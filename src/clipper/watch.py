@@ -333,9 +333,29 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
     return d
 
 
+def draft_job(w: Watched, moment: dict, cfg: Config) -> None:
+    """Make one draft and report it; every failure is logged and kept on the clip, never raised (it runs in a worker)."""
+    try:
+        try:
+            d = make_draft(w, moment, cfg)
+        except Exception as e:
+            note_error(clip_dir(w.work, clip_id(moment["peak_s"])), f"draft failed: {e}")
+            raise
+        note_error(d, None)
+        s = read_json(d / "clip.json")
+        print(f"DRAFT {w.channel} {d.name}  {s.get('trigger', 'chat')} {s['score']}  ready {s['ready_seconds_after_moment']}s after the moment  {d / 'final.mp4'}", flush=True)
+    except Exception as e:
+        # A ToolError's message is the whole story; anything else is a bug and gets its full traceback.
+        log.error("%s: %s", w.channel, e, exc_info=not isinstance(e, ToolError))
+
+
 def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
     names = [channel_name(c) for c in channels]
     watched: dict[str, Watched] = {}
+    pool = ThreadPoolExecutor(max_workers=max(1, int(cfg.watch.draft_workers)), thread_name_prefix="draft")
+    making: dict[tuple[str, str], object] = {}  # (channel, clip id) -> the draft being made, so a moment is not started twice
     deadline = time.time() + max_minutes * 60 if max_minutes else None
     print(f"Watching {', '.join(names)} using {cfg.watch.mode}. Drafts appear under {cfg.data_dir / 'work'}. Ctrl+C to stop.")
     try:
@@ -352,16 +372,15 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                                 log.info("%s: not live; will check again", name)
                             continue
                         watched[name] = w
+                    for key in [k for k, f in making.items() if f.done()]:
+                        del making[key]
                     for moment in new_moments(w, cfg):
-                        log.info("%s: moment at %s (%s, %.1f), making a draft", name, format_time(moment["peak_s"]), moment.get("trigger", "chat"), moment["score"])
-                        try:
-                            d = make_draft(w, moment, cfg)
-                        except Exception as e:
-                            note_error(clip_dir(w.work, clip_id(moment["peak_s"])), f"draft failed: {e}")
-                            raise
-                        note_error(d, None)
-                        s = read_json(d / "clip.json")
-                        print(f"DRAFT {name} {d.name}  {s.get('trigger', 'chat')} {s['score']}  ready {s['ready_seconds_after_moment']}s after the moment  {d / 'final.mp4'}")
+                        key = (name, clip_id(moment["peak_s"]))
+                        if key in making:
+                            continue  # already being made
+                        log.info("%s: moment at %s (%s, %.1f), making a draft%s", name, format_time(moment["peak_s"]), moment.get("trigger", "chat"),
+                                 moment["score"], f" ({len(making)} other draft(s) in progress)" if making else "")
+                        making[key] = pool.submit(draft_job, w, moment, cfg)
                     if time.time() - w.last_live_check > cfg.watch.live_check_s:
                         w.last_live_check = time.time()
                         if not (channel_is_live(name, cfg) if w.buffer else find_live_vod(name, cfg)):
@@ -375,6 +394,7 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
     except KeyboardInterrupt:
         pass
     finally:
+        pool.shutdown(wait=False, cancel_futures=True)
         for w in watched.values():
             w.stop()
         print("Stopped. Review drafts with: clipper review <vod url>")

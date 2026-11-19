@@ -64,6 +64,9 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid v
 .note b{color:var(--text)}
 details.log{margin-top:10px}details.log summary{cursor:pointer;color:var(--muted);font-size:12.5px}
 pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid var(--line);border-radius:8px;font:11.5px/1.45 Consolas,monospace;max-height:230px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.hrow{display:grid;grid-template-columns:14px 1fr;gap:2px 9px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+.hrow:first-child{border-top:0}.hrow .dot{margin-top:6px}.hrow small{grid-column:2;color:var(--muted);font-size:12px;word-break:break-word}
+.hrow small.fix{color:var(--text)}
 .lerr{color:var(--bad);font-weight:600}.lwarn{color:var(--warn)}
 .switch{display:flex;gap:10px;align-items:flex-start;padding:7px 0;cursor:pointer}
 .switch input{flex:none;width:36px;height:20px;appearance:none;background:var(--line);border-radius:999px;position:relative;cursor:pointer;margin-top:1px;transition:.15s}
@@ -119,6 +122,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
 <div class="top">
   <div class="brand">Stream Clipper<small id="scope"></small></div>
   <div class="pills">
+    <span class="pill" id="p-health" style="cursor:pointer" onclick="const d=$('healthbox');d.open=true;d.scrollIntoView({block:'start'})"><span class="dot"></span><span>Checking setup…</span></span>
     <span class="pill" id="p-watch"><span class="dot"></span><span>Not watching</span></span>
     <span class="pill" id="p-count">0 to review</span>
   </div>
@@ -127,6 +131,24 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
 
 <div class="layout">
   <aside class="side" id="side">
+    <section class="card">
+      <details id="healthbox">
+        <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:13px 16px">
+          <span class="step" id="h-badge" style="background:var(--surface2);color:var(--text);border:1px solid var(--line)">✓</span>
+          <h2 style="flex:1">Setup check</h2><span class="help" id="h-sum" style="margin:0"></span>
+        </summary>
+        <div class="body" style="padding-top:0">
+          <div id="h-items"></div>
+          <div class="btns">
+            <button class="btn" id="b-hcheck" onclick="hAct('/api/health/check')">Run the full check</button>
+            <button class="btn" id="b-hrepair" onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. Continue?')">Repair</button>
+            <button class="btn primary" id="b-hupdate" hidden onclick="hAct('/api/health/update','Update takes the newest version from GitHub. Your clips, settings and keys are not touched. Continue?')">Update</button>
+          </div>
+          <div class="note" id="h-note" hidden></div>
+          <details class="log"><summary>Activity log</summary><pre class="log" id="hlog"></pre></details>
+        </div>
+      </details>
+    </section>
     <section class="card">
       <header><span class="step">1</span><h2>Find moments</h2></header>
       <div class="body">
@@ -275,7 +297,8 @@ function show(s){
   $('f-ready').innerHTML=ready.map(l=>'<li>'+esc(l.slice(6).split(/[\\/]/).pop())+'</li>').join('')+notMade.map(l=>'<li class="nm">'+esc(l)+'</li>').join('');
   $('b-finish').disabled=s.finishing;
   logTo('flog',s.finish_log);
-  const bad=s.watch_log.concat(s.finish_log,s.run_log).filter(isBad), probs=[s.watch_problem,s.run_problem].filter(Boolean);
+  if(s.health)drawHealth(s.health);
+  const bad=s.watch_log.concat(s.finish_log,s.run_log,(s.health&&s.health.maint.lines)||[]).filter(isBad), probs=[s.watch_problem,s.run_problem].filter(Boolean);
   if(s.stamp!==PAGE_STAMP)probs.unshift('THE PROGRAM NEEDS A RESTART. Its files were updated, but the copy that is running is still the old one, so some buttons will not work. Go to the terminal window where you started it, press Ctrl+C, and start it again with:  uv run clipper review');
   setErr(probs.concat(bad.length?[bad.length+' error line(s) in the activity logs, shown in red. Latest: '+bad[bad.length-1]]:[]).join(NL));
   if(s.running)tab('vod');
@@ -287,6 +310,23 @@ async function act(url,body){
 }
 function startWatch(){act('/api/watch/start',{channels:val('o-channels'),mode:mode()})}
 function pickMode(){for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);saveOpts()}
+const HCOL={ok:'var(--ok)',warn:'var(--warn)',bad:'var(--bad)',todo:'var(--muted)'};
+let healthOpened=false;
+function drawHealth(h){
+  const sm=h.summary, col=sm.bad?'bad':(sm.todo?'todo':(sm.warn?'warn':'ok'));
+  $('h-items').innerHTML=h.items.map(i=>'<div class="hrow"><span class="dot" style="background:'+HCOL[i.state]+'"></span><span><b>'+esc(i.name)+'</b></span>'
+    +(i.detail?'<small>'+esc(i.detail)+'</small>':'')+(i.fix?'<small class="fix"><b>What to do:</b> '+esc(i.fix)+'</small>':'')+'</div>').join('');
+  $('h-sum').textContent=h.maint.running?h.maint.name+' running…':sm.text;
+  const b=$('h-badge'); b.textContent=sm.bad?'!':(sm.todo?'?':'✓'); b.style.background=sm.bad?'var(--bad)':(sm.warn||sm.todo?'var(--surface2)':'var(--ok)'); b.style.color=(sm.bad||col==='ok')?'#fff':'var(--text)';
+  const p=$('p-health'); p.querySelector('.dot').style.background=HCOL[col]; p.lastElementChild.textContent=h.maint.running?h.maint.name+'…':(sm.bad?sm.text:(sm.todo?'Setup not fully checked':'Setup OK'));
+  if(sm.bad&&!healthOpened){$('healthbox').open=true;healthOpened=true}
+  for(const id of ['b-hcheck','b-hrepair','b-hupdate'])$(id).disabled=h.maint.running;
+  $('b-hupdate').hidden=!h.can_update;
+  const last=h.maint.lines.length?h.maint.lines[h.maint.lines.length-1]:'';
+  $('h-note').hidden=!h.maint.lines.length; $('h-note').innerHTML=(h.maint.running?'<b>'+esc(h.maint.name)+' is running…</b> ':'')+esc(last);
+  logTo('hlog',h.maint.lines);
+}
+async function hAct(url,ask){if(ask&&!confirm(ask))return;act(url,{})}
 function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_prefer:val('a-prefer'),llm_fallback:$('a-fallback').checked,llm_model:val('a-model'),ai_model:val('a-stream')})}
 async function act2(url){if(await post(url))poll1()}
 async function poll1(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){}}
