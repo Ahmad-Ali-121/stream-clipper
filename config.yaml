@@ -98,6 +98,7 @@ llm:                      # writes hooks, titles, descriptions and narration. Ne
   fallback: true          # with auto: if the first fails (plan limit reached, key rejected), use the other and say so. false = stop instead
   model: claude-opus-5-5  # claude-haiku-5-5 costs about 40 times less and is usually enough for this job
   effort: low
+  look_at_frames: true    # also show Claude three small frames of each clip, so it rates what is on screen and not only the words
 
 ai:                       # "AI reads the stream": transcribes a finished stream's speech and lets Claude pick moments. Needs ANTHROPIC_API_KEY
   model: claude-haiku-5-5 # a few cents per stream. claude-opus-5-5 chooses better and costs about $0.30 per stream

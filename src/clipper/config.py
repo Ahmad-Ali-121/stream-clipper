@@ -145,6 +145,7 @@ class LlmSettings:
     fallback: bool = True  # with "auto": if the first fails (a plan limit, a rejected key), use the other and say so
     model: str = "claude-opus-5-5"  # "claude-haiku-5-5" costs about 40 times less and is usually enough here
     effort: str = "low"
+    look_at_frames: bool = True  # also show AI three small frames of each clip, so it can rate what is on screen, not only the words
 
 
 @dataclass

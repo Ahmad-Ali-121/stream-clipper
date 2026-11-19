@@ -205,10 +205,11 @@ def add_ai_moments(found: list[dict], picks: list[dict]) -> list[dict]:
             if "ai" not in match["trigger"].split("+"):
                 match["trigger"] += "+ai"
             match["ai_pick"] = p["reason"]
+            match["ai_strength"] = p["strength"]
             continue
         rank += 1
         out.append({
-            "rank": rank, "score": float(p["strength"]), "activity": 0, "messages": 0, "hype": 0, "trigger": "ai", "ai_pick": p["reason"],
+            "rank": rank, "score": float(p["strength"]), "activity": 0, "messages": 0, "hype": 0, "trigger": "ai", "ai_pick": p["reason"], "ai_strength": p["strength"],
             "peak_s": round(p["start_s"] + (p["end_s"] - p["start_s"]) * 0.6, 1), "start_s": p["start_s"], "end_s": p["end_s"],
         })
     return out

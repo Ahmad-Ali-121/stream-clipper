@@ -18,6 +18,7 @@ import os
 import shutil
 import subprocess
 import time
+from pathlib import Path
 from typing import Any
 
 from .config import Config, load_env
@@ -33,7 +34,11 @@ SYSTEM = """You write the on-screen and caption text for short vertical clips cu
 
 You are given one clip: the streamer, the stream title, a transcript of what is said in the clip \n(speech-to-text, so it has mistakes and no punctuation), and a list of hashtags that currently \nwell-viewed YouTube Shorts on the same topic are using.
 
+You may also be given three still frames from the clip (near its start, middle and end). Use them to see what \\nthe words do not say: what is on screen, the streamer's face, whether anything visible happens. Do not describe \\nthe frames in your text.
+
 Decide first whether the clip is worth posting. It is not worth posting when the transcript is filler: \ngreetings, reading chat, giveaways or sub talk, technical problems, silence, a menu, or talk with no \npayoff. Be honest; most automatic clips are filler. If you cannot tell from the transcript, keep it \nand say so in the reason.
+
+Give a rating from 0 to 100 for how well this works as a short clip for someone who never saw the stream: \\na clear hook in the first seconds, a payoff before the end, and no need for outside context. 80 and above means \\npost it as it is; around 50 means it needs a better cut or is only mildly interesting; under 30 means filler.
 
 Then write:
 - hook: on-screen text for the first three seconds. At most 8 words. It states what happens or why to \nkeep watching, in plain words a viewer would use. It must be true of this clip; never promise something \nthe transcript does not show.
@@ -52,6 +57,7 @@ SCHEMA = {
     "type": "object",
     "properties": {
         "keep": {"type": "boolean"},
+        "rating": {"type": "integer"},
         "reason": {"type": "string"},
         "hook": {"type": "string"},
         "hook_b": {"type": "string"},
@@ -63,7 +69,7 @@ SCHEMA = {
         "intro_b": {"type": "string"},
         "rank_line": {"type": "string"},
     },
-    "required": ["keep", "reason", "hook", "hook_b", "title", "title_b", "description", "tags", "intro", "intro_b", "rank_line"],
+    "required": ["keep", "rating", "reason", "hook", "hook_b", "title", "title_b", "description", "tags", "intro", "intro_b", "rank_line"],
     "additionalProperties": False,
 }
 
@@ -178,7 +184,7 @@ def check(cfg: Config, backend: str) -> dict:
     return {"ok": not problem, "problem": problem}
 
 
-def _ask_claude_code(cfg: Config, model: str, system: str, user: str, schema: dict, what: str) -> dict:
+def _ask_claude_code(cfg: Config, model: str, system: str, user: str, schema: dict, what: str, images: list | None = None) -> dict:
     """The same question through the Claude Code command, signed in with this person's own plan."""
     exe = shutil.which("claude")
     if not exe:
@@ -188,8 +194,19 @@ def _ask_claude_code(cfg: Config, model: str, system: str, user: str, schema: di
     prompt_file = folder / "system.txt"
     prompt_file.write_text(system, encoding="utf-8")
     cmd = [exe, "-p", "--model", model, "--output-format", "json", "--json-schema", json.dumps(schema),
-           "--system-prompt-file", str(prompt_file), "--tools", "", "--no-session-persistence",
-           "--strict-mcp-config", "--setting-sources", ""]
+           "--system-prompt-file", str(prompt_file), "--no-session-persistence", "--strict-mcp-config", "--setting-sources", ""]
+    if images:
+        # The command reads pictures from files: copy them into its own empty folder and let it use only the file reader.
+        names = []
+        for n, src in enumerate(images):
+            dst = folder / f"frame{n + 1}{Path(src).suffix}"
+            shutil.copyfile(src, dst)
+            names.append(dst.name)
+        cmd += ["--tools", "Read", "--allowedTools", "Read"]
+        user = (f"Before answering, look at these {len(names)} still frames from the clip by reading the files "
+                f"{', '.join(names)} in the current folder (start, middle, end of the clip).\n\n" + user)
+    else:
+        cmd += ["--tools", ""]
     # With an API key in the environment the command would bill the API instead of using the plan.
     env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
     try:
@@ -252,7 +269,7 @@ def clip_prompt(state: dict, trend_tags: list[str]) -> str:
     )
 
 
-def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str) -> dict:
+def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str, images: list | None = None) -> dict:
     """One question to Claude with a JSON answer in the given shape. Raises LlmUnavailable with the reason when it cannot.
 
     With llm.backend "auto" the preferred connection is tried first; if it fails and llm.fallback is on,
@@ -267,7 +284,7 @@ def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str
     failures: list[str] = []
     for n, backend in enumerate(order):
         try:
-            data = (_ask_claude_code if backend == "claude-code" else _ask_api)(cfg, model, system, user, schema, what)
+            data = (_ask_claude_code if backend == "claude-code" else _ask_api)(cfg, model, system, user, schema, what, images)
         except LlmUnavailable as e:
             _remember(cfg, backend, ok=False, problem=str(e))
             failures.append(f"{BACKENDS[backend]}: {e}")
@@ -281,7 +298,7 @@ def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str
     raise LlmUnavailable(" | ".join(failures))
 
 
-def _ask_api(cfg: Config, model: str, system: str, user: str, schema: dict, what: str) -> dict:
+def _ask_api(cfg: Config, model: str, system: str, user: str, schema: dict, what: str, images: list | None = None) -> dict:
     """The question through the Claude API, billed to the key in .env."""
     problem = static_problem(cfg, "api")
     if problem:
@@ -294,7 +311,7 @@ def _ask_api(cfg: Config, model: str, system: str, user: str, schema: dict, what
         max_tokens=16000,
         # The instructions are identical for every call of one kind, so they are cached; only the material varies.
         system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": user}],
+        messages=[{"role": "user", "content": _with_images(user, images)}],
         output_config={"effort": cfg.llm.effort, "format": {"type": "json_schema", "schema": schema}},
     )
     try:
@@ -323,9 +340,22 @@ def _ask_api(cfg: Config, model: str, system: str, user: str, schema: dict, what
         raise LlmUnavailable("Claude's reply was not valid JSON") from e
 
 
-def write_copy(state: dict, trend_tags: list[str], cfg: Config) -> dict:
-    """Ask Claude for this clip's text. Raises LlmUnavailable when there is no key or the call fails."""
-    return clean_copy(ask(cfg, cfg.llm.model, SYSTEM, clip_prompt(state, trend_tags), SCHEMA, f"copy for clip {state.get('id')}"))
+def _with_images(user: str, images: list | None):
+    """The user turn for the API: the pictures first, then the text."""
+    if not images:
+        return user
+    import base64
+
+    blocks: list[dict] = []
+    for src in images:
+        kind = "image/png" if str(src).lower().endswith(".png") else "image/jpeg"
+        blocks.append({"type": "image", "source": {"type": "base64", "media_type": kind, "data": base64.standard_b64encode(Path(src).read_bytes()).decode()}})
+    return blocks + [{"type": "text", "text": user}]
+
+
+def write_copy(state: dict, trend_tags: list[str], cfg: Config, images: list | None = None) -> dict:
+    """Ask Claude for this clip's text and rating. Raises LlmUnavailable when there is no key or the call fails."""
+    return clean_copy(ask(cfg, cfg.llm.model, SYSTEM, clip_prompt(state, trend_tags), SCHEMA, f"copy for clip {state.get('id')}", images))
 
 
 def clean_copy(data: dict) -> dict:
@@ -337,6 +367,7 @@ def clean_copy(data: dict) -> dict:
             tags.append(t)
     return {
         "keep": bool(data.get("keep", True)),
+        "rating": max(0, min(100, int(data["rating"]))) if isinstance(data.get("rating"), (int, float)) else None,
         "reason": str(data.get("reason", "")).strip(),
         "hook": " ".join(str(data.get("hook", "")).split()[:10]),
         "hook_b": " ".join(str(data.get("hook_b", "")).split()[:10]),
@@ -365,6 +396,7 @@ def fallback_copy(state: dict, trend_tags: list[str], max_tags: int = 6) -> dict
             uniq.append(t)
     return {
         "keep": len(words) >= 6,
+        "rating": None,
         "reason": "not judged by AI: kept because the clip has speech" if len(words) >= 6 else "almost no speech in this clip",
         "hook": hook,
         "hook_b": f"Watch what {channel} does next" if len(words) >= 4 else "",

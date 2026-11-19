@@ -352,7 +352,10 @@ function cardHtml(c){
   const k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
   const vid=c.video?'<video controls preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+'"></video><small>'+shown+'</small>'
     :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
-  const chips=foundBy(c).map(x=>'<span class="chip">'+esc(x)+'</span>').join('')
+  const pc=c.points>=70?'good':(c.points>=40?'':'meh');
+  const chips='<span class="chip '+pc+'" title="One score from chat, sound, picture and AI. Higher is better."><b>Score '+c.points+'</b></span>'
+    +(c.ai_rating!=null?'<span class="chip" title="How well AI thinks this works as a clip, from its words and three frames">AI rating '+c.ai_rating+'</span>':'')
+    +foundBy(c).map(x=>'<span class="chip">'+esc(x)+'</span>').join('')
     +(c.activity!=null?'<span class="chip">'+esc(c.activity)+' chatters</span>':'')
     +(c.ai_pick?'<span class="chip good">AI pick</span>':'')
     +(c.ai_judged?(c.copy_source==='plain'?'<span class="chip meh">Text written without AI</span>'

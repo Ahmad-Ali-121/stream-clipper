@@ -127,6 +127,7 @@ def stage_find(
                 "trigger": m["trigger"],
                 "signals": m.get("signals", {}),
                 "ai_pick": m.get("ai_pick", ""),
+                "ai_strength": m.get("ai_strength"),
                 "peak_s": m["peak_s"],
                 "start_s": m["start_s"],
                 "end_s": m["end_s"],
@@ -337,9 +338,18 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
             state["trend_tags"] = tags
         except Exception as e:  # research is a nice-to-have; a clip must not fail because of it
             log.warning("clip %s: hashtag research failed (%s)", d.name, e)
+    frames: list = []
+    if llm.available(cfg) and cfg.llm.look_at_frames:
+        try:
+            from .render import clip_frames
+
+            frames = clip_frames(d, cfg)
+        except Exception as e:  # the pictures help the rating; the text must not fail because of them
+            log.warning("clip %s: no frames for AI to look at (%s); it will judge from the words only", d.name, e)
     try:
-        copy = llm.write_copy(state, tags, cfg)
+        copy = llm.write_copy(state, tags, cfg, frames)
         state["copy_source"] = cfg.llm.model
+        state["ai_saw_frames"] = len(frames)
         state.pop("copy_problem", None)
     except llm.LlmUnavailable as e:
         log.warning("clip %s: text written WITHOUT AI: %s", d.name, e)
@@ -353,7 +363,7 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
             state[key] = copy[key]
             auto.add(key)
     state["copy_auto"] = sorted(auto)
-    state["ai_keep"], state["ai_reason"] = copy["keep"], copy["reason"]
+    state["ai_keep"], state["ai_reason"], state["ai_rating"] = copy["keep"], copy["reason"], copy.get("rating")
     state["copy_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     for key, files in SHOWS.items():
         if state.get(key) != before[key]:  # the text is burned in, so the old render is stale

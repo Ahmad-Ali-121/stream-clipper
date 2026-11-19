@@ -102,7 +102,9 @@ def feed_command(ffmpeg: str, url: str, audio: bool, video: bool) -> list[str]:
     parts, maps = [], []
     if audio:
         parts.append(
-            "[0:a]aresample=16000,asetnsamples=n=16000,astats=metadata=1:reset=1,"
+            # 300 to 3400 Hz is where voices are. Measuring loudness there follows shouts and laughter,
+            # and is far less moved by game explosions, engines and bass-heavy music.
+            "[0:a]aresample=16000,highpass=f=300,lowpass=f=3400,asetnsamples=n=16000,astats=metadata=1:reset=1,"
             "ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-:direct=1[a]"
         )
         maps += ["-map", "[a]", "-f", "null", "-"]

@@ -117,6 +117,23 @@ def _layout_for(state: dict, cfg: Config):
     return r, layout
 
 
+def clip_frames(clip_dir: Path, cfg: Config, count: int = 3, width: int = 640) -> list[Path]:
+    """A few small frames of the clip as it was streamed (start, middle, end of the cut), for AI to look at."""
+    state = read_json(clip_dir / "clip.json")
+    if not done(clip_dir / "source.mp4"):
+        return []
+    offset, duration = cut_window(state)
+    out: list[Path] = []
+    for n in range(count):
+        at = offset + duration * (0.15 + 0.70 * n / max(1, count - 1))
+        name = f"look{n + 1}.jpg"
+        run([find_tool("ffmpeg", cfg.data_dir), "-y", "-hide_banner", "-v", "error", "-ss", f"{at:.2f}", "-i", "source.mp4",
+             "-frames:v", "1", "-vf", f"scale={width}:-2", "-q:v", "5", name], timeout_s=60, what=f"frame of clip {clip_dir.name}", cwd=clip_dir)
+        if done(clip_dir / name):
+            out.append(clip_dir / name)
+    return out
+
+
 def still_frame(clip_dir: Path, cfg: Config, at_s: float = 1.0, out_name: str = "still.png") -> Path:
     """One frame of the clip in its vertical layout with no text on it (for narration cards)."""
     state = read_json(clip_dir / "clip.json")

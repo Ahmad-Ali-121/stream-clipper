@@ -58,18 +58,20 @@ def page_html(title: str, has_panel: bool) -> str:
             .replace("__STAMP__", json.dumps(code_stamp())))
 
 
-def clip_view(d: Path) -> dict:
+def clip_view(d: Path, weights: dict | None = None) -> dict:
     """What the page needs to draw one clip."""
+    from . import scoring
+
     c = read_json(d / "clip.json")
     video = "final.mp4" if (d / "final.mp4").exists() else ("source.mp4" if (d / "source.mp4").exists() else "")
     out = {k: c.get(k) for k in (
         "channel", "start_s", "end_s", "cut_start_s", "cut_end_s", "trigger", "score", "activity", "layout", "layout_reason",
         "transcript", "hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags", "explainer", "disclosure",
-        "ai_keep", "ai_reason", "error", "notes", "stream_title", "copy_source", "copy_problem", "ai_pick",
+        "ai_keep", "ai_reason", "ai_rating", "error", "notes", "stream_title", "copy_source", "copy_problem", "ai_pick",
     )}
     out.update(
         key=f"{d.parent.parent.name}/{c['id']}",  # work folder / clip id: unique across streams
-        status=c.get("status", "candidate"), video=video, ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
+        status=c.get("status", "candidate"), video=video, points=scoring.combined(c, weights), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
         lo=c.get("fetch_start_s", c["start_s"]), hi=c.get("fetch_end_s", c["end_s"]),
         # Changes whenever the clip's data or its draft video changes, so the page knows to redraw it.
         mtime=int(max((d / n).stat().st_mtime for n in ("clip.json", video) if n) * 1000),
@@ -147,15 +149,27 @@ def delete_clip(d: Path) -> float:
     return freed / 1e6
 
 
-def list_clips(works: list[Path]) -> list[Path]:
-    """Clip folders of the given streams: waiting ones first (newest first), then approved, then rejected."""
+def list_clips(works: list[Path], weights: dict | None = None) -> list[Path]:
+    """Clip folders of the given streams: waiting ones first, best score first; then approved, then rejected (newest first)."""
+    from . import scoring
+
     order = {"candidate": 0, "approved": 1, "rejected": 2}
     dirs = [d for w in works for d in clip_dirs(w) if read_json(d / "clip.json", {}).get("status") != "deleted"]
 
     def key(d: Path):
-        return (order.get(read_json(d / "clip.json", {}).get("status", "candidate"), 0), -(d / "clip.json").stat().st_mtime)
+        state = read_json(d / "clip.json", {})
+        status = state.get("status", "candidate")
+        # A draft still being made (no video yet) goes after the finished ones, so the top of the list is always watchable.
+        ready = (d / "final.mp4").exists() or (d / "source.mp4").exists()
+        first = (-int(ready), -scoring.combined(state, weights)) if status == "candidate" else (0, 0)
+        return (order.get(status, 0), *first, -(d / "clip.json").stat().st_mtime)
 
     return sorted(dirs, key=key)
+
+
+def all_states(works: list[Path]) -> list[dict]:
+    """Every clip's state, including deleted ones (a deletion is a decision too)."""
+    return [read_json(d / "clip.json", {}) for w in works for d in clip_dirs(w)]
 
 
 def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_stream: bool = False, open_browser: bool = False) -> int:
@@ -198,10 +212,13 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             if self.path == "/":
                 return self._send(200, page_html(title, bool(control)).encode("utf-8"), "text/html; charset=utf-8")
             if self.path == "/api/clips":
+                from . import scoring
+
+                weights = scoring.load_weights(cfg.data_dir) if cfg is not None else None
                 views = []
-                for d in list_clips(list(by_name.values())):
+                for d in list_clips(list(by_name.values()), weights):
                     try:
-                        views.append(clip_view(d))
+                        views.append(clip_view(d, weights))
                     except Exception as e:  # one unreadable clip must not blank the whole page
                         log.error("clip %s could not be shown: %s", d, e, exc_info=True)
                 return self._send(200, json.dumps(views).encode("utf-8"), "application/json")
@@ -309,6 +326,10 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 return self._send(404, str(e).encode(), "text/plain")
             except (ValueError, TypeError) as e:
                 return self._send(400, str(e).encode(), "text/plain")
+            if "status" in edit and cfg is not None:
+                from . import scoring
+
+                scoring.relearn(cfg.data_dir, all_states(list(by_name.values())))  # every decision teaches the ranking
             self._send(200, json.dumps({"status": state.get("status")}).encode(), "application/json")
 
     try:
