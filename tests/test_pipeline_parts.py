@@ -433,3 +433,18 @@ def test_deleting_a_clip_removes_its_files_and_hides_it(tmp_path):
     state = read_json(d / "clip.json")
     assert state["status"] == "deleted" and "error" not in state
     assert list_clips([work]) == []
+
+
+def test_two_review_pages_cannot_share_a_port():
+    from http.server import BaseHTTPRequestHandler
+
+    import pytest
+
+    from clipper.review import OneAtATimeServer
+
+    first = OneAtATimeServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
+    try:
+        with pytest.raises(OSError):
+            OneAtATimeServer(("127.0.0.1", first.server_address[1]), BaseHTTPRequestHandler)
+    finally:
+        first.server_close()

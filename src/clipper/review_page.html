@@ -207,7 +207,7 @@ const $=id=>document.getElementById(id), val=id=>$(id).value;
 const NL=String.fromCharCode(10);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clock=s=>{s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0')};
-const HAS_PANEL=__HAS_PANEL__;
+const HAS_PANEL=__HAS_PANEL__, PAGE_STAMP=__STAMP__;
 const MODES={chat:['A','Chat only','Clips when chat suddenly erupts. Uses almost no internet.'],
   audio:['B','Chat + sound','Also catches loud moments chat missed. About 70 MB an hour per channel.'],
   video:['C','Chat + picture','Also catches fast action on screen. About 100 MB an hour per channel.'],
@@ -229,6 +229,9 @@ function lastLine(lines){for(let i=lines.length-1;i>=0;i--){if(lines[i].trim())r
 
 function show(s){
   last=s;
+  /* An older program may be answering (it was updated but not restarted). Draw what it sends without breaking. */
+  s.ai=s.ai||{backend:'api',backends:{},model:'',stream_model:'',models:[],problem:'this running program is older than the page; restart it'};
+  s.run_log=s.run_log||[]; s.watch_log=s.watch_log||[]; s.finish_log=s.finish_log||[];
   if(!drawn){
     $('o-modes').innerHTML=Object.keys(s.modes).map(k=>{const m=MODES[k]||['?',k,s.modes[k]];
       return '<label class="mode" data-k="'+k+'"><input type="radio" name="o-mode" value="'+k+'" onchange="pickMode()"><b>'+m[0]+'</b><span>'+m[1]+'</span><em>'+m[2]+'</em></label>'}).join('');
@@ -258,6 +261,7 @@ function show(s){
   $('b-finish').disabled=s.finishing;
   logTo('flog',s.finish_log);
   const bad=s.watch_log.concat(s.finish_log,s.run_log).filter(isBad), probs=[s.watch_problem,s.run_problem].filter(Boolean);
+  if(s.stamp!==PAGE_STAMP)probs.unshift('THE PROGRAM NEEDS A RESTART. Its files were updated, but the copy that is running is still the old one, so some buttons will not work. Go to the terminal window where you started it, press Ctrl+C, and start it again with:  uv run clipper review');
   setErr(probs.concat(bad.length?[bad.length+' error line(s) in the activity logs, shown in red. Latest: '+bad[bad.length-1]]:[]).join(NL));
   if(s.running)tab('vod');
 }
@@ -271,8 +275,11 @@ function pickMode(){for(const m of document.querySelectorAll('.mode'))m.classLis
 function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_model:val('a-model'),ai_model:val('a-stream')})}
 function saveOpts(){act('/api/options',{mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked})}
 async function poll(){
-  try{const r=await fetch('/api/options');if(r.ok)show(await r.json());else setErr('The page could not read the program state: '+r.status+' '+await r.text())}
+  let s=null;
+  try{const r=await fetch('/api/options');if(r.ok)s=await r.json();else setErr('The page could not read the program state: '+r.status+' '+await r.text())}
   catch(e){setErr('THE PROGRAM IS NOT ANSWERING. It has stopped or crashed: look at the terminal window where you started it; the reason is printed there.')}
+  /* Drawing is kept apart from fetching: a fault in the page itself must not be reported as the program having stopped. */
+  if(s){try{show(s)}catch(e){setErr('THE PAGE HIT A FAULT OF ITS OWN while drawing ('+e+'). The program is still running. Reload the page; if this stays, restart the program and report this line.')}}
   setTimeout(poll,5000)}
 
 /* ---------- clips ---------- */

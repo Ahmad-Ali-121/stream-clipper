@@ -24,11 +24,38 @@ TEXT_FIELDS = ("hook", "hook_b", "intro", "intro_b", "title", "title_b", "descri
 PAGE_FILE = Path(__file__).with_name("review_page.html")
 
 
+def code_stamp() -> str:
+    """Changes whenever the program's files on disk change (an update)."""
+    return str(int(max(f.stat().st_mtime for f in Path(__file__).parent.glob("*.py"))))
+
+
+RUNNING_STAMP = code_stamp()  # the code this running program was started with
+
+
+class OneAtATimeServer(ThreadingHTTPServer):
+    """Refuses to start when the port is already taken.
+
+    The standard server lets a second program listen on the same port on Windows. The browser then
+    talks to whichever answers first, usually the older one, which is how a page ends up showing new
+    buttons wired to an old program.
+    """
+
+    allow_reuse_address = False
+
+    def server_bind(self) -> None:
+        import socket
+
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def page_html(title: str, has_panel: bool) -> str:
     """The review page: one HTML file, with the title and whether the controls are shown filled in."""
     return (PAGE_FILE.read_text(encoding="utf-8")
             .replace("__TITLE__", json.dumps(title).replace("</", "<\\/"))
-            .replace("__HAS_PANEL__", "true" if has_panel else "false"))
+            .replace("__HAS_PANEL__", "true" if has_panel else "false")
+            .replace("__STAMP__", json.dumps(code_stamp())))
 
 
 def clip_view(d: Path) -> dict:
@@ -166,7 +193,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
 
         def do_GET(self) -> None:
             if self.path == "/api/options" and control:
-                return self._send(200, json.dumps(control.status()).encode(), "application/json")
+                return self._send(200, json.dumps({**control.status(), "stamp": RUNNING_STAMP}).encode(), "application/json")
             refresh()
             if self.path == "/":
                 return self._send(200, page_html(title, bool(control)).encode("utf-8"), "text/html; charset=utf-8")
@@ -283,7 +310,13 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 return self._send(400, str(e).encode(), "text/plain")
             self._send(200, json.dumps({"status": state.get("status")}).encode(), "application/json")
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    try:
+        server = OneAtATimeServer(("127.0.0.1", port), Handler)
+    except OSError as e:
+        raise ValueError(
+            f"the review page cannot start: port {port} is already in use ({e}). It is probably already running in another "
+            f"terminal window. Close that one first (Ctrl+C), or start this one on another port:  uv run clipper review --port {port + 1}"
+        ) from e
     print(f"Review page: http://127.0.0.1:{port}/   (Ctrl+C to stop)")
     try:
         server.serve_forever()
