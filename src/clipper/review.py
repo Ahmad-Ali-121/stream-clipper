@@ -84,7 +84,7 @@ def clip_view(d: Path, weights: dict | None = None, brief=None) -> dict:
     out = {k: c.get(k) for k in (
         "channel", "start_s", "end_s", "cut_start_s", "cut_end_s", "trigger", "score", "activity", "layout", "layout_reason",
         "transcript", "hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags", "explainer", "disclosure",
-        "ai_keep", "ai_reason", "ai_rating", "error", "notes", "stream_title", "copy_source", "copy_problem", "ai_pick",
+        "ai_keep", "ai_reason", "ai_rating", "error", "notes", "stream_title", "copy_source", "copy_problem", "ai_pick", "part", "parts",
     )}
     out.update(
         key=f"{d.parent.parent.name}/{c['id']}",  # work folder / clip id: unique across streams
@@ -262,8 +262,11 @@ def list_clips(works: list[Path], weights: dict | None = None) -> list[Path]:
         status = state.get("status", "candidate")
         # A draft still being made (no video yet) goes after the finished ones, so the top of the list is always watchable.
         ready = (d / "final.mp4").exists() or (d / "source.mp4").exists()
+        if status == "candidate" and state.get("trigger") == "manual":
+            # Clips you cut yourself come first and stay in their own order: part 1, part 2, part 3.
+            return (0, -1, -10**6, d.parent.parent.name, float(state.get("peak_s") or 0))
         first = (-int(ready), -scoring.combined(state, weights)) if status == "candidate" else (int(videos_made(d, state)), 0)
-        return (order.get(status, 0), *first, -(d / "clip.json").stat().st_mtime)
+        return (order.get(status, 0), *first, "", -(d / "clip.json").stat().st_mtime)
 
     return sorted(dirs, key=key)
 
@@ -401,14 +404,44 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             if origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
                 return self._send(403, b"not allowed from another site", "text/plain")
             actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch",
-                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/ai/check": "start_ai_check",
+                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/ai/check": "start_ai_check",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
                        "/api/restart": "restart"}
+            if self.path.startswith("/api/upload") and cfg is not None:
+                # A video file chosen on the page is saved under the data folder, piece by piece, and its path is given back.
+                from urllib.parse import parse_qs, urlparse
+
+                name = re.sub(r"[^A-Za-z0-9 ._()-]+", "_", (parse_qs(urlparse(self.path).query).get("name") or ["video.mp4"])[0])[-120:] or "video.mp4"
+                if not name.lower().endswith((".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v", ".ts", ".flv")):
+                    return self._send(400, b"that does not look like a video file (mp4, mkv, mov, webm, avi)", "text/plain")
+                folder = cfg.data_dir / "uploads"
+                folder.mkdir(parents=True, exist_ok=True)
+                target, left = folder / name, int(self.headers.get("Content-Length", "0"))
+                if left <= 0:
+                    return self._send(400, b"the file arrived empty", "text/plain")
+                from .work import free_gb
+
+                if free_gb(cfg.data_dir) < left / 1e9 + 2:
+                    return self._send(400, b"not enough free disk space for this file", "text/plain")
+                part = target.with_name(target.name + ".part")
+                with part.open("wb") as fh:
+                    while left > 0:
+                        chunk = self.rfile.read(min(1024 * 1024, left))
+                        if not chunk:
+                            break
+                        fh.write(chunk)
+                        left -= len(chunk)
+                if left:
+                    part.unlink(missing_ok=True)
+                    return self._send(400, b"the file did not arrive completely; try again", "text/plain")
+                part.replace(target)
+                log.info("video file received: %s (%.0f MB)", target, target.stat().st_size / 1e6)
+                return self._send(200, json.dumps({"path": str(target)}).encode("utf-8"), "application/json")
             if control and self.path in actions:
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
                     name = actions[self.path]
-                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run") else getattr(control, name)()
+                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut") else getattr(control, name)()
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 if isinstance(result, dict) and "watching" in result:

@@ -98,6 +98,7 @@ pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid
 .twrap{overflow-x:auto}
 .issues{margin:0 0 8px;padding:8px 10px;border-radius:9px;background:var(--surface2);font-size:13px}
 .issues ul{margin:4px 0 0;padding-left:18px}.issues li.fail{color:var(--bad)}
+.hms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .lerr{color:var(--bad);font-weight:600}.lwarn{color:var(--warn)}
 .switch{display:flex;gap:10px;align-items:flex-start;padding:7px 0;cursor:pointer}
 .switch input{flex:none;width:36px;height:20px;appearance:none;background:var(--line);border-radius:999px;position:relative;cursor:pointer;margin-top:1px;transition:.15s}
@@ -186,7 +187,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
     <section class="card">
       <header><span class="step">1</span><h2>Find moments</h2></header>
       <div class="body">
-        <div class="tabs"><button id="t-live" class="on" onclick="tab('live')">Live streams</button><button id="t-vod" onclick="tab('vod')">Finished stream</button></div>
+        <div class="tabs"><button id="t-live" class="on" onclick="tab('live')">Live streams</button><button id="t-vod" onclick="tab('vod')">Finished stream</button><button id="t-own" onclick="tab('own')">Your own clip</button></div>
         <details class="log" id="langbox" style="margin:0 0 10px"><summary>Language: <b id="lang-sum">English</b></summary>
           <label class="f" for="l-speech">What the streamer speaks</label>
           <select id="l-speech" onchange="saveLang()"><option value="en">English</option><option value="ur">Urdu</option><option value="hi">Hindi</option><option value="auto">Detect it (can guess wrong on mixed speech)</option></select>
@@ -205,6 +206,30 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <div class="btns"><button class="btn primary" id="b-start" onclick="startWatch()">Start watching</button><button class="btn bad" id="b-stop" onclick="act('/api/watch/stop',{})">Stop</button></div>
           <div class="note" id="w-note">Not watching.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="wlog"></pre></details>
+        </div>
+        <div id="tab-own" hidden>
+          <p class="help">Pick the part of a video yourself. Works with a YouTube or Twitch video link, or a video file on this PC such as a screen recording. No chat is needed.</p>
+          <label class="f" for="m-src">Video link, or the path of a video file</label>
+          <input type="text" id="m-src" placeholder="https://www.youtube.com/watch?v=...   or   D:\Videos\recording.mp4">
+          <div class="btns" style="margin-top:6px"><button class="btn" onclick="$('m-file').click()">Choose a file from this PC</button><span class="saved" id="m-up"></span></div>
+          <input type="file" id="m-file" accept="video/*,.mkv,.mp4,.mov,.webm,.avi" hidden onchange="uploadFile(this)">
+          <div class="two">
+            <div><label class="f">Start (hours : minutes : seconds)</label>
+              <div class="hms"><input type="number" min="0" id="m-sh" value="0" aria-label="start hours"><input type="number" min="0" max="59" id="m-sm" value="0" aria-label="start minutes"><input type="number" min="0" max="59" id="m-ss" value="0" aria-label="start seconds"></div></div>
+            <div><label class="f">End (hours : minutes : seconds)</label>
+              <div class="hms"><input type="number" min="0" id="m-eh" value="0" aria-label="end hours"><input type="number" min="0" max="59" id="m-em" value="1" aria-label="end minutes"><input type="number" min="0" max="59" id="m-es" value="0" aria-label="end seconds"></div></div>
+          </div>
+          <label class="check"><input type="checkbox" id="m-toend" onchange="ownHint()"> Until the end of the video</label>
+          <label class="f" for="m-split">One clip, or several parts?</label>
+          <select id="m-split" onchange="ownHint()"><option value="one">One clip</option><option value="count">Split into a number of parts</option><option value="secs">Split into parts of a set length</option></select>
+          <div id="m-count" hidden><label class="f" for="m-parts">How many parts</label><input type="number" min="2" max="30" id="m-parts" value="3" oninput="ownHint()"></div>
+          <div id="m-secs" hidden><label class="f" for="m-plen">Seconds in each part</label><input type="number" min="8" max="300" id="m-plen" value="50" oninput="ownHint()"></div>
+          <label class="check" id="m-labelrow" hidden><input type="checkbox" id="m-label" checked> Show "Part 1", "Part 2"… on the video, and "Part 2 next" at the end</label>
+          <p class="help" id="m-hint" style="margin-top:8px"></p>
+          <div class="btns"><button class="btn primary" id="b-own" onclick="makeOwn()">Make the clip</button><button class="btn bad" id="b-ownstop" onclick="act('/api/run/stop',{})">Stop</button></div>
+          <div class="bar indet" id="m-bar" hidden><i></i></div>
+          <div class="note" id="m-note">Nothing running.</div>
+          <details class="log"><summary>Activity log</summary><pre class="log" id="mlog"></pre></details>
         </div>
         <div id="tab-vod" hidden>
           <p class="help">Paste the link of a stream that has ended. Its chat replay is scored, its sound and picture can be measured too, and only the best moments are downloaded and turned into drafts.</p>
@@ -317,7 +342,8 @@ function closeErr(){for(const l of errShown)errClosed.add(l);$('errbox').style.d
 async function restartNow(){const r=await send('/api/restart');if(r.error){toast(r.error,true);return}
   toast('Restarting… this page reconnects by itself.');setTimeout(()=>location.reload(),6000)}
 function toast(msg,err){const t=$('toast');$('toasttext').textContent=msg;t.className=err?'err':'';t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',err?9000:2500)}
-function tab(name){for(const n of ['live','vod']){$('tab-'+n).hidden=n!==name;$('t-'+n).className=n===name?'on':''}}
+let curTab='live';
+function tab(name){curTab=name;for(const n of ['live','vod','own']){$('tab-'+n).hidden=n!==name;$('t-'+n).className=n===name?'on':''}}
 function mode(){return (document.querySelector('[name=o-mode]:checked')||{}).value}
 function isBad(l){return /ERROR|FAILED|NOT MADE|Traceback|Error:|fatal exception|STOPPED BY ITSELF/.test(l)}
 function logTo(id,lines){const el=$(id);const stick=el.scrollTop+el.clientHeight>=el.scrollHeight-30;el.textContent='';
@@ -388,7 +414,10 @@ function show(s){
     +(s.health&&s.health.launcher?'Press Restart now.':'Close its window (or press Ctrl+C in it), then double-click Stream-Clipper.cmd to start it again.'));
   /* One banner line per distinct error, without counts, so closing it once keeps it closed. */
   setErr(probs.concat(bad.length?['An activity log has an error, shown in red there. Latest: '+bad[bad.length-1]]:[]));
-  if(s.running)tab('vod');
+  if(s.running&&curTab==='live')tab('vod');
+  $('b-own').disabled=s.running; $('b-ownstop').disabled=!s.running; $('m-bar').hidden=!s.running;
+  $('m-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?'<b>Done.</b> '+esc(lastLine(s.run_log)):'Nothing running.'));
+  logTo('mlog',s.run_log);
 }
 async function act(url,body){
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -414,6 +443,35 @@ function drawHealth(h){
   logTo('hlog',h.maint.lines);
 }
 async function hAct(url,ask){if(ask&&!confirm(ask))return;act(url,{})}
+/* ---------- your own clip ---------- */
+function hms(p){return (+val(p+'h')||0)*3600+(+val(p+'m')||0)*60+(+val(p+'s')||0)}
+function ownHint(){
+  const mode=val('m-split'), toEnd=$('m-toend').checked, a=hms('m-s'), b=hms('m-e'), len=b-a;
+  $('m-count').hidden=mode!=='count'; $('m-secs').hidden=mode!=='secs'; $('m-labelrow').hidden=mode==='one';
+  for(const id of ['m-eh','m-em','m-es'])$(id).disabled=toEnd;
+  $('b-own').textContent=mode==='one'?'Make the clip':'Make the parts';
+  let t='';
+  if(toEnd)t=mode==='one'?'One clip from the start time to the end of the video.':'From the start time to the end of the video, split into parts.';
+  else if(len<=0)t='The end must be after the start.';
+  else if(mode==='one')t='One clip, '+Math.round(len)+' seconds long.'+(len>90?' That is long for a short; consider splitting it into parts.':'');
+  else if(mode==='count'){const n=+val('m-parts')||1;t=n+' parts of about '+Math.round(len/n)+' seconds each.'}
+  else{const p=+val('m-plen')||50, n=Math.max(1,Math.floor(len/p)), rest=len-n*p;t=(rest>=8?n+1:n)+' parts of '+p+' seconds'+(rest>=8?', the last one '+Math.round(rest)+' seconds.':(rest>0?', the last one a little longer.':'.'))}
+  $('m-hint').textContent=t;
+}
+function makeOwn(){
+  const mode=val('m-split'), body={source:val('m-src').trim(),start:hms('m-s'),end:hms('m-e'),to_end:$('m-toend').checked,part_label:$('m-label').checked};
+  if(!body.source){toast('Paste a video link, or choose a file, first.',true);return}
+  if(mode==='count')body.parts=+val('m-parts'); if(mode==='secs')body.part_seconds=+val('m-plen');
+  act('/api/cut',body);
+}
+async function uploadFile(inp){
+  const f=inp.files[0]; if(!f)return; const st=$('m-up'); st.className='saved'; st.textContent='Copying '+f.name+' ('+Math.round(f.size/1e6)+' MB)…';
+  try{const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f});
+    if(!r.ok){st.textContent='';toast('The file was not taken: '+await r.text(),true);return}
+    const d=await r.json(); $('m-src').value=d.path; st.textContent='Ready: '+f.name}
+  catch(e){st.textContent='';toast('The file could not be copied: '+e,true)}
+  inp.value='';
+}
 function saveLang(){
   /* Choosing Urdu or Hindi for the first time: write the text in Roman letters too, which is what most people want. */
   if(val('l-speech')!=='en'&&(last.speech_language||'en')==='en'&&val('l-text')==='English'){$('l-text').value=val('l-speech')==='hi'?'Hinglish':'Roman Urdu'}
@@ -440,6 +498,7 @@ function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
   if(t.includes('audio'))parts.push('Loud moment');
   if(t.includes('video'))parts.push('Fast action');
   if(t==='ai')parts.push('Found by AI from the speech');
+  if(t==='manual')return [c.parts?'Part '+c.part+' of '+c.parts:'Chosen by you'];
   return parts.length?parts:[t]}
 function cardHtml(c){
   const k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
@@ -452,14 +511,14 @@ function cardHtml(c){
   const chips='<span class="chip '+pc+'" title="One score from chat, sound, picture and AI. Higher is better."><b>Score '+c.points+'</b></span>'
     +(c.ai_rating!=null?'<span class="chip" title="How well AI thinks this works as a clip, from its words and three frames">AI rating '+c.ai_rating+'</span>':'')
     +foundBy(c).map(x=>'<span class="chip">'+esc(x)+'</span>').join('')
-    +(c.activity!=null?'<span class="chip">'+esc(c.activity)+' chatters</span>':'')
+    +(c.activity!=null&&c.trigger!=='manual'?'<span class="chip">'+esc(c.activity)+' chatters</span>':'')
     +(c.ai_pick?'<span class="chip good">AI pick</span>':'')
     +(c.ai_judged?(c.copy_source==='plain'?'<span class="chip meh">Text written without AI</span>'
         :'<span class="chip '+(c.ai_keep?'good':'meh')+'">'+(c.ai_keep?'AI: worth posting':'AI: probably filler')+'</span>'):'')
     +(c.exported?'<span class="chip good">Videos made</span>':'');
   const lay=[['','Automatic'],['split','Split: facecam over gameplay'],['crop','Centre crop']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
   return '<div class="vid">'+vid+'</div><div class="info">'
-   +'<div class="chead"><h3>'+esc(c.channel||'Unknown streamer')+'</h3><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[place(c)]+'</span></div>'
+   +'<div class="chead"><h3>'+esc(c.channel||c.stream_title||'Your video')+'</h3><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[place(c)]+'</span></div>'
    +'<div class="chips">'+chips+'</div>'
    +(c.ai_pick?'<div class="ai"><b>Why AI picked it:</b> '+esc(c.ai_pick)+'</div>':'')
    +(c.ai_judged&&c.copy_source==='plain'?'<div class="ai"><b>The opening text and titles below are placeholders,</b> because AI was not used: '+esc(c.copy_problem||'no reason recorded')+'. Type your own, or press "Write text with AI".</div>'
@@ -706,6 +765,7 @@ document.addEventListener('keydown',e=>{
 });
 async function clipLoop(){await loadClips();setTimeout(clipLoop,8000)}
 $('scope').textContent=__TITLE__;
+if(HAS_PANEL){for(const id of ['m-sh','m-sm','m-ss','m-eh','m-em','m-es'])$(id).addEventListener('input',ownHint);ownHint()}
 if(HAS_PANEL)poll();else $('side').remove();
 if(!HAS_PANEL)document.querySelector('.layout').style.gridTemplateColumns='1fr';
 clipLoop();

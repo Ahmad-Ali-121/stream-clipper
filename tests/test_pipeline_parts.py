@@ -24,7 +24,7 @@ def test_parse_twitch_and_youtube_urls():
 
 
 def test_channel_url_is_rejected_with_guidance():
-    with pytest.raises(SourceError, match="VOD"):
+    with pytest.raises(SourceError, match="channel link is not enough"):
         parse_source("https://www.twitch.tv/lacy")
 
 

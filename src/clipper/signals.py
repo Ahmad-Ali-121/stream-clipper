@@ -215,6 +215,9 @@ def vod_feed_url(url: str, cfg: Config, video: bool) -> str:
     """Address of a finished stream's lowest-quality version (sound only, or the smallest picture)."""
     from .fetch import _ytdlp
 
+    if Path(url).is_file():
+        return url  # a video file on this computer is read directly
+
     proc = run(
         _ytdlp(cfg) + ["-g", "-f", "160p/worst[vcodec!=none]/worst" if video else "Audio_Only/audio_only/worstaudio/worst", url],
         timeout_s=120, retries=2, retry_wait_s=5, what="finished stream's low-quality address",

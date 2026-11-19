@@ -263,7 +263,12 @@ def clip_prompt(state: dict, trend_tags: list[str]) -> str:
         f"Streamer: {state.get('channel', '')}\n"
         f"Stream title: {state.get('stream_title', '')}\n"
         f"Clip length: {round(float(state.get('cut_end_s', state.get('end_s', 0))) - float(state.get('cut_start_s', state.get('start_s', 0))))} seconds\n"
-        f"Chat reaction: {state.get('score')} times the normal chat rate\n"
+        + (f"This is part {state['part']} of {state['parts']} of one continuous video cut into parts; the screen shows \"Part {state['part']}\". "
+           "Write a hook that makes sense for this part and, unless it is the last part, leaves the viewer wanting the next one.\n"
+           if state.get("part") and int(state.get("parts") or 0) > 1 else "")
+        + (f"Chat reaction: {state.get('score')} times the normal chat rate\n" if state.get("trigger") != "manual" else
+           "This range was chosen by hand, so there is no chat reaction to go by.\n")
+        +
         f"Hashtags used by well-viewed Shorts on this topic right now: {' '.join(trend_tags) or '(none available)'}\n\n"
         f"Transcript:\n{state.get('transcript') or '(no speech detected)'}"
     )

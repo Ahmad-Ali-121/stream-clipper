@@ -73,19 +73,27 @@ def stage_find(
         # The stream has ended: put it aside and download the whole chat replay.
         chat_file.replace(work / "chat.watched.json")
         log.info("the stream has ended; downloading its whole chat instead of the part collected while watching")
-    chat_path = fetch_chat(source, work, cfg, refresh=refresh_chat)
-    messages = load_chat(chat_path)
-    if not messages:
-        raise PipelineError("the chat log is empty; nothing to score")
+    if source.platform == "local":
+        from .signals import MODES as _MODES, parse_mode as _parse_mode
+
+        if not ai and not any(_MODES[_parse_mode(signals or cfg.moments.signals)]):
+            raise PipelineError("a video file has no chat to find moments from. Choose sound, picture or AI reading, "
+                                "or use \"Your own clip\" to pick the range yourself")
+        messages = []
+    else:
+        chat_path = fetch_chat(source, work, cfg, refresh=refresh_chat)
+        messages = load_chat(chat_path)
+        if not messages:
+            raise PipelineError("the chat log is empty; nothing to score")
     overrides = {k: v for k, v in (("top", top), ("mode", mode)) if v is not None}
     settings = replace(cfg.moments, **overrides)
     settings.validate()
     # A stream that is still live reports a stale length, which would cut clips short; ignore it then.
     live = refresh_chat or meta.get("is_live")
-    moments = find_moments(messages, settings, duration_s=None if live else meta.get("duration_s"))
+    moments = find_moments(messages, settings, duration_s=None if live else meta.get("duration_s")) if messages else []
     log.info(
         "%s: %d chat messages over %s, %d moments, %.0fs",
-        meta.get("channel") or source.key, len(messages), format_time(messages[-1].t), len(moments), time.monotonic() - t0,
+        meta.get("channel") or source.key, len(messages), format_time(messages[-1].t if messages else 0), len(moments), time.monotonic() - t0,
     )
     found = [dict(m.to_dict(), trigger="chat") for m in moments]
     from .signals import MODES, add_signal_moments, measure_vod, parse_mode, signal_peaks
@@ -162,6 +170,101 @@ def _clip_failed(d: Path, step: str, e: Exception, failed: list[str] | None) -> 
     note_error(d, f"{step} failed: {e}")
     if failed is not None:
         failed.append(d.name)
+
+
+MAX_PART_S = 300.0  # a single clip longer than five minutes is not a short any more; split it into parts instead
+MIN_PART_S = 8.0
+
+
+def parse_clock(text) -> float:
+    """Seconds from "1:02:30", "2:30", "150" or 150."""
+    if isinstance(text, (int, float)):
+        return float(text)
+    parts = str(text).strip().split(":")
+    if not parts or len(parts) > 3 or any(not p.strip() for p in parts):
+        raise ValueError(f"{text!r} is not a time; write it as hours:minutes:seconds, minutes:seconds or seconds")
+    try:
+        nums = [float(p) for p in parts]
+    except ValueError:
+        raise ValueError(f"{text!r} is not a time; write it as hours:minutes:seconds, minutes:seconds or seconds") from None
+    if any(n < 0 for n in nums):
+        raise ValueError("a time cannot be negative")
+    return sum(n * 60 ** i for i, n in enumerate(reversed(nums)))
+
+
+def split_range(start_s: float, end_s: float, parts: int = 1, part_s: float | None = None) -> list[tuple[float, float]]:
+    """The (start, end) of each part of a range: ``parts`` equal parts, or parts of ``part_s`` seconds each.
+
+    With ``part_s`` a short leftover at the end is added to the last part, so no part is a few seconds long.
+    """
+    total = end_s - start_s
+    if total <= 0:
+        raise ValueError("the end must be after the start")
+    if part_s:
+        if part_s < MIN_PART_S:
+            raise ValueError(f"each part must be at least {MIN_PART_S:g} seconds")
+        count = max(1, int(total // part_s))
+        edges = [start_s + i * part_s for i in range(count)] + [end_s]
+        if total - count * part_s >= MIN_PART_S:  # enough left over for a part of its own
+            edges = [start_s + i * part_s for i in range(count + 1)] + [end_s]
+    else:
+        if parts < 1:
+            raise ValueError("the number of parts must be at least 1")
+        edges = [start_s + total * i / parts for i in range(parts + 1)]
+    segments = [(round(a, 2), round(b, 2)) for a, b in zip(edges, edges[1:])]
+    longest = max(b - a for a, b in segments)
+    if longest > MAX_PART_S:
+        raise ValueError(f"a part would be {longest:.0f} seconds long; split it into more parts (at most {MAX_PART_S:.0f} seconds each)")
+    if min(b - a for a, b in segments) < MIN_PART_S:
+        raise ValueError(f"a part would be shorter than {MIN_PART_S:g} seconds; use fewer parts")
+    return segments
+
+
+def stage_cut(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None = None, parts: int = 1, part_s: float | None = None,
+              part_label: bool = True) -> list[Path]:
+    """Make draft clips from a range a person chose in a video (a link or a file), whole or split into numbered parts.
+
+    No chat is needed and nothing is searched for: the range is the clip. Each part gets its own draft.
+    """
+    source, work = open_work(url, cfg)
+    meta = fetch_meta(source, work, cfg)
+    length = float(meta.get("duration_s") or 0)
+    if end_s is None:
+        if not length:
+            raise PipelineError("this video's length is not known, so give an end time")
+        end_s = length
+    if length and end_s > length + 1:
+        raise PipelineError(f"the end ({format_time(end_s)}) is after the end of the video ({format_time(length)})")
+    segments = split_range(float(start_s), min(float(end_s), length) if length else float(end_s), parts, part_s)
+    ids: list[str] = []
+    for n, (a, b) in enumerate(segments, 1):
+        d = clip_dir(work, clip_id(a))
+        state = read_json(d / "clip.json", {})
+        if state.get("source_range") != [a, b]:  # another range under the same name: its old files do not belong to it
+            for f in d.iterdir() if d.exists() else []:
+                if f.is_file() and f.name != "clip.json":
+                    f.unlink()
+            state = {k: v for k, v in state.items() if k in ("status", "notes")}
+        state.update({
+            "id": d.name, "rank": n, "score": 0, "activity": 0, "messages": 0, "trigger": "manual", "signals": {},
+            "peak_s": a, "start_s": a, "end_s": b, "cut_start_s": a, "cut_end_s": b, "cut_auto": False, "source_range": [a, b],
+            "part": n if len(segments) > 1 else None, "parts": len(segments) if len(segments) > 1 else None, "part_label": bool(part_label),
+            "vod_url": source.url, "platform": source.platform, "channel": meta.get("channel", ""),
+            "channel_handle": meta.get("channel_id", "") if source.platform == "youtube" else "",
+            "source_url": meta.get("channel_url") or source.url, "stream_title": meta.get("title", ""),
+        })
+        state.setdefault("status", "candidate")
+        write_json(d / "clip.json", state)
+        ids.append(d.name)
+    log.info("%d clip(s) to make from %s to %s of %s", len(ids), format_time(segments[0][0]), format_time(segments[-1][1]), meta.get("title") or source.url)
+    failed: list[str] = []
+    stage_fetch(url, cfg, only=ids, failed=failed)
+    stage_transcribe(url, cfg, only=ids, failed=failed)
+    stage_write(cfg, url, only=ids)
+    made = stage_render(url, cfg, only=ids, failed=failed)
+    if failed:
+        log.warning("%d draft(s) made; %d could not be made and show their reason on the review page: %s", len(made), len(set(failed)), ", ".join(sorted(set(failed))))
+    return made
 
 
 def stage_fetch(url: str, cfg: Config, only: list[str] | None = None, failed: list[str] | None = None) -> list[Path]:

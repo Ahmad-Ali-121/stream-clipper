@@ -41,6 +41,15 @@ def fetch_meta(source: Source, work: Path, cfg: Config) -> dict:
     out = work / "meta.json"
     if done(out):
         return json.loads(out.read_text(encoding="utf-8"))
+    if source.platform == "local":
+        info = probe(Path(source.url), cfg)
+        meta = {
+            "url": source.url, "platform": "local", "video_id": source.video_id, "title": Path(source.url).stem,
+            "channel": "", "channel_id": "", "channel_url": "", "duration_s": info["duration_s"], "is_live": False,
+            "started_at": None, "width": info["width"], "height": info["height"],
+        }
+        write_json(out, meta)
+        return meta
     proc = run(
         _ytdlp(cfg) + ["-J", "--skip-download", source.url],
         timeout_s=180,
@@ -72,6 +81,8 @@ def fetch_meta(source: Source, work: Path, cfg: Config) -> dict:
 def fetch_chat(source: Source, work: Path, cfg: Config, refresh: bool = False) -> Path:
     """Download the full chat log to chat.json. ``refresh`` re-downloads (use while a stream is still live)."""
     out = work / "chat.json"
+    if source.platform == "local":
+        raise NoChatError("a video file on this computer has no chat")
     if done(out) and not refresh:
         return out
     tmp_dir = cfg.data_dir / "tmp"
@@ -123,6 +134,16 @@ def fetch_range(source: Source, start_s: float, end_s: float, out: Path, cfg: Co
         part.unlink()
     start_s = max(0.0, start_s)
     ffmpeg = find_tool("ffmpeg", cfg.data_dir)
+    if source.platform == "local":
+        # Re-encoded rather than copied: screen recordings have few key frames, and a copy could start seconds off.
+        run([ffmpeg, "-hide_banner", "-v", "error", "-y", "-ss", f"{start_s:.3f}", "-i", source.url, "-t", f"{end_s - start_s:.3f}",
+             "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+             "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(part)],
+            timeout_s=cfg.fetch.timeout_s, what="cutting the range out of the video file")
+        if not done(part):
+            raise ToolError("cutting the range out of the video file produced nothing")
+        os.replace(part, out)
+        return out
     if source.platform == "twitch":
         cmd = [
             find_tool("TwitchDownloaderCLI", cfg.data_dir), "videodownload",

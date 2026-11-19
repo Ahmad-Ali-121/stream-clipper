@@ -210,6 +210,12 @@ def render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str 
         overlays.append(Overlay(credit, 0.0, duration, "Credit"))
     if state.get("disclosure"):
         overlays.append(Overlay(r.disclosure_text, 0.0, min(r.disclosure_seconds, duration), "Disclosure"))
+    part, parts = int(state.get("part") or 0), int(state.get("parts") or 0)
+    if part and parts > 1 and state.get("part_label", True):
+        # Viewers who land on part 2 go looking for part 1, and those on part 1 wait for the next: say which this is.
+        overlays.append(Overlay(f"Part {part}", 0.0, duration, "Part"))
+        if part < parts and duration > 8:
+            overlays.append(Overlay(f"Part {part + 1} next", max(0.0, duration - 3.0), duration, "PartNext", pop=r.opening))
     top_h = _even(r.height * r.split_top)
     # In the split layout the hook sits on the seam between facecam and gameplay, not over the face.
     hook_margin = top_h - 60 if layout == "split" else 170

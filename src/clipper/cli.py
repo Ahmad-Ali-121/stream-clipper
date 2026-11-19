@@ -225,6 +225,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_cut(args: argparse.Namespace) -> int:
+    from .pipeline import parse_clock, stage_cut
+
+    start = parse_clock(args.start)
+    end = parse_clock(args.end) if args.end else (start + parse_clock(args.length) if args.length else None)
+    made = stage_cut(args.source, load_config(args.config), start_s=start, end_s=end, parts=args.parts,
+                     part_s=parse_clock(args.part_seconds) if args.part_seconds else None, part_label=not args.no_part_label)
+    for video in made:
+        print(f"DRAFT  {video}")
+    print(f"{len(made)} draft(s) ready. Review them on the page.")
+    return 0
+
+
 def _cmd_status(args: argparse.Namespace) -> int:
     from .pipeline import open_work, select_clips
     from .work import read_json
@@ -349,6 +362,16 @@ def build_parser() -> argparse.ArgumentParser:
     ru.add_argument("--ai", action="store_true", help="also let AI read the whole stream's speech and pick moments (slow; needs a Claude key)")
     ru.add_argument("--refresh", action="store_true", help="re-download chat (stream still live)")
     ru.set_defaults(func=_cmd_run)
+
+    cu = sub.add_parser("cut", help="make clips from a range you choose in a video link or a video file, whole or in numbered parts")
+    cu.add_argument("source", help="a YouTube or Twitch video link, or the path of a video file on this computer")
+    cu.add_argument("--start", default="0", help="where to start: hours:minutes:seconds, minutes:seconds or seconds (default: the beginning)")
+    cu.add_argument("--end", help="where to stop (default: the end of the video)")
+    cu.add_argument("--length", help="how long, instead of --end")
+    cu.add_argument("--parts", type=int, default=1, help="split the range into this many equal parts")
+    cu.add_argument("--part-seconds", help="or: split it into parts of this length")
+    cu.add_argument("--no-part-label", action="store_true", help="do not show Part 1, Part 2 ... on the videos")
+    cu.set_defaults(func=_cmd_cut)
 
     st = sub.add_parser("status", help="list a stream's clips and what exists for each")
     st.add_argument("url")

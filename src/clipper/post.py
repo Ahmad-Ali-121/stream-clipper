@@ -47,6 +47,8 @@ def build_tags(state: dict, brief: Brief | None) -> list[str]:
 def build_caption(state: dict, brief: Brief | None) -> tuple[str, str, list[str]]:
     """(title, description, tags) for this clip, with required campaign text included."""
     title = (state.get("title") or state.get("hook") or f"{state.get('channel', 'Stream')} clip").strip()
+    if state.get("part") and int(state.get("parts") or 0) > 1 and f"part {state['part']}" not in title.lower():
+        title = f"{title} (Part {state['part']})"
     description = (state.get("description") or "").strip()
     credit = f"Clip from {state.get('channel')}'s stream: {state.get('source_url')}" if state.get("channel") else ""
     for phrase in brief.required_text if brief else []:

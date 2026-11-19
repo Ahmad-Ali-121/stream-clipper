@@ -189,6 +189,9 @@ def build_ass(
             "Style: Shape,Arial,20,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
             f"Style: Credit,{s.font},{credit_size},&H30FFFFFF,&H30FFFFFF,&H40000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,0,2,40,40,70,1",
             f"Style: Disclosure,{s.font},{credit_size},&H00FFFFFF,&H00FFFFFF,&H60000000,&H60000000,-1,0,0,0,100,100,0,0,3,8,0,7,40,40,60,1",
+            # "PART 2" in the top right corner for the whole clip, and "PART 3 NEXT" near the bottom at the end.
+            f"Style: Part,{s.font},{credit_size + 14},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,10,0,9,40,40,64,1",
+            f"Style: PartNext,{s.font},{hook_size},&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,14,0,2,90,90,250,1",
             "",
             "[Events]",
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -199,12 +202,12 @@ def build_ass(
         for ev in build_events(words, s)
     ]
     for ov in overlays:
-        if ov.style not in ("Hook", "HookB", "Credit", "Disclosure"):
+        if ov.style not in ("Hook", "HookB", "Credit", "Disclosure", "Part", "PartNext"):
             raise ValueError(f"unknown overlay style {ov.style!r}")
         text = clean_text(ov.text)
         if not text or _cs(ov.end) <= _cs(ov.start):
             continue
-        if ov.style in ("Hook", "HookB") and s.uppercase:
+        if ov.style in ("Hook", "HookB", "Part", "PartNext") and s.uppercase:
             text = text.upper()
         # \q0 turns smart line wrapping on for this event (captions themselves never wrap).
         pop = "\\fscx60\\fscy60\\t(0,140,\\fscx109\\fscy109)\\t(140,250,\\fscx100\\fscy100)" if ov.pop else ""

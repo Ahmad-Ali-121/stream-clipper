@@ -96,6 +96,22 @@ Each step has an "Activity log" you can open to see what the program is doing. P
 
 Keep the terminal open while you use the page. The steps below do the same things from the terminal.
 
+### Your own clip: a link or a recording, with the times you choose
+
+Use this when you already know which part you want, or the video has no chat. In step 1 open the **Your own clip** tab.
+
+1. **The video.** Paste a YouTube or Twitch video link, or press **Choose a file from this PC** for a screen recording or any video file. (You can also paste a file's full path.)
+2. **Start and end.** Type hours, minutes and seconds for each. Tick **Until the end of the video** to go to the end.
+3. **One clip or parts.** Leave it on *One clip*, or choose:
+   - *Split into a number of parts*: for example 3 equal parts;
+   - *Split into parts of a set length*: for example 50 seconds each. A short leftover is added to the last part.
+4. Leave **Show "Part 1", "Part 2"…** ticked so each video shows which part it is, and "Part 2 next" at the end of part 1.
+5. Press **Make the clip** (or **Make the parts**).
+
+The drafts appear at the top of the list, in order. Review, approve and make the videos as usual; the titles get "(Part 1)", "(Part 2)" added.
+
+A part can be between 8 seconds and 5 minutes long. A video file can also be searched automatically: in the **Finished stream** tab paste its path and choose sound, picture or AI reading (a file has no chat).
+
 ### YouTube streams, and Urdu or Hindi streamers
 
 **YouTube.** In the channels box type the channel's handle with its @, for example `@channelname`, or paste the address of the live stream. Twitch names and YouTube handles can be mixed: `lacy @channelname`. For a live YouTube stream the clips are cut from the stream itself; nothing is recorded in the background. Moments come from chat only on YouTube.

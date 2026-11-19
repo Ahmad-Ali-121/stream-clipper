@@ -434,6 +434,38 @@ class Control:
             )
         return self.status()
 
+    def start_cut(self, raw: dict) -> dict:
+        """Make clips from a range the person chose (the same as ``clipper cut``), as the one finished-stream job."""
+        from .pipeline import parse_clock, split_range
+        from .sources import parse_source
+
+        source = parse_source(str(raw.get("source") or ""))
+        start = parse_clock(raw.get("start") or 0)
+        end = None if raw.get("to_end") else parse_clock(raw.get("end") or 0)
+        if end is not None and end <= start:
+            raise ValueError("the end time must be after the start time")
+        parts = int(raw.get("parts") or 1)
+        part_s = float(raw.get("part_seconds")) if raw.get("part_seconds") else None
+        if end is not None:
+            split_range(start, end, parts, part_s)  # refuse an impossible split now, with its reason, not in the log later
+        cmd = ["cut", source.url, "--start", f"{start:g}", "--parts", str(parts)]
+        cmd += ["--end", f"{end:g}"] if end is not None else []
+        cmd += ["--part-seconds", f"{part_s:g}"] if part_s else []
+        cmd += ["--no-part-label"] if raw.get("part_label") is False else []
+        with self._lock:
+            if self.running():
+                raise ValueError("another job is still running in this box; wait for it to end or press Stop")
+            self.run_problem, self.run_seen = "", True
+            self.run_log_path.parent.mkdir(parents=True, exist_ok=True)
+            out = self.run_log_path.open("w", encoding="utf-8")
+            out.write(f"{time.strftime('%H:%M:%S')} making your own clip(s) from {source.url}\n")
+            out.flush()
+            self.run_proc = subprocess.Popen(
+                [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())", *cmd],
+                stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(PROJECT_ROOT),
+            )
+        return self.status()
+
     def stop_run(self) -> dict:
         with self._lock:
             if self.running():
