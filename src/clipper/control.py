@@ -48,11 +48,21 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
                 raise ValueError(f"{key} must be on or off")
             out.setdefault("render", {})[key] = value
         elif key == "llm_backend":
+            from .llm import CHOICES
+
+            if value not in CHOICES:
+                raise ValueError(f"the AI connection must be one of: {', '.join(CHOICES)}")
+            out.setdefault("llm", {})["backend"] = value
+        elif key == "llm_prefer":
             from .llm import BACKENDS
 
             if value not in BACKENDS:
-                raise ValueError(f"the AI connection must be one of: {', '.join(BACKENDS)}")
-            out.setdefault("llm", {})["backend"] = value
+                raise ValueError(f"the preferred connection must be one of: {', '.join(BACKENDS)}")
+            out.setdefault("llm", {})["prefer"] = value
+        elif key == "llm_fallback":
+            if not isinstance(value, bool):
+                raise ValueError("llm_fallback must be on or off")
+            out.setdefault("llm", {})["fallback"] = value
         elif key in ("llm_model", "ai_model"):
             from .llm import PRICES
 
@@ -82,6 +92,8 @@ class Control:
         self.run_proc: subprocess.Popen | None = None  # "analyse a finished stream", the same as `clipper run URL`
         self.run_log_path = cfg.data_dir / "run.log"
         self.run_problem = ""
+        self.ai_checking = False
+        self.ai_checked = False  # an automatic check was already started in this session
         self.watch_seen = False
         self.run_seen = False  # a run was started from this page, so its log is worth showing
         self._lock = threading.Lock()
@@ -111,8 +123,39 @@ class Control:
         from . import llm
 
         cfg = self.cfg
-        return {"backend": cfg.llm.backend, "backends": llm.BACKENDS, "model": cfg.llm.model, "stream_model": cfg.ai.model,
-                "models": list(llm.PRICES), "problem": llm.why_unavailable(cfg)}
+        checks = llm.read_checks(cfg)
+        ways = {b: {"name": name, "missing": llm.static_problem(cfg, b), **checks[b]} for b, name in llm.BACKENDS.items()}
+        order = llm.candidates(cfg) if not llm.why_unavailable(cfg) else []
+        if not self.ai_checking and not self.ai_checked and any(not w["missing"] and not w["fresh"] for w in ways.values()):
+            self.start_ai_check()  # nothing recent is known about a connection that could work: find out, once
+        return {"backend": cfg.llm.backend, "backends": llm.CHOICES, "prefer": cfg.llm.prefer, "fallback": cfg.llm.fallback,
+                "model": cfg.llm.model, "stream_model": cfg.ai.model, "models": list(llm.PRICES),
+                "problem": llm.why_unavailable(cfg), "ways": ways, "using": order[0] if order else "", "note": checks["note"],
+                "checking": self.ai_checking}
+
+    def start_ai_check(self) -> dict:
+        """Really try each connection that is set up, in the background."""
+        from . import llm
+
+        with self._lock:
+            if self.ai_checking:
+                return {"checking": True}
+            self.ai_checking = self.ai_checked = True
+
+        def work() -> None:
+            try:
+                cfg = self.reload()
+                llm._remember(cfg, note="")
+                for b in llm.BACKENDS:
+                    if not llm.static_problem(cfg, b):
+                        llm.check(cfg, b)
+            except Exception:
+                log.exception("the Claude connection check failed")
+            finally:
+                self.ai_checking = False
+
+        threading.Thread(target=work, daemon=True, name="ai-check").start()
+        return {"checking": True}
 
     def save(self, raw: dict) -> dict:
         save_local(clean_options(raw))

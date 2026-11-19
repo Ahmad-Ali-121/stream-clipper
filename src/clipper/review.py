@@ -253,7 +253,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             if origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
                 return self._send(403, b"not allowed from another site", "text/plain")
             actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch",
-                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run"}
+                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/ai/check": "start_ai_check"}
             if control and self.path in actions:
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")

@@ -168,11 +168,18 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
         <p class="help">Claude writes the opening text and titles, judges each clip, and can read a whole stream. Without it everything still works, with placeholder text.</p>
         <label class="f" for="a-backend">How to reach Claude</label>
         <select id="a-backend" onchange="saveAi()"></select>
+        <div id="a-auto">
+          <label class="f" for="a-prefer">When both work, use first</label>
+          <select id="a-prefer" onchange="saveAi()"></select>
+          <label class="switch"><input type="checkbox" id="a-fallback" onchange="saveAi()"><span><b>Use the other if the first fails</b>For example when your plan's limit is reached. This can move work onto your paid API key; the page says so when it happens.</span></label>
+        </div>
+        <div id="a-ways" style="margin-top:10px"></div>
         <div class="two">
           <div><label class="f" for="a-model">Model for clip text</label><select id="a-model" onchange="saveAi()"></select></div>
           <div><label class="f" for="a-stream">Model for reading streams</label><select id="a-stream" onchange="saveAi()"></select></div>
         </div>
         <div class="note" id="a-note"></div>
+        <div class="btns"><button class="btn" id="b-aicheck" onclick="act2('/api/ai/check')">Check again</button></div>
       </div>
     </section>
 
@@ -237,14 +244,22 @@ function show(s){
       return '<label class="mode" data-k="'+k+'"><input type="radio" name="o-mode" value="'+k+'" onchange="pickMode()"><b>'+m[0]+'</b><span>'+m[1]+'</span><em>'+m[2]+'</em></label>'}).join('');
     $('o-channels').value=s.channels; drawn=true;
     $('a-backend').innerHTML=Object.entries(s.ai.backends).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('');
+    $('a-prefer').innerHTML=Object.entries(s.ai.ways||{}).map(([k,w])=>'<option value="'+k+'">'+esc(w.name)+'</option>').join('');
     const names={'claude-haiku-5-5':'Haiku (fastest, cheapest)','claude-sonnet-5-5':'Sonnet (balanced)','claude-opus-5-5':'Opus (best judgement)','claude-fable-5-2':'Fable (most capable)'};
     const opts=s.ai.models.map(m=>'<option value="'+m+'">'+esc(names[m]||m)+'</option>').join('');
     $('a-model').innerHTML=opts; $('a-stream').innerHTML=opts;
   }
-  if(!document.querySelector('#a-backend:focus,#a-model:focus,#a-stream:focus')){$('a-backend').value=s.ai.backend;$('a-model').value=s.ai.model;$('a-stream').value=s.ai.stream_model}
-  $('a-note').innerHTML=s.ai.problem?'<b>Claude cannot be used yet:</b> '+esc(s.ai.problem)+'.'
-    :(s.ai.backend==='claude-code'?'<b>Ready.</b> Uses the Claude Code command with your own Claude plan. Nothing is billed per use, but it counts towards your plan\'s usage limits.'
-      :'<b>Ready.</b> Uses your API key. Each use is billed and written to the usage log.');
+  if(!document.querySelector('#a-backend:focus,#a-model:focus,#a-stream:focus,#a-prefer:focus')){$('a-backend').value=s.ai.backend;$('a-model').value=s.ai.model;$('a-stream').value=s.ai.stream_model;$('a-prefer').value=s.ai.prefer}
+  $('a-fallback').checked=!!s.ai.fallback; $('a-auto').hidden=s.ai.backend!=='auto';
+  const ways=s.ai.ways||{};
+  $('a-ways').innerHTML=Object.entries(ways).map(([k,w])=>{
+    const st=w.missing?['#98a1b0','Not set up',w.missing]:(w.ok===true?['var(--ok)','Works','']:(w.ok===false?['var(--bad)','Does not work',w.problem]:['var(--warn)',s.ai.checking?'Checking…':'Not checked yet','']));
+    return '<div style="display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:3px 0"><span class="dot" style="background:'+st[0]+';flex:none;position:relative;top:-1px"></span><span><b>'+esc(w.name)+'</b>: '+st[1]+(st[2]?'<br><span style="color:var(--muted)">'+esc(st[2])+'</span>':'')+'</span></div>'}).join('');
+  const use=ways[s.ai.using];
+  $('a-note').innerHTML=(s.ai.problem?'<b>Claude cannot be used yet:</b> '+esc(s.ai.problem)+'.'
+    :'<b>Using now:</b> '+esc(use?use.name:'')+'. '+(s.ai.using==='claude-code'?'Nothing is billed per use, but it counts towards your plan\'s usage limits.':'Each use is billed and written to the usage log.'))
+    +(s.ai.note?'<br><b style="color:var(--warn)">'+esc(s.ai.note)+'</b>':'');
+  $('b-aicheck').disabled=!!s.ai.checking; $('b-aicheck').textContent=s.ai.checking?'Checking…':'Check again';
   const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!r.checked&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
   for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);
   $('o-ab').checked=s.ab_versions; $('o-opening').checked=s.opening;
@@ -272,7 +287,9 @@ async function act(url,body){
 }
 function startWatch(){act('/api/watch/start',{channels:val('o-channels'),mode:mode()})}
 function pickMode(){for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);saveOpts()}
-function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_model:val('a-model'),ai_model:val('a-stream')})}
+function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_prefer:val('a-prefer'),llm_fallback:$('a-fallback').checked,llm_model:val('a-model'),ai_model:val('a-stream')})}
+async function act2(url){if(await post(url))poll1()}
+async function poll1(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){}}
 function saveOpts(){act('/api/options',{mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked})}
 async function poll(){
   let s=null;

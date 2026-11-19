@@ -212,10 +212,66 @@ def test_claude_code_backend_explains_what_is_wrong(tmp_path, monkeypatch):
     cfg = _cli_cfg(tmp_path)
     monkeypatch.setattr(llm.shutil, "which", lambda name: None)
     assert "Install Claude Code" in llm.why_unavailable(cfg)
-    with pytest.raises(llm.LlmUnavailable, match="was not found"):
+    with pytest.raises(llm.LlmUnavailable, match="is not installed"):
         llm.ask(cfg, "claude-haiku-5-5", "s", "u", {}, "t")
     monkeypatch.setattr(llm.shutil, "which", lambda name: "claude")
     monkeypatch.setattr(llm.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
         cmd, 1, stdout=json.dumps({"is_error": True, "result": "Not logged in · Please run /login"}), stderr=""))
     with pytest.raises(llm.LlmUnavailable, match="Not logged in"):
         llm.ask(cfg, "claude-haiku-5-5", "s", "u", {}, "t")
+
+
+def _auto_cfg(tmp_path, monkeypatch):
+    from clipper.config import load_config
+
+    cfg = load_config()
+    cfg.paths.data_dir = str(tmp_path)
+    cfg.llm.backend, cfg.llm.prefer, cfg.llm.fallback = "auto", "claude-code", True
+    monkeypatch.setattr(llm, "load_env", lambda: None)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setattr(llm.shutil, "which", lambda name: "claude")
+    return cfg
+
+
+def test_automatic_uses_the_preferred_connection_and_falls_back_out_loud(tmp_path, monkeypatch):
+    cfg = _auto_cfg(tmp_path, monkeypatch)
+    assert llm.candidates(cfg) == ["claude-code", "api"] and llm.why_unavailable(cfg) == ""
+    calls = []
+    monkeypatch.setattr(llm, "_ask_claude_code", lambda *a: (calls.append("plan"), (_ for _ in ()).throw(llm.LlmUnavailable("usage limit reached")))[1])
+    monkeypatch.setattr(llm, "_ask_api", lambda *a: (calls.append("api"), {"ok": True})[1])
+    assert llm.ask(cfg, "m", "s", "u", {}, "t") == {"ok": True} and calls == ["plan", "api"]
+    checks = llm.read_checks(cfg)
+    assert checks["claude-code"]["ok"] is False and checks["api"]["ok"] is True
+    assert "usage limit reached" in checks["note"] and "was used instead" in checks["note"]
+    # The broken one is now tried last, so the next request does not waste time on it.
+    assert llm.candidates(cfg) == ["api", "claude-code"]
+
+
+def test_fallback_can_be_switched_off(tmp_path, monkeypatch):
+    import pytest
+
+    cfg = _auto_cfg(tmp_path, monkeypatch)
+    cfg.llm.fallback = False
+    calls = []
+    monkeypatch.setattr(llm, "_ask_claude_code", lambda *a: (_ for _ in ()).throw(llm.LlmUnavailable("usage limit reached")))
+    monkeypatch.setattr(llm, "_ask_api", lambda *a: calls.append("api"))
+    with pytest.raises(llm.LlmUnavailable, match="usage limit reached"):
+        llm.ask(cfg, "m", "s", "u", {}, "t")
+    assert calls == []  # the paid key was not touched
+
+
+def test_automatic_with_only_one_connection_set_up(tmp_path, monkeypatch):
+    cfg = _auto_cfg(tmp_path, monkeypatch)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: None)
+    assert llm.candidates(cfg) == ["api"]
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    assert llm.candidates(cfg) == [] and "neither way" in llm.why_unavailable(cfg)
+
+
+def test_a_check_is_remembered_until_the_key_changes(tmp_path, monkeypatch):
+    cfg = _auto_cfg(tmp_path, monkeypatch)
+    monkeypatch.setattr(llm, "_ask_api", lambda *a: (_ for _ in ()).throw(llm.LlmUnavailable("the ANTHROPIC_API_KEY in .env was rejected")))
+    assert llm.check(cfg, "api") == {"ok": False, "problem": "the ANTHROPIC_API_KEY in .env was rejected"}
+    assert llm.read_checks(cfg)["api"]["ok"] is False
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-another")
+    assert llm.read_checks(cfg)["api"]["ok"] is None  # a different key: the old result says nothing about it

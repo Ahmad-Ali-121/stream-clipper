@@ -69,36 +69,120 @@ SCHEMA = {
 
 
 BACKENDS = {"api": "Claude API key (paid per use)", "claude-code": "Claude Code on this computer (uses your Claude plan)"}
+CHOICES = {"auto": "Automatic (use whichever works)", **BACKENDS}
+CHECK_MODEL = "claude-haiku-5-5"  # the cheapest model: a connection check must cost next to nothing
+CHECK_FRESH_S = 6 * 3600
+CHECK_SCHEMA = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"], "additionalProperties": False}
 
 
 class LlmUnavailable(RuntimeError):
     pass
 
 
-def why_unavailable(cfg: Config) -> str:
-    """Why AI cannot be used on this computer right now, in words a person can act on; "" when it can."""
-    if not cfg.llm.enabled:
-        return "AI is switched off (llm.enabled is false in the settings)"
-    if cfg.llm.backend == "claude-code":
+def static_problem(cfg: Config, backend: str) -> str:
+    """Why this connection cannot even be tried on this computer; "" when its pieces are in place."""
+    if backend == "claude-code":
         if not shutil.which("claude"):
-            return ("the Claude Code command was not found on this computer. Install Claude Code, run `claude` once in a terminal "
-                    "and sign in with your own Claude plan, then try again")
+            return ("the Claude Code command is not installed on this computer. Install Claude Code, run `claude` once in a terminal "
+                    "and sign in with your own Claude plan")
         return ""
-    if cfg.llm.backend != "api":
-        return f"llm.backend must be one of {', '.join(BACKENDS)}, not {cfg.llm.backend!r}"
     load_env()
     if not os.environ.get("ANTHROPIC_API_KEY"):
         return "there is no ANTHROPIC_API_KEY in the .env file on this computer"
     return ""
 
 
+def _fingerprint(backend: str) -> str:
+    """Changes when the thing a check was made with changes (another key, another install), so old results are not trusted."""
+    import hashlib
+
+    load_env()
+    what = shutil.which("claude") or "" if backend == "claude-code" else os.environ.get("ANTHROPIC_API_KEY", "")
+    return hashlib.sha256(what.encode()).hexdigest()[:12]
+
+
+def _state_path(cfg: Config):
+    return cfg.data_dir / "ai_check.json"
+
+
+def read_checks(cfg: Config) -> dict:
+    """What is known about each connection: {"api": {"ok", "problem", "at", "fresh"}, "claude-code": {...}, "note": str}."""
+    try:
+        data = json.loads(_state_path(cfg).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    out: dict[str, Any] = {"note": data.get("note", "")}
+    for b in BACKENDS:
+        c = data.get(b) or {}
+        fresh = bool(c) and c.get("id") == _fingerprint(b) and time.time() - float(c.get("at", 0)) < CHECK_FRESH_S
+        out[b] = {"ok": c.get("ok") if fresh else None, "problem": c.get("problem", "") if fresh else "", "at": c.get("at"), "fresh": fresh}
+    return out
+
+
+def _remember(cfg: Config, backend: str | None = None, ok: bool | None = None, problem: str = "", note: str | None = None) -> None:
+    path = _state_path(cfg)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    if backend:
+        data[backend] = {"ok": ok, "problem": problem, "at": time.time(), "id": _fingerprint(backend)}
+    if note is not None:
+        data["note"] = note
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data), encoding="utf-8")
+    tmp.replace(path)
+
+
+def candidates(cfg: Config) -> list[str]:
+    """The connections to try, in order. One for a fixed choice; for "auto", the preferred one first,
+    with any that a recent check found broken moved to the back."""
+    choice = cfg.llm.backend
+    if choice in BACKENDS:
+        return [choice]
+    order = [cfg.llm.prefer] + [b for b in BACKENDS if b != cfg.llm.prefer]
+    order = [b for b in order if b in BACKENDS and not static_problem(cfg, b)]
+    checks = read_checks(cfg)
+    return sorted(order, key=lambda b: checks[b]["ok"] is False)  # stable: keeps the preference among equals
+
+
+def why_unavailable(cfg: Config) -> str:
+    """Why AI cannot be used on this computer right now, in words a person can act on; "" when it can."""
+    if not cfg.llm.enabled:
+        return "AI is switched off (llm.enabled is false in the settings)"
+    if cfg.llm.backend not in CHOICES:
+        return f"llm.backend must be one of {', '.join(CHOICES)}, not {cfg.llm.backend!r}"
+    if cfg.llm.backend in BACKENDS:
+        return static_problem(cfg, cfg.llm.backend)
+    if candidates(cfg):
+        return ""
+    return "neither way of reaching Claude is set up: " + "; and ".join(static_problem(cfg, b) for b in BACKENDS)
+
+
 def available(cfg: Config) -> bool:
     return not why_unavailable(cfg)
+
+
+def check(cfg: Config, backend: str) -> dict:
+    """Really try one connection with a one-word request and remember the answer. Returns {"ok", "problem"}."""
+    problem = static_problem(cfg, backend)
+    if not problem:
+        try:
+            run = _ask_claude_code if backend == "claude-code" else _ask_api
+            run(cfg, CHECK_MODEL, "You reply in JSON only.", "Set ok to true.", CHECK_SCHEMA, "connection check")
+        except LlmUnavailable as e:
+            problem = str(e)
+    _remember(cfg, backend, ok=not problem, problem=problem)
+    log.info("Claude connection check, %s: %s", BACKENDS[backend], "works" if not problem else f"does not work ({problem})")
+    return {"ok": not problem, "problem": problem}
 
 
 def _ask_claude_code(cfg: Config, model: str, system: str, user: str, schema: dict, what: str) -> dict:
     """The same question through the Claude Code command, signed in with this person's own plan."""
     exe = shutil.which("claude")
+    if not exe:
+        raise LlmUnavailable(static_problem(cfg, "claude-code"))
     folder = cfg.data_dir / "tmp" / "claude-code"  # an empty folder: no project files, settings or hooks get picked up
     folder.mkdir(parents=True, exist_ok=True)
     prompt_file = folder / "system.txt"
@@ -169,12 +253,39 @@ def clip_prompt(state: dict, trend_tags: list[str]) -> str:
 
 
 def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str) -> dict:
-    """One question to Claude with a JSON answer in the given shape. Raises LlmUnavailable with the reason when it cannot."""
+    """One question to Claude with a JSON answer in the given shape. Raises LlmUnavailable with the reason when it cannot.
+
+    With llm.backend "auto" the preferred connection is tried first; if it fails and llm.fallback is on,
+    the other one is used and that is said out loud, because it can move work onto a paid key.
+    """
     problem = why_unavailable(cfg)
     if problem:
         raise LlmUnavailable(problem)
-    if cfg.llm.backend == "claude-code":
-        return _ask_claude_code(cfg, model, system, user, schema, what)
+    order = candidates(cfg)
+    if not cfg.llm.fallback:
+        order = order[:1]
+    failures: list[str] = []
+    for n, backend in enumerate(order):
+        try:
+            data = (_ask_claude_code if backend == "claude-code" else _ask_api)(cfg, model, system, user, schema, what)
+        except LlmUnavailable as e:
+            _remember(cfg, backend, ok=False, problem=str(e))
+            failures.append(f"{BACKENDS[backend]}: {e}")
+            if n + 1 < len(order):
+                note = (f"{time.strftime('%H:%M')} {BACKENDS[backend]} did not work ({e}), so {BACKENDS[order[n + 1]]} was used instead.")
+                log.warning("AI FALLBACK: %s", note)
+                _remember(cfg, note=note)
+            continue
+        _remember(cfg, backend, ok=True)
+        return data
+    raise LlmUnavailable(" | ".join(failures))
+
+
+def _ask_api(cfg: Config, model: str, system: str, user: str, schema: dict, what: str) -> dict:
+    """The question through the Claude API, billed to the key in .env."""
+    problem = static_problem(cfg, "api")
+    if problem:
+        raise LlmUnavailable(problem)
     import anthropic
 
     client = anthropic.Anthropic()

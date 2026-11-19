@@ -140,7 +140,9 @@ class TrendSettings:
 @dataclass
 class LlmSettings:
     enabled: bool = True  # only takes effect when the chosen backend can be reached
-    backend: str = "api"  # "api" = Claude API key in .env, paid per use; "claude-code" = the Claude Code command on this PC, using your own Claude plan
+    backend: str = "auto"  # "auto" = whichever works; "api" = Claude API key in .env, paid per use; "claude-code" = the Claude Code command on this PC, using your own Claude plan
+    prefer: str = "claude-code"  # with "auto" and both available, the one tried first
+    fallback: bool = True  # with "auto": if the first fails (a plan limit, a rejected key), use the other and say so
     model: str = "claude-opus-5-5"  # "claude-haiku-5-5" costs about 40 times less and is usually enough here
     effort: str = "low"
 
