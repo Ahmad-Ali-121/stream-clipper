@@ -78,6 +78,12 @@ def stream_model_name(cfg: Config) -> str:
     return cfg.transcribe.model if hw.whisper_device(cfg)[0] == "cuda" else "small"
 
 
+def _speech_language(cfg: Config) -> str | None:
+    from .transcribe import speech_language
+
+    return speech_language(cfg)
+
+
 def read_rows(path: Path) -> list[dict]:
     rows = []
     if path.exists():
@@ -122,7 +128,7 @@ def transcribe_stream(url: str, work: Path, cfg: Config, duration_s: float | Non
             if not raw:
                 break
             audio = np.frombuffer(raw[: len(raw) // 2 * 2], dtype=np.int16).astype(np.float32) / 32768.0
-            segments, _info = model.transcribe(audio, language=None if cfg.transcribe.language == "auto" else cfg.transcribe.language, beam_size=1, vad_filter=False,
+            segments, _info = model.transcribe(audio, language=_speech_language(cfg), beam_size=1, vad_filter=False,
                                                condition_on_previous_text=False, word_timestamps=False)
             with out.open("a", encoding="utf-8") as fh:
                 for seg in segments:

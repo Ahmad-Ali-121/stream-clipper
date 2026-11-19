@@ -61,9 +61,9 @@ def test_roman_captions_keep_one_word_per_word(monkeypatch):
     monkeypatch.setattr(llm, "ask", lambda *a, **k: {"words": ["bhai", "game"]})
     out = transcribe.caption_script([dict(w) for w in words], cfg)
     assert [w["word"] for w in out] == ["bhai", "game"] and out[0]["native"] == "भाई" and out[1]["start"] == 0.5
-    # A wrong count would shift every caption off its word: refuse it and keep the heard letters.
+    # A wrong count would shift every caption off its word: refuse it and use the fixed rules, still one word per word.
     monkeypatch.setattr(llm, "ask", lambda *a, **k: {"words": ["bhai"]})
-    assert [w["word"] for w in transcribe.caption_script([dict(w) for w in words], cfg)] == ["भाई", "गेम"]
+    assert [w["word"] for w in transcribe.caption_script([dict(w) for w in words], cfg)] == ["bhai", "gem"]
     # English speech, or captions set to the script's own letters: nothing is asked.
     monkeypatch.setattr(llm, "ask", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not be called")))
     assert transcribe.caption_script([{"word": "hello", "start": 0, "end": 1}], cfg)[0]["word"] == "hello"
@@ -84,3 +84,25 @@ def test_credit_line_for_youtube_uses_the_handle():
     assert credit_text({"platform": "youtube", "channel": "Live Insaan", "channel_handle": "@liveinsaan"}) == "Clip: youtube.com/@liveinsaan"
     assert credit_text({"platform": "youtube", "channel": "Live Insaan"}) == "Clip: Live Insaan on YouTube"
     assert credit_text({"platform": "twitch", "channel": "Lacy"}) == "Clip: twitch.tv/Lacy"
+
+
+def test_fixed_rules_give_readable_roman_letters_without_claude():
+    from clipper.transcribe import roman_fallback
+
+    heard = "भाई क्या नहीं यार कमाल ज़िंदगी फ़ोन गया है".split()
+    assert [roman_fallback(w) for w in heard] == ["bhai", "kya", "nahin", "yar", "kamal", "zindagi", "fon", "gaya", "hai"]
+    assert roman_fallback("hello") == "hello" and roman_fallback("२०") == "20"
+
+
+def test_urdu_wanted_in_roman_letters_is_heard_as_hindi():
+    from clipper.transcribe import speech_language
+
+    cfg = load_config()
+    cfg.transcribe.language, cfg.captions.script = "ur", "roman"
+    assert speech_language(cfg) == "hi"       # Hindi letters carry the vowels that Latin letters need
+    cfg.captions.script = "native"
+    assert speech_language(cfg) == "ur"       # asked for Urdu letters: hear it as Urdu
+    cfg.transcribe.language = "auto"
+    assert speech_language(cfg) is None
+    cfg.transcribe.language = "en"
+    assert speech_language(cfg) == "en"

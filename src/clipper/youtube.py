@@ -204,6 +204,9 @@ class YouTubeWindow:
     """
 
     REFRESH_S = 1800  # feed addresses expire after some hours; ask for fresh ones well before that
+    # A live feed sometimes skips a few seconds (the encoder restarts, an advert marker). A clip may run across
+    # such a skip: it just jumps there, as it did for viewers. A longer hole means the moment is really missing.
+    SKIP_OK_S = 6.0
 
     def __init__(self, url: str, stream_start: float, cfg: Config, label: str = "") -> None:
         self.url, self.stream_start, self.cfg, self.channel = url, stream_start, cfg, label or url
@@ -253,7 +256,7 @@ class YouTubeWindow:
         import shutil
 
         rows, sound = self._rows()
-        picked = choose_pieces(rows, start_s, end_s)
+        picked = choose_pieces(rows, start_s, end_s, slack=self.SKIP_OK_S)
         out.parent.mkdir(parents=True, exist_ok=True)
         folder = out.with_name(out.stem + ".pieces")
         shutil.rmtree(folder, ignore_errors=True)
@@ -263,6 +266,11 @@ class YouTubeWindow:
             head = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-TARGETDURATION:3", "#EXT-X-MEDIA-SEQUENCE:0"]
             lists = {"v": list(head), "a": list(head)}
             for n, row in enumerate(picked):
+                if n and row["t"] - (picked[n - 1]["t"] + picked[n - 1]["d"]) > 0.5:
+                    for kind in ("v", "a"):  # tell FFmpeg the clock jumps here, so picture and sound stay in step
+                        lists[kind].append("#EXT-X-DISCONTINUITY")
+                    log.info("%s: the live feed skips %.1f s inside this clip; the clip jumps there too", self.channel,
+                             row["t"] - (picked[n - 1]["t"] + picked[n - 1]["d"]))
                 for kind, piece, ext in (("v", row["piece"], "ts"), ("a", sound[row["key"]], "aac")):
                     data = b""
                     for attempt in range(3):

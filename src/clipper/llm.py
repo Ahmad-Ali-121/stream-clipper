@@ -355,8 +355,9 @@ def _with_images(user: str, images: list | None):
 
 TEXT_LANGUAGES = {
     "English": "",
-    "Roman Urdu": "Roman Urdu: Urdu written in Latin letters, the way Pakistani viewers type in chat (for example \"Bhai ne kamaal kar diya\"). "
-                  "Gaming words everyone says in English stay English.",
+    "Roman Urdu": "Roman Urdu mixed with English: Urdu written in Latin letters, the way Pakistani viewers type in chat (for example "
+                  "\"Bhai ne kamaal kar diya\"), with English words kept in English wherever people say them in English "
+                  "(game, mission, police, stream, level). Never use Urdu or Hindi letters.",
     "Hinglish": "Hinglish: Hindi written in Latin letters and mixed with English, the way Indian viewers type in chat "
                 "(for example \"Bhai ne toh kamaal kar diya\").",
     "Urdu": "Urdu, in Urdu script.",
@@ -398,7 +399,7 @@ def romanize(words: list[str], cfg: Config, chunk: int = 150) -> list[str]:
         data = ask(cfg, cfg.llm.model, ROMAN_SYSTEM, json.dumps(part, ensure_ascii=False), ROMAN_SCHEMA, "captions in Latin letters")
         got = [str(x).strip() for x in (data.get("words") or [])]
         if len(got) != len(part) or not all(got):
-            raise LlmUnavailable(f"Claude returned {len(got)} words for {len(part)}; the captions stay in their own letters")
+            raise LlmUnavailable(f"Claude returned {len(got)} words for {len(part)}; that reply cannot be used")
         out += got
     return out
 

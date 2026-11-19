@@ -93,7 +93,7 @@ def _local(path: Path, cfg: Config) -> list[dict]:
     t = cfg.transcribe
     segments, _info = load_model(cfg).transcribe(
         _decode_audio(path, cfg),
-        language=None if t.language == "auto" else t.language,
+        language=speech_language(cfg),
         beam_size=5,
         vad_filter=t.vad_filter,
         vad_parameters=dict(min_silence_duration_ms=500) if t.vad_filter else None,
@@ -163,8 +163,78 @@ def _log_usage(cfg: Config, entry: dict) -> None:
     log.info("paid API use: %s", entry)
 
 
+def speech_language(cfg: Config) -> str | None:
+    """The language handed to the speech model; None lets it detect.
+
+    Urdu speech that is wanted in Latin letters is heard as Hindi on purpose. Spoken Urdu and Hindi are the same
+    language, but Hindi letters spell out every vowel and Urdu letters leave most of them out, so Hindi letters
+    turn into readable Latin letters ("bhai", "nahin") and Urdu letters would turn into "bhy", "nhyn".
+    """
+    lang = cfg.transcribe.language
+    if lang == "auto":
+        return None
+    return "hi" if lang == "ur" and cfg.captions.script == "roman" else lang
+
+
+_DEV_CONSONANTS = {
+    "क": "k", "ख": "kh", "ग": "g", "घ": "gh", "ङ": "n", "च": "ch", "छ": "chh", "ज": "j", "झ": "jh", "ञ": "n",
+    "ट": "t", "ठ": "th", "ड": "d", "ढ": "dh", "ण": "n", "त": "t", "थ": "th", "द": "d", "ध": "dh", "न": "n",
+    "प": "p", "फ": "ph", "ब": "b", "भ": "bh", "म": "m", "य": "y", "र": "r", "ल": "l", "व": "v", "श": "sh", "ष": "sh",
+    "स": "s", "ह": "h", "क़": "q", "ख़": "kh", "ग़": "gh", "ज़": "z", "ड़": "r", "ढ़": "rh", "फ़": "f", "य़": "y",
+}
+_DEV_NUKTA = {"क": "q", "ख": "kh", "ग": "gh", "ज": "z", "ड": "r", "ढ": "rh", "फ": "f"}
+_DEV_VOWELS = {"अ": "a", "आ": "a", "इ": "i", "ई": "i", "उ": "u", "ऊ": "u", "ए": "e", "ऐ": "ai", "ओ": "o", "औ": "au", "ऋ": "ri", "ऑ": "o"}
+_DEV_SIGNS = {"ा": "a", "ि": "i", "ी": "i", "ु": "u", "ू": "u", "े": "e", "ै": "ai", "ो": "o", "ौ": "au", "ृ": "ri", "ॉ": "o", "ॅ": "e"}
+_DEV_OTHER = {"ं": "n", "ँ": "n", "ः": "h", "।": ".", "॥": ".", "ॐ": "om"}
+_DEV_DIGITS = {chr(0x0966 + i): str(i) for i in range(10)}
+
+
+def roman_fallback(word: str) -> str:
+    """A Hindi-letter word in Latin letters by fixed rules, for when Claude cannot be asked.
+
+    Rough but readable: "भाई" -> "bhai", "नहीं" -> "nahin", "क्या" -> "kya". It cannot know that "गेम" is the
+    English word "game" (it gives "gem"); Claude does that part better.
+    """
+    out: list[str] = []
+    chars = list(word)
+    i = 0
+    while i < len(chars):
+        ch = chars[i]
+        nxt = chars[i + 1] if i + 1 < len(chars) else ""
+        if ch in _DEV_CONSONANTS:
+            base = _DEV_CONSONANTS[ch]
+            if nxt == "़":  # a dot under the letter changes its sound (ज़ = z, फ़ = f)
+                base = _DEV_NUKTA.get(ch, base)
+                i += 1
+                nxt = chars[i + 1] if i + 1 < len(chars) else ""
+            out.append(base)
+            if nxt == "्":  # joined to the next consonant: no vowel between them
+                i += 1
+            elif nxt in _DEV_SIGNS:
+                out.append(_DEV_SIGNS[nxt])
+                i += 1
+            elif nxt and (nxt in _DEV_CONSONANTS or nxt in _DEV_OTHER):
+                out.append("a")  # the unwritten "a" inside a word; at the end of a word it is silent
+        elif ch in _DEV_VOWELS:
+            out.append(_DEV_VOWELS[ch])
+        elif ch in _DEV_SIGNS:
+            out.append(_DEV_SIGNS[ch])
+        elif ch in _DEV_OTHER:
+            out.append(_DEV_OTHER[ch])
+        elif ch in _DEV_DIGITS:
+            out.append(_DEV_DIGITS[ch])
+        elif ch not in ("़", "्", "\u200d", "\u200c"):
+            out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def caption_script(words: list[dict], cfg: Config) -> list[dict]:
-    """Urdu or Hindi words in Latin letters when captions.script is "roman"; the heard spelling is kept as "native"."""
+    """Urdu or Hindi words in Latin letters when captions.script is "roman"; the heard spelling is kept as "native".
+
+    Claude does it when it can be reached (it also restores English words). Without it, fixed rules are used,
+    so captions are never left in letters the viewer was not meant to see.
+    """
     from .captions import script_font
 
     if cfg.captions.script != "roman" or not script_font(w["word"] for w in words):
@@ -174,9 +244,9 @@ def caption_script(words: list[dict], cfg: Config) -> list[dict]:
     try:
         roman = llm.romanize([w["word"] for w in words], cfg)
     except llm.LlmUnavailable as e:
-        log.warning("captions stay in their own letters, not Latin letters: %s", e)
-        return words
-    return [{**w, "native": w["word"], "word": r} for w, r in zip(words, roman)]
+        log.warning("captions were put into Latin letters by fixed rules, which is rougher than Claude's version: %s", e)
+        roman = [roman_fallback(w["word"]) for w in words]
+    return [{**w, "native": w["word"], "word": r or w["word"]} for w, r in zip(words, roman)]
 
 
 def transcribe_file(path: Path, cfg: Config) -> list[dict]:

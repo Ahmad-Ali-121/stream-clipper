@@ -141,7 +141,7 @@ captions:
   active_scale: 112         # percent size of the active word
   margin_v: 520             # distance of the caption from the bottom edge, in pixels
   uppercase: true
-  script: native            # Urdu or Hindi speech only: native = Urdu / Devanagari letters; roman = Latin letters ("bhai ne kamaal kar diya"), needs Claude
+  script: roman             # Urdu or Hindi speech only: roman = Latin letters ("bhai ne kamaal kar diya"), best with Claude; native = Urdu / Devanagari letters
   max_words: 3              # words on screen at once
   max_chars: 18
   max_gap_s: 0.6            # a pause longer than this starts a new caption line

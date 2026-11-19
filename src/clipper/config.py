@@ -64,7 +64,7 @@ class MomentSettings:
 @dataclass
 class CaptionSettings:
     preset: str = "bold"  # the look chosen on the page; "custom" when the values below were set by hand
-    script: str = "native"  # for Urdu or Hindi speech: "native" = Urdu or Devanagari letters, "roman" = Latin letters (needs Claude)
+    script: str = "roman"  # for Urdu or Hindi speech: "roman" = Latin letters ("bhai ne kamaal kar diya"), "native" = Urdu or Devanagari letters
     play_res_x: int = 1080
     play_res_y: int = 1920
     font: str = "Arial Black"

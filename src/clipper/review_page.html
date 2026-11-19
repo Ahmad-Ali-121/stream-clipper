@@ -191,9 +191,9 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <label class="f" for="l-speech">What the streamer speaks</label>
           <select id="l-speech" onchange="saveLang()"><option value="en">English</option><option value="ur">Urdu</option><option value="hi">Hindi</option><option value="auto">Detect it (can guess wrong on mixed speech)</option></select>
           <label class="f" for="l-script">Captions for Urdu or Hindi speech</label>
-          <select id="l-script" onchange="saveLang()"><option value="roman">Latin letters: "bhai ne kamaal kar diya" (needs Claude)</option><option value="native">Urdu or Hindi letters</option></select>
+          <select id="l-script" onchange="saveLang()"><option value="roman">Latin letters: "bhai ne kamaal kar diya" (best with Claude)</option><option value="native">Urdu or Hindi letters</option></select>
           <label class="f" for="l-text">Opening text and titles written in</label>
-          <select id="l-text" onchange="saveLang()"><option>English</option><option>Roman Urdu</option><option>Hinglish</option><option>Urdu</option><option>Hindi</option></select>
+          <select id="l-text" onchange="saveLang()"><option value="Roman Urdu">Roman Urdu mixed with English</option><option>English</option><option value="Hinglish">Hinglish (Roman Hindi mixed with English)</option><option value="Urdu">Urdu letters</option><option value="Hindi">Hindi letters</option></select>
           <p class="help" style="margin-top:6px">Applies to clips made from now on. The narrator in explainer videos speaks English.</p>
         </details>
         <div id="tab-live">
@@ -208,8 +208,8 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
         </div>
         <div id="tab-vod" hidden>
           <p class="help">Paste the link of a stream that has ended. Its chat replay is scored, its sound and picture can be measured too, and only the best moments are downloaded and turned into drafts.</p>
-          <label class="f" for="r-url">Twitch video link</label>
-          <input type="text" id="r-url" placeholder="https://www.twitch.tv/videos/1234567890">
+          <label class="f" for="r-url">Link to the finished stream (Twitch or YouTube)</label>
+          <input type="text" id="r-url" placeholder="https://www.twitch.tv/videos/1234567890  or  https://www.youtube.com/watch?v=...">
           <label class="f" for="r-sig">What should find the moments?</label>
           <select id="r-sig">
             <option value="chat">Chat only (fastest, almost no internet)</option>
@@ -362,7 +362,7 @@ function show(s){
       cp.style.fontFamily='"'+p.font+'",Arial,sans-serif'; cp.style.fontWeight=900; cp.style.webkitTextStroke=Math.max(1,p.outline/4)+'px #000'; cp.style.paintOrder='stroke fill';
       cp.innerHTML='<span style="color:#'+p.text_color+'">'+t[0]+' </span><span style="color:#'+p.active_color+';font-size:112%">'+t[1]+'</span><span style="color:#'+p.text_color+'"> '+t[2]+'</span>'}
     else cp.textContent='Custom style from the settings file'}
-  if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'native';$('l-text').value=s.text_language||'English'}
+  if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'roman';$('l-text').value=s.text_language||'English'}
   $('lang-sum').textContent=({en:'English',ur:'Urdu',hi:'Hindi',auto:'detected automatically'})[s.speech_language||'en']+((s.speech_language||'en')!=='en'?', captions in '+(s.caption_script==='roman'?'Latin letters':'its own letters')+', text in '+(s.text_language||'English'):'');
   if(document.activeElement!==$('o-camp'))$('o-camp').value=s.campaign||'';
   const cc=(s.campaigns||[]).find(c=>c.id===s.campaign);
@@ -414,7 +414,10 @@ function drawHealth(h){
   logTo('hlog',h.maint.lines);
 }
 async function hAct(url,ask){if(ask&&!confirm(ask))return;act(url,{})}
-function saveLang(){act('/api/options',{speech_language:val('l-speech'),caption_script:val('l-script'),text_language:val('l-text')})}
+function saveLang(){
+  /* Choosing Urdu or Hindi for the first time: write the text in Roman letters too, which is what most people want. */
+  if(val('l-speech')!=='en'&&(last.speech_language||'en')==='en'&&val('l-text')==='English'){$('l-text').value=val('l-speech')==='hi'?'Hinglish':'Roman Urdu'}
+  act('/api/options',{speech_language:val('l-speech'),caption_script:val('l-script'),text_language:val('l-text')})}
 function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_prefer:val('a-prefer'),llm_fallback:$('a-fallback').checked,llm_model:val('a-model'),ai_model:val('a-stream')})}
 async function act2(url){if(await post(url))poll1()}
 async function poll1(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){}}

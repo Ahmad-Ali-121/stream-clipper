@@ -72,7 +72,7 @@ def parse_playlist(text: str, base_url: str = "") -> list[Piece]:
     return out
 
 
-def choose_pieces(pieces: list[dict], start_s: float, end_s: float) -> list[dict]:
+def choose_pieces(pieces: list[dict], start_s: float, end_s: float, slack: float = JOIN_SLACK_S) -> list[dict]:
     """The stored pieces that cover [start_s, end_s] of the stream, or a ToolError saying why they do not.
 
     Each piece is {"t": stream seconds, "d": seconds, "file": path}. Adverts are never stored,
@@ -81,16 +81,16 @@ def choose_pieces(pieces: list[dict], start_s: float, end_s: float) -> list[dict
     have = sorted(pieces, key=lambda p: p["t"])
     if not have:
         raise ToolError("the live buffer is still empty; nothing to cut yet")
-    if start_s < have[0]["t"] - JOIN_SLACK_S:
+    if start_s < have[0]["t"] - slack:
         raise ToolError("this moment is no longer in the live buffer (it only keeps the last few minutes)")
     picked = [p for p in have if p["t"] + p["d"] > start_s and p["t"] < end_s]
-    if have[-1]["t"] + have[-1]["d"] < end_s - JOIN_SLACK_S:
+    if have[-1]["t"] + have[-1]["d"] < end_s - slack:
         raise ToolError("the live buffer has not reached the end of this moment yet")
     missing = ToolError("part of this moment is missing from the live feed (an advert break or a dropped connection)")
-    if not picked or picked[0]["t"] > start_s + JOIN_SLACK_S or picked[-1]["t"] + picked[-1]["d"] < end_s - JOIN_SLACK_S:
+    if not picked or picked[0]["t"] > start_s + slack or picked[-1]["t"] + picked[-1]["d"] < end_s - slack:
         raise missing
     for a, b in zip(picked, picked[1:]):
-        if b["t"] - (a["t"] + a["d"]) > JOIN_SLACK_S:
+        if b["t"] - (a["t"] + a["d"]) > slack:
             raise missing
     return picked
 
