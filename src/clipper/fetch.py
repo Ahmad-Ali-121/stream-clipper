@@ -137,7 +137,7 @@ def fetch_range(source: Source, start_s: float, end_s: float, out: Path, cfg: Co
     if source.platform == "local":
         # Re-encoded rather than copied: screen recordings have few key frames, and a copy could start seconds off.
         run([ffmpeg, "-hide_banner", "-v", "error", "-y", "-ss", f"{start_s:.3f}", "-i", source.url, "-t", f"{end_s - start_s:.3f}",
-             "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+             "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "16", "-pix_fmt", "yuv420p",
              "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(part)],
             timeout_s=cfg.fetch.timeout_s, what="cutting the range out of the video file")
         if not done(part):

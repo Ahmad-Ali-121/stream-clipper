@@ -90,6 +90,8 @@ class FetchSettings:
     retries: int = 5
     retry_wait_s: float = 10.0
     timeout_s: float = 1800.0
+    # The longest part of a video the cutting board downloads in one go. It is for a part you chose, never a whole stream.
+    max_range_minutes: float = 30.0
 
 
 @dataclass
@@ -115,6 +117,9 @@ class RenderSettings:
     crop_x: float = 0.5  # horizontal centre of the crop, 0 (left) to 1 (right)
     # Facecam rectangle in the source, as fractions of width/height: x, y, w, h. Used by the split layout.
     facecam: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.25, 0.25])
+    # The part of the picture shown as "the video" (below the face in split, the whole clip in crop): x, y, w, h.
+    # Empty = worked out automatically from crop_x. Set per clip with the boxes on the review page.
+    game: list[float] = field(default_factory=list)
     split_top: float = 0.38  # share of the output height the facecam gets
     encoder: str = "auto"  # auto = NVIDIA, Intel or AMD hardware encoder when one works, else libx264 (CPU)
     preset: str = "veryfast"

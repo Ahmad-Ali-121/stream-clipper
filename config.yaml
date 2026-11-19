@@ -37,6 +37,7 @@ fetch:
   retries: 5              # the connection drops; a failed download is retried
   retry_wait_s: 10
   timeout_s: 1800
+  max_range_minutes: 30   # the longest part the cutting board downloads in one go (a part you chose, never a whole stream)
 
 transcribe:
   backend: local          # local = faster-whisper on this machine (free); groq = paid API, needs GROQ_API_KEY in .env

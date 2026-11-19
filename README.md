@@ -15,6 +15,8 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **AI can read a finished stream.** `--ai` turns all of its speech into text and has Claude pick moments from what was said (needs a Claude key; a few cents a stream).
 - **Works live or on finished streams, on Twitch and YouTube.** `watch` follows several live channels at once (Twitch names, YouTube handles like `@channel`); `run` processes a finished Twitch VOD or a YouTube recording with chat replay.
 - **Your own clips.** Give a YouTube or Twitch video link, or a video file such as a screen recording, with a start and an end; get one clip, or the range split into parts labelled "Part 1", "Part 2" on screen.
+- **Cutting board.** Download the part of a video you chose once, then mark the cuts on a timeline with the sound wave, see how many clips that gives and how long each is, and make them.
+- **Face box and video box.** On any clip, drag two boxes over the stream picture to choose what is shown on top (the face) and below (the video); a small preview shows the result. Can be kept for a streamer's next clips.
 - **Urdu and Hindi streams.** Speech-to-text in Urdu or Hindi, captions in the language's own letters or in Latin letters ("bhai ne kamaal kar diya"), and opening text and titles in English, Roman Urdu, Hinglish, Urdu or Hindi.
 - **Frames the clip by itself.** Detects a full-screen camera or a small facecam over gameplay, and measures each streamer's facecam box from the picture.
 - **Captions.** Local Whisper speech-to-text, word-by-word highlighted captions burned in.
@@ -69,6 +71,8 @@ The code is plain Python and FFmpeg, so it should run on macOS and Linux, but th
 |---|---|
 | `watch CHANNEL... [--mode A\|B\|C\|D] [--minutes N]` | Watch live Twitch channels and make a draft clip for each moment |
 | `cut SOURCE [--start T] [--end T] [--parts N \| --part-seconds S]` | Make clips from a range you choose in a video link or a video file, whole or in numbered parts |
+| `range SOURCE [--start T] [--end T]` | Download one part of a video once, for the cutting board on the review page |
+| `cut SOURCE --range NAME --pieces 0-45,45-110` | Make clips from pieces of a part downloaded with `range` (what the cutting board runs) |
 | `run URL [--top 8] [--signals A\|B\|C\|D]` | Process a finished stream: find moments (chat, or chat plus sound and picture), fetch, transcribe, draft |
 | `review [URL]` | Local page: options panel, and approve, reject or edit each clip |
 | `finish [URL] [--brief FILE]` | Render approved clips (A and B versions, explainers) and export them with upload text |
@@ -112,7 +116,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           167 unit tests (uv run pytest -q)
+tests/           174 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

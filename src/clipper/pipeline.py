@@ -228,6 +228,16 @@ def stage_cut(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None =
     """
     source, work = open_work(url, cfg)
     meta = fetch_meta(source, work, cfg)
+    start_s, end_s = _chosen_range(meta, float(start_s), end_s)
+    segments = split_range(start_s, end_s, parts, part_s)
+    return _make_own(url, cfg, _own_drafts(source, work, meta, segments, part_label))
+
+
+def range_id(start_s: float, end_s: float) -> str:
+    return f"{clip_id(start_s)}-{clip_id(end_s)}"
+
+
+def _chosen_range(meta: dict, start_s: float, end_s: float | None) -> tuple[float, float]:
     length = float(meta.get("duration_s") or 0)
     if end_s is None:
         if not length:
@@ -235,7 +245,89 @@ def stage_cut(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None =
         end_s = length
     if length and end_s > length + 1:
         raise PipelineError(f"the end ({format_time(end_s)}) is after the end of the video ({format_time(length)})")
-    segments = split_range(float(start_s), min(float(end_s), length) if length else float(end_s), parts, part_s)
+    end_s = min(float(end_s), length) if length else float(end_s)
+    if end_s <= start_s:
+        raise PipelineError("the end must be after the start")
+    return float(start_s), end_s
+
+
+def stage_range(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None = None) -> Path:
+    """Download one chosen part of a video once, for the cutting board, where a person marks the cuts on a timeline.
+
+    Only this part is downloaded, never the whole video, and at most ``fetch.max_range_minutes`` of it.
+    """
+    source, work = open_work(url, cfg)
+    meta = fetch_meta(source, work, cfg)
+    a, b = _chosen_range(meta, start_s, end_s)
+    if b - a < MIN_PART_S:
+        raise PipelineError(f"this part is {b - a:.0f} seconds long; a clip needs at least {MIN_PART_S:g} seconds")
+    most = cfg.fetch.max_range_minutes * 60
+    if b - a > most + 1:
+        raise PipelineError(
+            f"this part is {format_time(b - a)} long; the cutting board takes at most {cfg.fetch.max_range_minutes:g} minutes at a time "
+            "(fetch.max_range_minutes in config.yaml). Choose a shorter part, or do it in two goes."
+        )
+    d = work / "ranges" / range_id(a, b)
+    d.mkdir(parents=True, exist_ok=True)
+    out, note = d / "range.mp4", d / "range.json"
+    info = read_json(note, {})
+    if not done(out) or info.get("range") != [a, b]:
+        if free_gb(cfg.data_dir) < MIN_FREE_GB:
+            raise PipelineError(f"less than {MIN_FREE_GB:.0f} GB free on {cfg.data_dir.anchor}; delete old work folders before fetching more")
+        for f in d.iterdir():
+            if f.is_file():
+                f.unlink()
+        log.info("downloading %s to %s of %s (%s) for the cutting board", format_time(a), format_time(b), meta.get("title") or source.url, format_time(b - a))
+        t0 = time.monotonic()
+        fetch_range(source, a, b, out, cfg)
+        log.info("downloaded in %.0fs (%.0f MB)", time.monotonic() - t0, out.stat().st_size / 1e6)
+    pr = probe(out, cfg)
+    write_json(note, {
+        "id": d.name, "range": [a, b], "start_s": a, "end_s": b, "duration_s": round(pr["duration_s"], 2), "width": pr["width"], "height": pr["height"],
+        "url": source.url, "platform": source.platform, "title": meta.get("title", ""), "channel": meta.get("channel", ""), "ready": True,
+    })
+    log.info("ready on the cutting board: %s", d.name)
+    return out
+
+
+def check_segments(segments, length: float) -> list[tuple[float, float]]:
+    """The pieces marked on the cutting board (seconds from the start of the downloaded part), checked and in order."""
+    out: list[tuple[float, float]] = []
+    for seg in segments or []:
+        try:
+            a, b = round(float(seg[0]), 2), round(float(seg[1]), 2)
+        except (TypeError, ValueError, IndexError):
+            raise ValueError("each piece needs a start and an end in seconds") from None
+        if not (0 <= a < b <= length + 0.5):
+            raise ValueError(f"a piece ({a:g} to {b:g} seconds) is outside the downloaded part ({length:g} seconds long)")
+        if b - a < MIN_PART_S:
+            raise ValueError(f"piece {len(out) + 1} is {b - a:.1f} seconds long; a clip needs at least {MIN_PART_S:g} seconds. Move or remove a cut.")
+        if b - a > MAX_PART_S:
+            raise ValueError(f"piece {len(out) + 1} is {b - a:.0f} seconds long; a clip can be at most {MAX_PART_S:.0f} seconds. Add a cut inside it.")
+        out.append((a, min(b, length)))
+    if not out:
+        raise ValueError("no pieces are chosen, so there is nothing to make")
+    out.sort()
+    if any(n[0] < p[1] - 0.01 for p, n in zip(out, out[1:])):
+        raise ValueError("two pieces overlap")
+    return out
+
+
+def stage_cut_range(url: str, cfg: Config, rid: str, segments, part_label: bool = True) -> list[Path]:
+    """Make draft clips from the pieces marked on the cutting board, cut out of the part that is already downloaded."""
+    source, work = open_work(url, cfg)
+    d = work / "ranges" / rid
+    info = read_json(d / "range.json", {})
+    if not info.get("ready") or not done(d / "range.mp4"):
+        raise PipelineError(f"the downloaded part {rid} is not there any more; download it again from the Your own clip tab")
+    meta = fetch_meta(source, work, cfg)
+    base = float(info["start_s"])
+    pieces = [(round(base + a, 2), round(base + b, 2)) for a, b in check_segments(segments, float(info["duration_s"]))]
+    return _make_own(url, cfg, _own_drafts(source, work, meta, pieces, part_label, {"range_id": rid}))
+
+
+def _own_drafts(source: Source, work: Path, meta: dict, segments: list[tuple[float, float]], part_label: bool, extra: dict | None = None) -> list[str]:
+    """Write the clip.json of each piece a person chose. Returns the clip ids, in order."""
     ids: list[str] = []
     for n, (a, b) in enumerate(segments, 1):
         d = clip_dir(work, clip_id(a))
@@ -252,11 +344,16 @@ def stage_cut(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None =
             "vod_url": source.url, "platform": source.platform, "channel": meta.get("channel", ""),
             "channel_handle": meta.get("channel_id", "") if source.platform == "youtube" else "",
             "source_url": meta.get("channel_url") or source.url, "stream_title": meta.get("title", ""),
+            "range_id": None, **(extra or {}),
         })
         state.setdefault("status", "candidate")
         write_json(d / "clip.json", state)
         ids.append(d.name)
     log.info("%d clip(s) to make from %s to %s of %s", len(ids), format_time(segments[0][0]), format_time(segments[-1][1]), meta.get("title") or source.url)
+    return ids
+
+
+def _make_own(url: str, cfg: Config, ids: list[str]) -> list[Path]:
     failed: list[str] = []
     stage_fetch(url, cfg, only=ids, failed=failed)
     stage_transcribe(url, cfg, only=ids, failed=failed)
@@ -297,7 +394,17 @@ def _fetch_one(source: Source, d: Path, cfg: Config) -> Path | None:
         fetch_start = max(0.0, state["start_s"] - cfg.fetch.pad_s)
         fetch_end = state["end_s"] + cfg.fetch.pad_s
         t0 = time.monotonic()
-        fetch_range(source, fetch_start, fetch_end, out, cfg)
+        part = d.parent.parent / "ranges" / str(state.get("range_id") or "-") / "range.mp4"
+        info = read_json(part.with_name("range.json"), {}) if state.get("range_id") else {}
+        if info.get("ready") and done(part):
+            # Already on this computer: cut it out of the downloaded part instead of downloading it again.
+            from .sources import local_source
+
+            base = float(info["start_s"])
+            fetch_start, fetch_end = max(base, fetch_start), min(base + float(info["duration_s"]), fetch_end)
+            fetch_range(local_source(part), fetch_start - base, fetch_end - base, out, cfg)
+        else:
+            fetch_range(source, fetch_start, fetch_end, out, cfg)
         state["fetch_start_s"] = fetch_start
         state["fetch_end_s"] = fetch_end
         state["fetch_seconds"] = round(time.monotonic() - t0, 1)

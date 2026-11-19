@@ -17,7 +17,7 @@ from .work import clip_dirs, read_json, write_json
 
 log = logging.getLogger(__name__)
 
-EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "disclosure", "layout", "cut_start_s", "cut_end_s",
+EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "disclosure", "layout", "facecam", "game", "cut_start_s", "cut_end_s",
             "title", "title_b", "description", "tags", "notes"}
 TEXT_FIELDS = ("hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags")
 
@@ -75,7 +75,19 @@ def videos_made(d: Path, state: dict) -> bool:
     return not state.get("explainer") or (d / "explained.mp4").exists()
 
 
-def clip_view(d: Path, weights: dict | None = None, brief=None) -> dict:
+def _framing(state: dict, cfg) -> dict | None:
+    if cfg is None:
+        return None
+    from .render import framing
+
+    try:
+        return framing(state, cfg)
+    except Exception as e:  # a clip with odd numbers still shows; only its box editor is missing
+        log.warning("clip %s: its framing could not be worked out: %s", state.get("id"), e)
+        return None
+
+
+def clip_view(d: Path, weights: dict | None = None, brief=None, cfg=None) -> dict:
     """What the page needs to draw one clip."""
     from . import scoring
 
@@ -92,12 +104,78 @@ def clip_view(d: Path, weights: dict | None = None, brief=None) -> dict:
         videos=[n for n in ("final.mp4", "final_b.mp4", "explained.mp4", "explained_b.mp4", "source.mp4") if (d / n).exists()],
         fetch_start_s=c.get("fetch_start_s", 0), has_words=(d / "words.json").exists(),
         exported_name=Path(c["exported"]).name if c.get("exported") else "",
+        framing=_framing(c, cfg),
         campaign=brief.name if brief else "", campaign_issues=_campaign_issues(c, brief), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
         lo=c.get("fetch_start_s", c["start_s"]), hi=c.get("fetch_end_s", c["end_s"]),
         # Changes whenever the clip's data or its draft video changes, so the page knows to redraw it.
         mtime=int(max((d / n).stat().st_mtime for n in ("clip.json", video) if n) * 1000),
     )
     return out
+
+
+def clean_box(box, label: str) -> list[float]:
+    """A box from the page as four fractions (x, y, width, height) inside the picture; a clear refusal otherwise."""
+    try:
+        x, y, w, h = (float(v) for v in box)
+    except (TypeError, ValueError):
+        raise ValueError(f"the {label} box must be four numbers: x, y, width, height") from None
+    if not (0 <= x < 1 and 0 <= y < 1 and 0.04 <= w <= 1 and 0.04 <= h <= 1):
+        raise ValueError(f"the {label} box is too small or outside the picture")
+    w, h = min(w, 1 - x), min(h, 1 - y)
+    return [round(x, 4), round(y, 4), round(w, 4), round(h, 4)]
+
+
+def set_framing(d: Path, body: dict, cfg) -> dict:
+    """Save the face and video boxes chosen on the page for one clip and make its draft again with them.
+
+    ``auto`` goes back to automatic framing. ``streamer`` also keeps the boxes for this streamer's new clips.
+    Returns the other clips of the same video that ``others`` asked to get the same boxes (their drafts are remade by the caller).
+    """
+    from . import layout as layout_mod
+    from .render import render_clip
+
+    work, state = d.parent.parent, read_json(d / "clip.json")
+    if not (d / "source.mp4").exists():
+        raise ValueError("this clip has no downloaded video yet, so there is nothing to frame")
+    channel = str(state.get("channel") or "")
+    if body.get("auto"):
+        for k in ("layout", "facecam", "game", "crop_x"):
+            state.pop(k, None)
+        state["layout_auto"] = True
+        layout_mod.save_framing(channel, None, cfg)
+        state = layout_mod.auto_layout(d, state, cfg)
+        write_json(d / "clip.json", state)
+        for name in RENDERS:
+            (d / name).unlink(missing_ok=True)
+        edit = None
+    else:
+        if body.get("layout") not in ("split", "crop"):
+            raise ValueError("choose face and video, or video only")
+        if not body.get("game") or (body["layout"] == "split" and not body.get("facecam")):
+            raise ValueError("a box is missing")
+        edit = {"layout": body["layout"], "game": body["game"]}
+        if body["layout"] == "split":
+            edit["facecam"] = body["facecam"]
+        state = apply_edit(work, d.name, edit)
+        state["layout_auto"], state["layout_reason"] = False, "boxes set by you"
+        write_json(d / "clip.json", state)
+        if body.get("streamer") and channel:
+            layout_mod.save_framing(channel, {**state, "source": [state.get("source_width"), state.get("source_height")]}, cfg)
+    for name in RENDERS:
+        (d / name).unlink(missing_ok=True)
+    render_clip(d, cfg)
+    others: list[Path] = []
+    if edit and body.get("others"):
+        for o in clip_dirs(work):
+            st = read_json(o / "clip.json", {})
+            same = (st.get("source_width"), st.get("source_height")) == (state.get("source_width"), state.get("source_height"))
+            if o != d and same and (o / "source.mp4").exists() and st.get("status") in ("candidate", "approved"):
+                apply_edit(work, o.name, edit)
+                st = read_json(o / "clip.json")
+                st["layout_auto"], st["layout_reason"] = False, "boxes set by you"
+                write_json(o / "clip.json", st)
+                others.append(o)
+    return {"others": others}
 
 
 def apply_edit(work: Path, cid: str, edit: dict) -> dict:
@@ -115,6 +193,11 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
         raise ValueError("layout must be split, crop or empty")
     state = read_json(path)
     edit = dict(edit)
+    for name, label in (("facecam", "face"), ("game", "video")):
+        if edit.get(name):
+            edit[name] = clean_box(edit[name], label)
+        elif name in edit:
+            edit[name] = None
     if isinstance(edit.get("tags"), str):  # the page sends hashtags as one line of text
         edit["tags"] = ["#" + t.lstrip("#") for t in re.split(r"[\s,]+", edit["tags"]) if t.strip("#")]
     start = float(edit.get("cut_start_s", state.get("cut_start_s", state["start_s"])))
@@ -125,7 +208,7 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
         raise ValueError(f"cut must stay inside the fetched range {lo:g}-{hi:g} seconds and start before it ends")
     def shown(st: dict) -> tuple:
         """What is burned into the video, compared by meaning: an unset cut is the moment's own, None and "" are the same."""
-        return (st.get("hook") or "", st.get("layout") or "", bool(st.get("disclosure")),
+        return (st.get("hook") or "", (st.get("layout") or "", tuple(st.get("facecam") or ()), tuple(st.get("game") or ())), bool(st.get("disclosure")),
                 round(float(st.get("cut_start_s", st["start_s"])), 2), round(float(st.get("cut_end_s", st["end_s"])), 2))
 
     before = shown(state)
@@ -181,10 +264,26 @@ def current_brief(cfg):
         return None
 
 
-def wave_peaks(d: Path, cfg, bins: int = 480) -> dict:
-    """The clip's sound as ``bins`` loudness values between 0 and 1 over its whole downloaded range, for the trimmer."""
+def list_ranges(cfg) -> list[dict]:
+    """The downloaded parts waiting on the cutting board, newest first."""
+    out = []
+    for note in (cfg.data_dir / "work").glob("*/ranges/*/range.json"):
+        info = read_json(note, {})
+        video = note.with_name("range.mp4")
+        if not info.get("ready") or not video.exists():
+            continue
+        work = note.parent.parent.parent
+        made = sum(1 for c in clip_dirs(work) if (s := read_json(c / "clip.json", {})).get("range_id") == info["id"] and s.get("status") != "deleted")
+        out.append({**{k: info.get(k) for k in ("id", "start_s", "end_s", "duration_s", "width", "height", "title", "channel", "platform")},
+                    "key": f"{work.name}/{info['id']}", "mb": round(video.stat().st_size / 1e6), "clips": made,
+                    "mtime": int(video.stat().st_mtime * 1000)})
+    return sorted(out, key=lambda r: -r["mtime"])
+
+
+def wave_peaks(d: Path, cfg, bins: int = 480, name: str = "source.mp4") -> dict:
+    """The sound of a clip (or a downloaded part) as ``bins`` loudness values between 0 and 1 over its whole length."""
     cache = d / "wave.json"
-    src = d / "source.mp4"
+    src = d / name
     if cache.exists() and cache.stat().st_mtime >= src.stat().st_mtime:
         return read_json(cache)
     import subprocess
@@ -194,7 +293,7 @@ def wave_peaks(d: Path, cfg, bins: int = 480) -> dict:
     from .tools import find_tool
 
     raw = subprocess.run([find_tool("ffmpeg", cfg.data_dir), "-v", "error", "-i", str(src), "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
-                         capture_output=True, stdin=subprocess.DEVNULL, timeout=120).stdout
+                         capture_output=True, stdin=subprocess.DEVNULL, timeout=300).stdout
     x = np.abs(np.frombuffer(raw[: len(raw) // 2 * 2], dtype=np.int16).astype(np.float32))
     if len(x) < bins:
         raise ValueError("this clip has no sound to draw")
@@ -323,7 +422,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 views = []
                 for d in list_clips(list(by_name.values()), weights):
                     try:
-                        views.append(clip_view(d, weights, brief))
+                        views.append(clip_view(d, weights, brief, control.cfg if control else cfg))
                     except Exception as e:  # one unreadable clip must not blank the whole page
                         log.error("clip %s could not be shown: %s", d, e, exc_info=True)
                 return self._send(200, json.dumps(views).encode("utf-8"), "application/json")
@@ -356,10 +455,27 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     log.error("clip %s: %s could not be read: %s", d.name, m.group(3), e, exc_info=True)
                     return self._send(500, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(data).encode(), "application/json")
+            if self.path == "/api/ranges" and cfg is not None:
+                return self._send(200, json.dumps(list_ranges(cfg)).encode("utf-8"), "application/json")
+            m = re.fullmatch(r"/api/range/([A-Za-z0-9_-]+)/([0-9a-z-]+)/wave", self.path.split("?")[0])
+            if m and m.group(1) in by_name:
+                d = by_name[m.group(1)] / "ranges" / m.group(2)
+                if not (d / "range.mp4").exists():
+                    return self._send(404, b"this downloaded part is not there any more", "text/plain")
+                try:
+                    data = wave_peaks(d, cfg, bins=1200, name="range.mp4")
+                except Exception as e:
+                    log.error("downloaded part %s: its sound could not be read: %s", d.name, e, exc_info=True)
+                    return self._send(500, str(e).encode(), "text/plain")
+                return self._send(200, json.dumps(data).encode(), "application/json")
             m = re.fullmatch(r"/media/([A-Za-z0-9_-]+)/([0-9a-z]+)/(final|final_b|explained|explained_b|source)\.mp4", self.path.split("?")[0])
-            if not m or m.group(1) not in by_name:
+            rm = re.fullmatch(r"/media/([A-Za-z0-9_-]+)/([0-9a-z]+-[0-9a-z]+)/range\.mp4", self.path.split("?")[0])
+            if rm and rm.group(1) in by_name:
+                f = by_name[rm.group(1)] / "ranges" / rm.group(2) / "range.mp4"
+            elif not m or m.group(1) not in by_name:
                 return self._send(404, b"not found", "text/plain")
-            f = by_name[m.group(1)] / "clips" / m.group(2) / f"{m.group(3)}.mp4"
+            else:
+                f = by_name[m.group(1)] / "clips" / m.group(2) / f"{m.group(3)}.mp4"
             if not f.exists():
                 return self._send(404, b"not found", "text/plain")
             size = f.stat().st_size
@@ -404,7 +520,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             if origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
                 return self._send(403, b"not allowed from another site", "text/plain")
             actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch",
-                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/ai/check": "start_ai_check",
+                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
                        "/api/restart": "restart"}
             if self.path.startswith("/api/upload") and cfg is not None:
@@ -441,7 +557,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
                     name = actions[self.path]
-                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut") else getattr(control, name)()
+                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut") else getattr(control, name)()
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 if isinstance(result, dict) and "watching" in result:
@@ -467,6 +583,17 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(result).encode("utf-8"), "application/json")
+            m = re.fullmatch(r"/api/range/([A-Za-z0-9_-]+)/([0-9a-z]+-[0-9a-z]+)/delete", self.path)
+            if m and m.group(1) in by_name:
+                import shutil
+
+                d = by_name[m.group(1)] / "ranges" / m.group(2)
+                if control and control.running():
+                    return self._send(400, b"a job is still running; wait for it to end, then delete this download", "text/plain")
+                mb = sum(f.stat().st_size for f in d.glob("*") if f.is_file()) / 1e6 if d.is_dir() else 0
+                shutil.rmtree(d, ignore_errors=True)
+                log.info("deleted the downloaded part %s/%s, %.0f MB freed", m.group(1), m.group(2), mb)
+                return self._send(200, json.dumps({"deleted": 1, "mb": round(mb)}).encode(), "application/json")
             if self.path == "/api/clips/delete-rejected":
                 gone, mb = 0, 0.0
                 for d in list_clips(list(by_name.values())):
@@ -495,6 +622,37 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 except Exception as e:
                     log.error("clip %s: %s failed: %s", d.name, m.group(3), e, exc_info=True)
                     return self._send(500, f"{type(e).__name__}: {e}".encode(), "text/plain")
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/framing", self.path)
+            if m and m.group(1) in by_name and cfg is not None:
+                d = by_name[m.group(1)] / "clips" / m.group(2)
+                if not (d / "clip.json").exists():
+                    return self._send(404, b"no such clip", "text/plain")
+                use = control.cfg if control else cfg
+                try:
+                    body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
+                    others = set_framing(d, body, use)["others"]
+                except (ValueError, TypeError, KeyError) as e:
+                    return self._send(400, str(e).encode(), "text/plain")
+                except Exception as e:
+                    log.error("clip %s: the draft could not be made with the new boxes: %s", d.name, e, exc_info=True)
+                    return self._send(500, f"{type(e).__name__}: {e}".encode(), "text/plain")
+                if others:
+                    import threading
+
+                    def remake() -> None:
+                        from .render import render_clip
+
+                        for o in others:
+                            try:
+                                render_clip(o, use)
+                            except Exception as e:
+                                log.error("clip %s: the draft could not be made with the new boxes: %s", o.name, e, exc_info=True)
+                                st = read_json(o / "clip.json")
+                                st["error"] = f"the draft could not be made with the new boxes: {type(e).__name__}: {e}"
+                                write_json(o / "clip.json", st)
+
+                    threading.Thread(target=remake, daemon=True).start()
+                return self._send(200, json.dumps({"others": len(others)}).encode(), "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(delete|clear-error)", self.path)
             if m and m.group(1) in by_name:
                 d = by_name[m.group(1)] / "clips" / m.group(2)

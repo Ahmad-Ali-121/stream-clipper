@@ -26,21 +26,30 @@ def _even(x: float) -> int:
     return max(2, int(round(x / 2)) * 2)
 
 
-def layout_filter(src_w: int, src_h: int, r: RenderSettings, layout: str) -> str:
-    """FFmpeg filter chain from input label [0:v] to output label [v0]."""
+def _box_px(box, src_w: int, src_h: int, name: str) -> tuple[int, int, int, int]:
+    """A box given as fractions (x, y, width, height) in pixels of the source, kept inside the picture."""
+    if len(box) != 4 or not all(0 <= float(v) <= 1 for v in box):
+        raise ValueError(f"render.{name} must be four fractions between 0 and 1: x, y, width, height")
+    x, y = int(box[0] * src_w), int(box[1] * src_h)
+    return x, y, max(2, min(_even(box[2] * src_w), src_w - x)), max(2, min(_even(box[3] * src_h), src_h - y))
+
+
+def layout_rects(src_w: int, src_h: int, r: RenderSettings, layout: str) -> tuple[tuple | None, tuple]:
+    """(face box or None, video box) cut out of the source, in pixels: x, y, width, height.
+
+    The video box is the one set by hand (``r.game``) when there is one, else a full-height slice placed by ``crop_x``.
+    """
     W, H = r.width, r.height
     if layout == "crop":
+        if r.game:
+            return None, _box_px(r.game, src_w, src_h, "game")
         cw = min(src_w, _even(src_h * W / H))
-        cx = int(min(max(r.crop_x * src_w - cw / 2, 0), src_w - cw))
-        return f"[0:v]crop={cw}:{src_h}:{cx}:0,scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}[v0]"
+        return None, (int(min(max(r.crop_x * src_w - cw / 2, 0), src_w - cw)), 0, cw, src_h)
     if layout == "split":
-        if len(r.facecam) != 4 or not all(0 <= v <= 1 for v in r.facecam):
-            raise ValueError("render.facecam must be four fractions between 0 and 1: x, y, width, height")
-        top_h = _even(H * r.split_top)
-        bot_h = H - top_h
-        fx, fy = int(r.facecam[0] * src_w), int(r.facecam[1] * src_h)
-        fw = min(_even(r.facecam[2] * src_w), src_w - fx)
-        fh = min(_even(r.facecam[3] * src_h), src_h - fy)
+        fx, fy, fw, fh = _box_px(r.facecam, src_w, src_h, "facecam")
+        if r.game:
+            return (fx, fy, fw, fh), _box_px(r.game, src_w, src_h, "game")
+        bot_h = H - _even(H * r.split_top)
         cw = min(src_w, _even(src_h * W / bot_h))
         cx = int(min(max(r.crop_x * src_w - cw / 2, 0), src_w - cw))
         # Keep the facecam out of the gameplay half when there is room to slide past it,
@@ -49,13 +58,69 @@ def layout_filter(src_w: int, src_h: int, r: RenderSettings, layout: str) -> str
             cx = max(cx, fx + fw)
         elif fx >= cw:  # facecam on the right
             cx = min(cx, fx - cw)
-        return (
-            "[0:v]split=2[fa][ga];"
-            f"[fa]crop={fw}:{fh}:{fx}:{fy},scale={W}:{top_h}:force_original_aspect_ratio=increase,crop={W}:{top_h}[top];"
-            f"[ga]crop={cw}:{src_h}:{cx}:0,scale={W}:{bot_h}:force_original_aspect_ratio=increase,crop={W}:{bot_h}[bot];"
-            "[top][bot]vstack=inputs=2[v0]"
-        )
+        return (fx, fy, fw, fh), (cx, 0, cw, src_h)
     raise ValueError(f"layout must be 'crop' or 'split', got {layout!r}")
+
+
+def layout_filter(src_w: int, src_h: int, r: RenderSettings, layout: str) -> str:
+    """FFmpeg filter chain from input label [0:v] to output label [v0]."""
+    W, H = r.width, r.height
+    face, (gx, gy, gw, gh) = layout_rects(src_w, src_h, r, layout)
+    if face is None:
+        return f"[0:v]crop={gw}:{gh}:{gx}:{gy},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}[v0]"
+    top_h = _even(H * r.split_top)
+    bot_h = H - top_h
+    fx, fy, fw, fh = face
+    return (
+        "[0:v]split=2[fa][ga];"
+        f"[fa]crop={fw}:{fh}:{fx}:{fy},scale={W}:{top_h}:force_original_aspect_ratio=increase,crop={W}:{top_h}[top];"
+        f"[ga]crop={gw}:{gh}:{gx}:{gy},scale={W}:{bot_h}:force_original_aspect_ratio=increase,crop={W}:{bot_h}[bot];"
+        "[top][bot]vstack=inputs=2[v0]"
+    )
+
+
+def _shown_part(box: tuple, aspect: float) -> list[float]:
+    """The middle of a pixel box that is really shown once it is scaled to fill a frame of this width/height ratio."""
+    x, y, w, h = box
+    if w / h > aspect:
+        nw = h * aspect
+        x, w = x + (w - nw) / 2, nw
+    else:
+        nh = w / aspect
+        y, h = y + (h - nh) / 2, nh
+    return [x, y, w, h]
+
+
+def framing(state: dict, cfg: Config) -> dict | None:
+    """Where the face box and the video box sit on this clip's source right now, for the box editor on the review page.
+
+    Boxes are fractions of the source picture and already have the shape they are shown in, so what is inside a box
+    is exactly what the viewer sees. None when the clip is not downloaded yet.
+    """
+    sw, sh = int(state.get("source_width") or 0), int(state.get("source_height") or 0)
+    if not sw or not sh:
+        return None
+    r, layout = _layout_for(state, cfg)
+    if layout not in ("crop", "split"):
+        layout = "crop"
+    W, H = r.width, r.height
+    top_h = _even(H * r.split_top)
+    aspects = {"face": W / top_h, "video_split": W / (H - top_h), "video_crop": W / H}
+
+    def frac(box, aspect):
+        x, y, w, h = _shown_part(box, aspect)
+        return [round(x / sw, 4), round(y / sh, 4), round(w / sw, 4), round(h / sh, 4)]
+
+    out = {"layout": layout, "source": [sw, sh], "aspects": aspects, "custom": bool(state.get("game")) or not state.get("layout_auto", True)}
+    for name in ("crop", "split"):
+        try:
+            face, video = layout_rects(sw, sh, r if name == layout else replace(r, game=[]), name)
+        except ValueError:
+            face, video = layout_rects(sw, sh, replace(r, game=[], facecam=[0.0, 0.0, 0.25, 0.25]), name)
+        out[name] = {"video": frac(video, aspects[f"video_{name}"])}
+        if face:
+            out[name]["face"] = frac(face, aspects["face"])
+    return out
 
 
 def cut_window(state: dict) -> tuple[float, float]:
@@ -123,6 +188,9 @@ def _layout_for(state: dict, cfg: Config):
     facecam = state.get("facecam") or profile.get("facecam")
     if facecam:
         r = replace(r, facecam=list(facecam))
+    game = state.get("game") or profile.get("game")  # the video box, when one was set by hand
+    if game:
+        r = replace(r, game=list(game))
     if state.get("crop_x") is not None:  # per-clip horizontal position of the crop
         r = replace(r, crop_x=float(state["crop_x"]))
     return r, layout

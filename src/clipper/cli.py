@@ -225,9 +225,31 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_range(args: argparse.Namespace) -> int:
+    from .pipeline import parse_clock, stage_range
+
+    start = parse_clock(args.start)
+    end = parse_clock(args.end) if args.end else (start + parse_clock(args.length) if args.length else None)
+    out = stage_range(args.source, load_config(args.config), start_s=start, end_s=end)
+    print(f"READY  {out}")
+    print("Open the Cutting board on the review page to mark the cuts.")
+    return 0
+
+
 def _cmd_cut(args: argparse.Namespace) -> int:
     from .pipeline import parse_clock, stage_cut
 
+    if args.range:
+        from .pipeline import stage_cut_range
+
+        if not args.pieces:
+            raise ValueError("--range needs --pieces, for example --pieces 0-45,45-110")
+        pieces = [p.split("-", 1) for p in args.pieces.split(",") if p.strip()]
+        made = stage_cut_range(args.source, load_config(args.config), args.range, pieces, part_label=not args.no_part_label)
+        for video in made:
+            print(f"DRAFT  {video}")
+        print(f"{len(made)} draft(s) ready. Review them on the page.")
+        return 0
     start = parse_clock(args.start)
     end = parse_clock(args.end) if args.end else (start + parse_clock(args.length) if args.length else None)
     made = stage_cut(args.source, load_config(args.config), start_s=start, end_s=end, parts=args.parts,
@@ -371,7 +393,16 @@ def build_parser() -> argparse.ArgumentParser:
     cu.add_argument("--parts", type=int, default=1, help="split the range into this many equal parts")
     cu.add_argument("--part-seconds", help="or: split it into parts of this length")
     cu.add_argument("--no-part-label", action="store_true", help="do not show Part 1, Part 2 ... on the videos")
+    cu.add_argument("--range", help="cut pieces out of a part already downloaded with the range command (its name, like 0h05m10s-0h07m40s)")
+    cu.add_argument("--pieces", help="with --range: the pieces to make, in seconds from the start of that part, e.g. 0-45,45-110")
     cu.set_defaults(func=_cmd_cut)
+
+    rg = sub.add_parser("range", help="download one part of a video once, to mark the cuts on the review page's cutting board")
+    rg.add_argument("source", help="a YouTube or Twitch video link, or the path of a video file on this computer")
+    rg.add_argument("--start", default="0", help="where to start: hours:minutes:seconds, minutes:seconds or seconds")
+    rg.add_argument("--end", help="where to stop (default: the end of the video)")
+    rg.add_argument("--length", help="how long, instead of --end")
+    rg.set_defaults(func=_cmd_range)
 
     st = sub.add_parser("status", help="list a stream's clips and what exists for each")
     st.add_argument("url")

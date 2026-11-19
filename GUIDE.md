@@ -108,9 +108,36 @@ Use this when you already know which part you want, or the video has no chat. In
 4. Leave **Show "Part 1", "Part 2"…** ticked so each video shows which part it is, and "Part 2 next" at the end of part 1.
 5. Press **Make the clip** (or **Make the parts**).
 
+Steps 3 to 5 are now under **Or make clips straight away**. The main button is the cutting board, below.
+
+#### The cutting board: download once, then cut by eye
+
+1. Give the video and the start and end as above, then press **Download this part and open the cutting board**. Only that part is downloaded (at most 30 minutes at a time). From YouTube this can take a few minutes.
+2. When it is ready the page opens **Cutting board** (third button at the top, next to Clips and Tracker). You see the video, and under it the sound wave of the whole part.
+3. Play the video, or click the sound wave to jump. Where one clip should end and the next begin, press **Cut here** (or the **C** key). An orange marker appears; drag it to move the cut. Click a marker and press **Remove the selected cut** (or **Delete**) to take it away.
+4. Quick ways: **Split into N equal parts**, or **cut every N seconds**. You can move the markers afterwards.
+5. The list under the timeline shows every piece: where it is in the video and how long it is. Untick **make this one** for a piece you do not want (an intro, a break). The heading says how many clips will be made. A piece shorter than 8 seconds or longer than 5 minutes is marked in red and must be fixed first.
+6. Press **Make these clips**. They are cut out of the part that is already on this PC, so nothing is downloaded again. Each gets captions and text as usual and appears under **Clips**, in order.
+
+Your cuts are remembered if you leave the page. The downloaded part stays until you press **Delete this download**, so you can cut it again differently.
+
+Keys on the cutting board: Space plays or pauses, the arrow keys move one second (five with Shift), comma and full stop move a tenth of a second.
+
 The drafts appear at the top of the list, in order. Review, approve and make the videos as usual; the titles get "(Part 1)", "(Part 2)" added.
 
 A part can be between 8 seconds and 5 minutes long. A video file can also be searched automatically: in the **Finished stream** tab paste its path and choose sound, picture or AI reading (a file has no chat).
+
+### Face box and video box: choose what the clip shows
+
+Works on every clip: live Twitch and YouTube drafts, finished streams and your own clips.
+
+1. On the clip's card open **Fine-tune** and press **Set the face box and the video box**.
+2. You see the stream as it was, with two boxes: orange **Face** and blue **Video**. Drag a box to move it; drag its round corner to make it bigger or smaller. The boxes keep the shape they are shown in, so what is inside a box is exactly what the viewer sees. The small picture on the right is the result. Use the slider or **Play** to check other moments of the clip.
+3. Under **What the clip shows** choose *Face on top, video below* (two boxes) or *Video only* (one tall box).
+4. Tick **Use the same boxes for the other clips of this video** to apply them to the other unfinished clips of the same video (handy for parts), and **Remember these boxes for new clips of this streamer** so the next drafts of that streamer start with them.
+5. Press **Save and make the draft again**. It takes up to a minute; then the card shows the new draft.
+
+**Back to automatic** forgets your boxes (and the ones remembered for the streamer) and lets the program choose again.
 
 ### YouTube streams, and Urdu or Hindi streamers
 

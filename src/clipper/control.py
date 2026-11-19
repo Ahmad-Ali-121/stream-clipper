@@ -434,6 +434,56 @@ class Control:
             )
         return self.status()
 
+    def _start_job(self, cmd: list[str], first_line: str) -> dict:
+        with self._lock:
+            if self.running():
+                raise ValueError("another job is still running in this box; wait for it to end or press Stop")
+            self.run_problem, self.run_seen = "", True
+            self.run_log_path.parent.mkdir(parents=True, exist_ok=True)
+            out = self.run_log_path.open("w", encoding="utf-8")
+            out.write(f"{time.strftime('%H:%M:%S')} {first_line}\n")
+            out.flush()
+            self.run_proc = subprocess.Popen(
+                [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())", *cmd],
+                stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(PROJECT_ROOT),
+            )
+        return self.status()
+
+    def start_range(self, raw: dict) -> dict:
+        """Download one chosen part of a video for the cutting board (the same as ``clipper range``)."""
+        from .pipeline import MIN_PART_S, parse_clock
+        from .sources import parse_source
+
+        source = parse_source(str(raw.get("source") or ""))
+        start = parse_clock(raw.get("start") or 0)
+        end = None if raw.get("to_end") else parse_clock(raw.get("end") or 0)
+        if end is not None:
+            if end <= start:
+                raise ValueError("the end time must be after the start time")
+            if end - start < MIN_PART_S:
+                raise ValueError(f"this part is shorter than {MIN_PART_S:g} seconds, too short for a clip")
+            if end - start > self.cfg.fetch.max_range_minutes * 60 + 1:
+                raise ValueError(f"the cutting board takes at most {self.cfg.fetch.max_range_minutes:g} minutes at a time; choose a shorter part, or do it in two goes")
+        cmd = ["range", source.url, "--start", f"{start:g}"] + (["--end", f"{end:g}"] if end is not None else [])
+        return self._start_job(cmd, f"downloading the part you chose from {source.url}")
+
+    def start_range_cut(self, raw: dict) -> dict:
+        """Make clips from the pieces marked on the cutting board (the same as ``clipper cut --range``)."""
+        import re
+
+        from .pipeline import check_segments
+        from .work import read_json
+
+        m = re.fullmatch(r"([A-Za-z0-9_-]+)/([0-9a-z-]+)", str(raw.get("key") or ""))
+        folder = self.cfg.data_dir / "work" / m.group(1) / "ranges" / m.group(2) if m else None
+        info = read_json(folder / "range.json", {}) if folder else {}
+        if not info.get("ready") or not (folder / "range.mp4").exists():
+            raise ValueError("this downloaded part is not there any more; download it again")
+        pieces = check_segments(raw.get("pieces"), float(info["duration_s"]))  # refuse a bad piece now, with its reason
+        cmd = ["cut", info["url"], "--range", m.group(2), "--pieces", ",".join(f"{a:g}-{b:g}" for a, b in pieces)]
+        cmd += ["--no-part-label"] if raw.get("part_label") is False else []
+        return self._start_job(cmd, f"making {len(pieces)} clip(s) from the cutting board")
+
     def start_cut(self, raw: dict) -> dict:
         """Make clips from a range the person chose (the same as ``clipper cut``), as the one finished-stream job."""
         from .pipeline import parse_clock, split_range

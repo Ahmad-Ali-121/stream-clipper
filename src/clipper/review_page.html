@@ -150,6 +150,33 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(640px,92vw);padding:10px 16px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.35);display:none;z-index:9;white-space:pre-wrap;padding-right:44px}
 .btn.quiet{background:none;border-color:transparent;color:var(--muted);margin-left:auto}.btn.quiet:hover{color:var(--bad);border-color:var(--bad)}
 #toast.err{border-color:var(--bad);background:var(--bad-soft)}
+.modal{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.62);display:grid;place-items:center;padding:16px;overflow:auto}
+.modal>.card{width:min(1080px,100%);padding:16px}
+.modal h2{font-size:17px;margin-bottom:4px}
+.bxgrid{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:16px;align-items:start}
+@media (max-width:760px){.bxgrid{grid-template-columns:1fr}}
+.stage{position:relative;background:#000;border-radius:8px;overflow:hidden;touch-action:none;user-select:none}
+.stage video{width:100%;display:block}
+.bx{position:absolute;border:3px solid;box-sizing:border-box;cursor:move;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+.bx b{position:absolute;left:0;top:0;font-size:11.5px;padding:1px 7px;color:#111;border-bottom-right-radius:6px;pointer-events:none}
+.bx i{position:absolute;right:-9px;bottom:-9px;width:20px;height:20px;border-radius:50%;border:2px solid #111;cursor:nwse-resize}
+.bx.face{border-color:#ffb020}.bx.face b,.bx.face i{background:#ffb020}
+.bx.video{border-color:#35c2ff}.bx.video b,.bx.video i{background:#35c2ff}
+.bxprev{width:200px;border-radius:8px;background:#000;display:block;border:1px solid var(--line)}
+.bxseek{width:100%;margin-top:8px}
+.tl.big{height:104px;margin-top:10px}
+.cutm{position:absolute;top:-6px;bottom:-6px;width:16px;margin-left:-8px;cursor:ew-resize;display:grid;justify-items:center;z-index:2}
+.cutm::after{content:"";width:3px;height:100%;background:#ffb020;border-radius:2px}
+.cutm::before{content:"";position:absolute;top:-3px;width:13px;height:13px;border-radius:3px;background:#ffb020;border:1px solid #111}
+.cutm.picked::after{box-shadow:0 0 0 2px var(--text)}.cutm.picked::before{box-shadow:0 0 0 2px var(--text)}
+.segn{position:absolute;bottom:3px;font-size:11px;font-weight:700;padding:0 7px;border-radius:99px;background:var(--surface);border:1px solid var(--line);transform:translateX(-50%);pointer-events:none;white-space:nowrap}
+.segn.off{opacity:.6;text-decoration:line-through}
+.cbruler{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:4px}
+.cbq{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}.cbq input{width:66px}
+#cb-video{width:100%;max-height:46vh;background:#000;border-radius:8px;display:block}
+.cbrow{display:grid;grid-template-columns:74px minmax(0,1fr) auto auto auto;gap:12px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
+.cbrow.off{opacity:.55}.cbrow .badt{color:var(--bad);font-weight:600}.cbrow .warnt{color:var(--warn)}
+.cbrow label{display:flex;gap:6px;align-items:center;cursor:pointer}
 </style>
 </head>
 <body>
@@ -220,13 +247,16 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
               <div class="hms"><input type="number" min="0" id="m-eh" value="0" aria-label="end hours"><input type="number" min="0" max="59" id="m-em" value="1" aria-label="end minutes"><input type="number" min="0" max="59" id="m-es" value="0" aria-label="end seconds"></div></div>
           </div>
           <label class="check"><input type="checkbox" id="m-toend" onchange="ownHint()"> Until the end of the video</label>
+          <div class="btns"><button class="btn primary" id="b-board" onclick="getRange()">Download this part and open the cutting board</button><button class="btn bad" id="b-ownstop" onclick="act('/api/run/stop',{})">Stop</button></div>
+          <p class="help" style="margin-top:8px">The part is downloaded once. Then you play it, mark the cuts on a timeline, see how many clips that gives, and make them.</p>
+          <details class="sec"><summary>Or make clips straight away <small>without the cutting board</small></summary>
           <label class="f" for="m-split">One clip, or several parts?</label>
           <select id="m-split" onchange="ownHint()"><option value="one">One clip</option><option value="count">Split into a number of parts</option><option value="secs">Split into parts of a set length</option></select>
           <div id="m-count" hidden><label class="f" for="m-parts">How many parts</label><input type="number" min="2" max="30" id="m-parts" value="3" oninput="ownHint()"></div>
           <div id="m-secs" hidden><label class="f" for="m-plen">Seconds in each part</label><input type="number" min="8" max="300" id="m-plen" value="50" oninput="ownHint()"></div>
           <label class="check" id="m-labelrow" hidden><input type="checkbox" id="m-label" checked> Show "Part 1", "Part 2"… on the video, and "Part 2 next" at the end</label>
           <p class="help" id="m-hint" style="margin-top:8px"></p>
-          <div class="btns"><button class="btn primary" id="b-own" onclick="makeOwn()">Make the clip</button><button class="btn bad" id="b-ownstop" onclick="act('/api/run/stop',{})">Stop</button></div>
+          <div class="btns"><button class="btn" id="b-own" onclick="makeOwn()">Make the clip</button></div></details>
           <div class="bar indet" id="m-bar" hidden><i></i></div>
           <div class="note" id="m-note">Nothing running.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="mlog"></pre></details>
@@ -296,7 +326,31 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
   </aside>
 
   <main>
-    <div class="tabs" style="max-width:320px"><button id="v-clips" class="on" onclick="view('clips')">Clips</button><button id="v-track" onclick="view('track')">Tracker</button></div>
+    <div class="tabs" style="max-width:480px"><button id="v-clips" class="on" onclick="view('clips')">Clips</button><button id="v-track" onclick="view('track')">Tracker</button><button id="v-board" onclick="view('board')">Cutting board</button></div>
+    <div id="view-board" hidden>
+      <div class="mainhead"><h2>Cutting board</h2><div class="filters" id="cb-list"></div></div>
+      <div class="empty" id="cb-empty" hidden><b>Nothing downloaded yet.</b>In step 1 open "Your own clip", give a video with a start and an end, and press "Download this part and open the cutting board".</div>
+      <div id="cb-body" hidden>
+        <p class="keys" id="cb-title"></p>
+        <div class="card" style="padding:14px">
+          <video id="cb-video" controls preload="metadata"></video>
+          <div class="tl big" id="cb-tl"><canvas></canvas><div id="cb-marks"></div><div class="ph" id="cb-ph"></div></div>
+          <div class="cbruler" id="cb-ruler"></div>
+          <div class="btns"><button class="btn primary" id="cb-cut">Cut here</button><button class="btn" id="cb-del">Remove the selected cut</button><button class="btn" id="cb-clear">Remove all cuts</button>
+            <span class="cbq">Split into <input type="number" id="cb-n" value="3" min="2" max="60" aria-label="number of equal parts"> equal parts <button class="btn" id="cb-eq">Do it</button></span>
+            <span class="cbq">or cut every <input type="number" id="cb-s" value="50" min="8" max="300" aria-label="seconds per piece"> seconds <button class="btn" id="cb-ev">Do it</button></span></div>
+          <p class="keys" style="margin:10px 0 0">Play the video or click the sound wave to move. Press <b>Cut here</b> where a clip should end and the next begin; drag an orange marker to move a cut. Keys: <kbd>Space</kbd> play or pause · <kbd>←</kbd> <kbd>→</kbd> one second (with <kbd>Shift</kbd> five) · <kbd>,</kbd> <kbd>.</kbd> a tenth of a second · <kbd>C</kbd> cut · <kbd>Delete</kbd> remove the selected cut</p>
+        </div>
+        <div class="card" style="padding:14px;margin-top:14px">
+          <h2 id="cb-count" style="font-size:15px;margin-bottom:8px"></h2>
+          <div id="cb-rows"></div>
+          <label class="check"><input type="checkbox" id="cb-label" checked> Show "Part 1", "Part 2"… on the videos, and "Part 2 next" at the end</label>
+          <div class="btns"><button class="btn primary" id="cb-make">Make the clips</button><button class="btn bad" id="cb-stop" onclick="act('/api/run/stop',{})">Stop</button><button class="btn quiet" id="cb-drop">Delete this download</button></div>
+          <div class="bar indet" id="cb-bar" hidden><i></i></div>
+          <div class="note" id="cb-note">Nothing running.</div>
+        </div>
+      </div>
+    </div>
     <div id="view-track" hidden>
       <div class="mainhead"><h2>What you posted, and what it earned</h2>
         <div class="filters"><button class="chipbtn" id="b-views" onclick="refreshViews()">Refresh views</button><a class="chipbtn" href="/api/tracker.csv" style="text-decoration:none">Download as a spreadsheet</a></div></div>
@@ -315,6 +369,27 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
     <div class="empty" id="empty" hidden></div>
     </div>
   </main>
+</div>
+<div class="modal" id="boxes" hidden>
+  <div class="card">
+    <h2>Face box and video box</h2>
+    <p class="help">Drag a box to move it; drag its round corner to make it bigger or smaller. What is inside a box is exactly what the viewer sees. The small picture on the right is the result.</p>
+    <div class="bxgrid">
+      <div>
+        <div class="stage" id="bx-stage"><video id="bx-video" muted playsinline preload="auto"></video>
+          <div class="bx video" id="bx-v"><b>Video</b><i></i></div>
+          <div class="bx face" id="bx-f"><b>Face</b><i></i></div></div>
+        <input type="range" class="bxseek" id="bx-seek" min="0" max="1000" value="0" aria-label="Move through the clip">
+        <div class="btns" style="margin-top:6px"><button class="btn" id="bx-play">Play</button><span class="saved" id="bx-size"></span></div>
+      </div>
+      <div><canvas class="bxprev" id="bx-prev" width="270" height="480"></canvas><p class="help" style="margin-top:6px">Result (without captions)</p></div>
+    </div>
+    <label class="f" for="bx-layout">What the clip shows</label>
+    <select id="bx-layout"><option value="split">Face on top, video below (two boxes)</option><option value="crop">Video only (one box, full height)</option></select>
+    <label class="check"><input type="checkbox" id="bx-others"> Use the same boxes for the other clips of this video that are not finished yet</label>
+    <label class="check" id="bx-strow"><input type="checkbox" id="bx-streamer"> <span id="bx-stlabel"></span></label>
+    <div class="btns"><button class="btn primary" id="bx-save">Save and make the draft again</button><button class="btn" id="bx-auto">Back to automatic</button><button class="btn" id="bx-cancel">Cancel</button><span class="saved" id="bx-note"></span></div>
+  </div>
 </div>
 <div id="toast"><span id="toasttext"></span><button class="x" title="Close" aria-label="Close" onclick="$('toast').style.display='none'">×</button></div>
 
@@ -418,6 +493,14 @@ function show(s){
   $('b-own').disabled=s.running; $('b-ownstop').disabled=!s.running; $('m-bar').hidden=!s.running;
   $('m-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?'<b>Done.</b> '+esc(lastLine(s.run_log)):'Nothing running.'));
   logTo('mlog',s.run_log);
+  $('b-board').disabled=s.running; $('cb-bar').hidden=!s.running; $('cb-stop').disabled=!s.running; $('cb-note').innerHTML=$('m-note').innerHTML;
+  cbRunning=s.running; if(CB)cbRows();
+  /* A job started from this page has ended: go where its result is. */
+  if(cbWasRunning&&!s.running&&cbJob){const job=cbJob;cbJob='';
+    if(!s.run_problem&&job==='range'){view('board');toast('Downloaded. Mark your cuts on the timeline.')}
+    if(!s.run_problem&&job==='pieces'){view('clips');setFilter('candidate');toast('Your clips are ready to review.')}
+    if(s.run_problem)toast('It stopped with a problem. The activity log in step 1 says why.',true)}
+  cbWasRunning=s.running;
 }
 async function act(url,body){
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -548,6 +631,7 @@ function cardHtml(c){
    +'<div><label class="f">End</label><input type="number" step="0.5" name="cut_end_s" value="'+esc(c.cut_end_s??c.end_s)+'"></div>'
    +'<div><label class="f">Framing</label><select name="layout">'+lay+'</select></div></div>'
    +'<p class="help" style="margin-top:6px">Can be set anywhere from '+esc(c.lo)+' to '+esc(c.hi)+' seconds. Framing now: '+esc(c.layout_reason||'not checked yet')+'.</p>'
+   +(c.framing?'<div class="btns" style="margin-top:0"><button class="btn" onclick="openBoxes(\''+k+'\')">Set the face box and the video box</button></div>':'')
    +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
    +(c.exported?'<details class="sec"><summary>Posted it? Log it <small>keeps views, payouts and rejections in the Tracker</small></summary>'
      +'<div class="three"><div><label class="f">Where</label><select name="t_platform"><option>YouTube Shorts</option><option>TikTok</option><option>Instagram Reels</option><option>Facebook Reels</option><option>Other</option></select></div>'
@@ -703,8 +787,185 @@ async function saveWords(key){
   toast('Captions saved. The draft is made again when you press Make videos, or use "Make B preview".');loadClips();
 }
 
+/* ---------- face box and video box ---------- */
+let BX=null;
+function openBoxes(key){
+  const c=known.find(x=>x.key===key);
+  if(!c||!c.framing||!(c.videos||[]).includes('source.mp4')){toast('This clip is not downloaded yet, so its boxes cannot be set.',true);return}
+  const f=c.framing;
+  BX={key:key,layout:f.layout,sw:f.source[0],sh:f.source[1],asp:f.aspects,face:(f.split.face||[0,0,.25,.25]).slice(),vs:f.split.video.slice(),vc:f.crop.video.slice()};
+  /* Each box has the shape it is shown in. A box that came from elsewhere is brought to that shape first. */
+  BX.face=bxFit(BX.face,BX.asp.face);BX.vs=bxFit(BX.vs,BX.asp.video_split);BX.vc=bxFit(BX.vc,BX.asp.video_crop);
+  $('bx-layout').value=BX.layout;$('bx-others').checked=false;$('bx-streamer').checked=false;$('bx-note').textContent='';
+  $('bx-strow').hidden=!c.channel;$('bx-stlabel').textContent='Remember these boxes for new clips of '+(c.channel||'');
+  const v=$('bx-video');v.src='/media/'+key+'/source.mp4?v='+c.mtime;
+  v.onloadedmetadata=()=>{v.currentTime=Math.max(0,((c.cut_start_s??c.start_s)-(Number(c.fetch_start_s)||0))+1)};
+  $('bx-stage').style.aspectRatio=BX.sw+' / '+BX.sh;$('bx-play').textContent='Play';
+  for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=false;
+  $('boxes').hidden=false;bxDraw();bxLoop();
+}
+function bxKind(){return BX.layout==='split'?'vs':'vc'}
+function bxAsp(which){return which==='face'?BX.asp.face:(BX.layout==='split'?BX.asp.video_split:BX.asp.video_crop)}
+/* Height of a box (as a share of the picture) that goes with its width, for the shape it is shown in. */
+function bxH(w,asp){return w*BX.sw/(BX.sh*asp)}
+function bxFit(b,asp){let w=b[2],h=bxH(w,asp);if(h>1){h=1;w=asp*BX.sh/BX.sw}
+  const cx=b[0]+b[2]/2,cy=b[1]+b[3]/2;return [Math.min(Math.max(0,cx-w/2),1-w),Math.min(Math.max(0,cy-h/2),1-h),w,h]}
+function bxDraw(){
+  const put=(el,b)=>{el.style.left=(b[0]*100)+'%';el.style.top=(b[1]*100)+'%';el.style.width=(b[2]*100)+'%';el.style.height=(b[3]*100)+'%'};
+  put($('bx-v'),BX[bxKind()]);put($('bx-f'),BX.face);$('bx-f').hidden=BX.layout!=='split';
+  const v=BX[bxKind()];$('bx-size').textContent='Video box: '+Math.round(v[2]*BX.sw)+' × '+Math.round(v[3]*BX.sh)+' of '+BX.sw+' × '+BX.sh
+    +(BX.layout==='split'?' · Face box: '+Math.round(BX.face[2]*BX.sw)+' × '+Math.round(BX.face[3]*BX.sh):'');
+}
+function bxLoop(){
+  if(!BX)return;const v=$('bx-video'),cv=$('bx-prev'),g=cv.getContext('2d'),W=cv.width,H=cv.height;
+  if(v.readyState>=2){const vw=v.videoWidth,vh=v.videoHeight,top=BX.layout==='split'?Math.round(H*BX.asp.video_crop/BX.asp.face):0;
+    try{if(top){const f=BX.face;g.drawImage(v,f[0]*vw,f[1]*vh,f[2]*vw,f[3]*vh,0,0,W,top)}
+      const b=BX[bxKind()];g.drawImage(v,b[0]*vw,b[1]*vh,b[2]*vw,b[3]*vh,0,top,W,H-top)}catch(e){}
+    if(!v.paused&&v.duration)$('bx-seek').value=Math.round(v.currentTime/v.duration*1000)}
+  requestAnimationFrame(bxLoop);
+}
+function bxDrag(which,resize){return e=>{
+  if(!BX||(!resize&&e.target.tagName==='I'))return;e.preventDefault();e.stopPropagation();
+  const name=which==='face'?'face':bxKind(),asp=bxAsp(which),st=$('bx-stage').getBoundingClientRect(),b0=BX[name].slice(),x0=e.clientX,y0=e.clientY;
+  const move=ev=>{const dx=(ev.clientX-x0)/st.width,dy=(ev.clientY-y0)/st.height,b=BX[name];
+    if(resize){let w=Math.max(.06,b0[2]+dx);w=Math.min(w,1-b0[0]);if(b0[1]+bxH(w,asp)>1)w=(1-b0[1])*BX.sh*asp/BX.sw;b[2]=w;b[3]=bxH(w,asp)}
+    else{b[0]=Math.min(Math.max(0,b0[0]+dx),1-b0[2]);b[1]=Math.min(Math.max(0,b0[1]+dy),1-b0[3])}
+    bxDraw()};
+  const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};
+  window.addEventListener('pointermove',move);window.addEventListener('pointerup',up)}}
+function closeBoxes(){const v=$('bx-video');v.pause();v.removeAttribute('src');v.load();$('boxes').hidden=true;BX=null}
+async function saveBoxes(auto){
+  const key=BX.key,body=auto?{auto:true}:{layout:BX.layout,game:BX[bxKind()],facecam:BX.face,others:$('bx-others').checked,streamer:$('bx-streamer').checked};
+  for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=true;
+  $('bx-note').className='saved';$('bx-note').textContent='Making the draft again… this takes up to a minute.';
+  const r=await send('/api/clip/'+key+'/framing',body);
+  if(r.error){for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=false;$('bx-note').textContent='';toast('The boxes were not saved: '+r.error,true);return}
+  closeBoxes();const el=$(domId(key));if(el){el.dataset.dirty='';el.dataset.m=''}
+  toast(auto?'Back to automatic framing. The draft is made again.':'Boxes saved. The draft is made again'+(r.others?'; '+r.others+' other clip'+(r.others>1?'s are':' is')+' being made again too.':'.'));loadClips();
+}
+function bxInit(){
+  $('bx-v').addEventListener('pointerdown',bxDrag('video',false));$('bx-f').addEventListener('pointerdown',bxDrag('face',false));
+  $('bx-v').querySelector('i').addEventListener('pointerdown',bxDrag('video',true));$('bx-f').querySelector('i').addEventListener('pointerdown',bxDrag('face',true));
+  $('bx-layout').addEventListener('change',()=>{BX.layout=val('bx-layout');bxDraw()});
+  $('bx-seek').addEventListener('input',()=>{const v=$('bx-video');if(v.duration)v.currentTime=val('bx-seek')/1000*v.duration});
+  $('bx-play').addEventListener('click',()=>{const v=$('bx-video');if(v.paused){v.play().catch(()=>{});$('bx-play').textContent='Pause'}else{v.pause();$('bx-play').textContent='Play'}});
+  $('bx-save').addEventListener('click',()=>saveBoxes(false));$('bx-auto').addEventListener('click',()=>saveBoxes(true));$('bx-cancel').addEventListener('click',closeBoxes);
+}
+bxInit();
+
+/* ---------- cutting board: mark cuts on a downloaded part ---------- */
+let CB=null, cbJob='', cbRunning=false, cbWasRunning=false, cbStopAt=null;
+async function getRange(){
+  const body={source:val('m-src').trim(),start:hms('m-s'),end:hms('m-e'),to_end:$('m-toend').checked};
+  if(!body.source){toast('Paste a video link, or choose a file, first.',true);return}
+  const r=await send('/api/range',body); if(r.error){toast(r.error,true);return}
+  cbJob='range';cbWasRunning=true;show(r);
+}
+async function loadBoard(pick){
+  let rs;try{const r=await fetch('/api/ranges');if(!r.ok){toast('The cutting board could not load: '+await r.text(),true);return}rs=await r.json()}catch(e){toast('The program is not answering: '+e,true);return}
+  $('cb-empty').hidden=rs.length>0;$('cb-body').hidden=!rs.length;
+  if(!rs.length){CB=null;$('cb-list').innerHTML='';return}
+  const key=pick||(CB&&rs.some(r=>r.key===CB.key)?CB.key:rs[0].key);
+  $('cb-list').innerHTML=rs.length>1?rs.map(r=>'<button class="chipbtn'+(r.key===key?' on':'')+'" data-k="'+esc(r.key)+'">'+esc(String(r.title||r.channel||'Video').slice(0,28))+' · '+clock(r.start_s)+' to '+clock(r.end_s)+'</button>').join(''):'';
+  const r=rs.find(x=>x.key===key);
+  if(!CB||CB.key!==key||CB.r.mtime!==r.mtime)await openBoard(r);else{CB.r=r;cbRows()}
+}
+async function openBoard(r){
+  CB={key:r.key,r:r,total:Number(r.duration_s),cuts:[],skip:[false],sel:-1,wave:null};
+  try{const s=JSON.parse(localStorage.getItem('cb:'+r.key)||'null');
+    if(s&&s.mtime===r.mtime&&Array.isArray(s.cuts)&&s.skip.length===s.cuts.length+1){CB.cuts=s.cuts;CB.skip=s.skip}}catch(e){}
+  $('cb-title').textContent=(r.title||r.channel||'Your video')+' · from '+clock(r.start_s)+' to '+clock(r.end_s)+' of the video · '+r.mb+' MB on this PC'+(r.clips?' · '+r.clips+' clip'+(r.clips>1?'s':'')+' already made from it':'');
+  $('cb-video').src='/media/'+r.key+'/range.mp4?v='+r.mtime;
+  $('cb-ruler').innerHTML=[0,.25,.5,.75,1].map(f=>'<span>'+clock(r.start_s+f*CB.total)+'</span>').join('');
+  cbDraw();
+  try{const w=await fetch('/api/range/'+r.key+'/wave');if(w.ok){const d=await w.json();if(CB&&CB.key===r.key){CB.wave=d;cbDraw()}}
+    else toast('The sound wave could not be drawn: '+await w.text()+' You can still cut by watching.',true)}catch(e){}
+}
+function cbSegs(){const e=[0].concat(CB.cuts,[CB.total]);return e.slice(0,-1).map((a,i)=>({a:a,b:e[i+1],i:i,on:!CB.skip[i]}))}
+function cbKeep(){try{localStorage.setItem('cb:'+CB.key,JSON.stringify({mtime:CB.r.mtime,cuts:CB.cuts,skip:CB.skip}))}catch(e){}}
+function cbDraw(){
+  if(!CB)return;const tl=$('cb-tl'),cv=tl.querySelector('canvas'),W=tl.clientWidth,H=tl.clientHeight,dpr=window.devicePixelRatio||1,segs=cbSegs(),T=CB.total;
+  if(W){cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+    const css=getComputedStyle(document.documentElement),on=css.getPropertyValue('--accent').trim(),off=css.getPropertyValue('--muted').trim();
+    for(const s of segs){g.globalAlpha=s.on?(s.i%2?.10:.18):0;g.fillStyle=on;g.fillRect(s.a/T*W,0,(s.b-s.a)/T*W,H)}
+    const pk=CB.wave?CB.wave.peaks:null,n=pk?pk.length:0,bw=n?W/n:0;let k=0;
+    for(let i=0;i<n;i++){const t=(i+.5)/n*T;while(k<segs.length-1&&t>=segs[k].b)k++;const h=Math.max(1,pk[i]*(H-22));
+      g.fillStyle=segs[k].on?on:off;g.globalAlpha=segs[k].on?1:.4;g.fillRect(i*bw,(H-14-h)/2,Math.max(1,bw-.4),h)}
+    g.globalAlpha=1}
+  let num=0;
+  $('cb-marks').innerHTML=CB.cuts.map((t,i)=>'<div class="cutm'+(i===CB.sel?' picked':'')+'" data-i="'+i+'" style="left:'+(t/T*100)+'%" title="Drag to move this cut"></div>').join('')
+    +segs.map(s=>'<span class="segn'+(s.on?'':' off')+'" style="left:'+((s.a+s.b)/2/T*100)+'%">'+(s.on?++num:'skip')+'</span>').join('');
+  cbRows();cbKeep();
+}
+function cbProblem(s){const len=s.b-s.a;return len<8?'too short (under 8 s)':(len>300?'too long (over 5 minutes)':'')}
+function cbRows(){
+  if(!CB)return;const segs=cbSegs(),on=segs.filter(s=>s.on),bad=on.filter(cbProblem);let num=0;
+  $('cb-rows').innerHTML=segs.map(s=>{const len=s.b-s.a,p=s.on?cbProblem(s):'';
+    return '<div class="cbrow'+(s.on?'':' off')+'"><b>'+(s.on?'Clip '+(++num):'Skipped')+'</b><span>'+clock(CB.r.start_s+s.a)+' to '+clock(CB.r.start_s+s.b)+' of the video</span>'
+      +'<span class="'+(p?'badt':(s.on&&len>90?'warnt':''))+'">'+len.toFixed(1)+' s'+(p?' · '+p:(s.on&&len>90?' · long for a short':''))+'</span>'
+      +'<label><input type="checkbox" data-seg="'+s.i+'"'+(s.on?' checked':'')+'> make this one</label><button class="btn" data-play="'+s.i+'">Play</button></div>'}).join('');
+  const sum=on.reduce((x,s)=>x+s.b-s.a,0);
+  $('cb-count').textContent=on.length?(on.length+' clip'+(on.length>1?'s':'')+' will be made · '+Math.round(sum)+' seconds in all'+(bad.length?' · fix the piece'+(bad.length>1?'s':'')+' marked in red first':'')):'No piece is ticked, so nothing will be made';
+  $('cb-make').textContent=on.length>1?'Make these '+on.length+' clips':'Make this clip';
+  $('cb-make').disabled=cbRunning||!on.length||bad.length>0;$('cb-drop').disabled=cbRunning;$('cb-del').disabled=CB.sel<0;$('cb-clear').disabled=!CB.cuts.length;
+  $('cb-label').parentElement.hidden=on.length<2;
+}
+function cbCut(t){
+  if(!CB)return;t=Math.round(t*10)/10;
+  if(t<1||t>CB.total-1||CB.cuts.some(c=>Math.abs(c-t)<1)){toast('A cut needs at least a second between it and the next cut or the edge.',true);return}
+  let p=CB.cuts.findIndex(c=>c>t);if(p<0)p=CB.cuts.length;
+  CB.cuts.splice(p,0,t);CB.skip.splice(p+1,0,CB.skip[p]);CB.sel=p;cbDraw();
+}
+function cbRemove(i){if(!CB||i<0||i>=CB.cuts.length)return;CB.cuts.splice(i,1);CB.skip.splice(i,2,CB.skip[i]&&CB.skip[i+1]);CB.sel=-1;cbDraw()}
+function cbSet(cuts){CB.cuts=cuts.map(t=>Math.round(t*10)/10);CB.skip=new Array(cuts.length+1).fill(false);CB.sel=-1;cbDraw()}
+function cbEqual(){const n=Math.round(+val('cb-n'));if(!(n>=2&&n<=60)){toast('Give a number of parts from 2 to 60.',true);return}
+  if(CB.total/n<8){toast('That would make parts shorter than 8 seconds. Use fewer parts.',true);return}
+  cbSet(Array.from({length:n-1},(_,i)=>(i+1)*CB.total/n))}
+function cbEvery(){const s=+val('cb-s');if(!(s>=8&&s<=300)){toast('Give a length from 8 to 300 seconds.',true);return}
+  const n=Math.max(1,Math.floor(CB.total/s)),rest=CB.total-n*s,cuts=[];for(let i=1;i<n;i++)cuts.push(i*s);if(rest>=8&&n*s<CB.total)cuts.push(n*s);cbSet(cuts)}
+async function cbMake(){
+  const pieces=cbSegs().filter(s=>s.on).map(s=>[s.a,s.b]);
+  const r=await send('/api/range/cut',{key:CB.key,pieces:pieces,part_label:$('cb-label').checked});
+  if(r.error){toast(r.error,true);return}
+  cbJob='pieces';cbWasRunning=true;show(r);toast('Making '+pieces.length+' clip'+(pieces.length>1?'s':'')+'. They appear under Clips as each one is ready.');
+}
+async function cbDrop(){
+  if(!CB||!confirm('Delete this downloaded part ('+CB.r.mb+' MB)?'+NL+NL+'Clips already made from it are kept. To cut it again you would have to download it again.'))return;
+  const r=await send('/api/range/'+CB.key+'/delete'); if(r.error){toast(r.error,true);return}
+  try{localStorage.removeItem('cb:'+CB.key)}catch(e){}
+  $('cb-video').removeAttribute('src');$('cb-video').load();CB=null;toast('Deleted ('+r.mb+' MB freed)');loadBoard();
+}
+function cbInit(){
+  const v=$('cb-video'),tl=$('cb-tl');
+  v.addEventListener('timeupdate',()=>{if(!CB)return;const ph=$('cb-ph');ph.style.display='block';ph.style.left=(v.currentTime/CB.total*100)+'%';
+    if(cbStopAt!=null&&v.currentTime>=cbStopAt){v.pause();cbStopAt=null}});
+  tl.addEventListener('pointerdown',e=>{
+    if(!CB)return;const m=e.target.closest('.cutm'),rect=()=>tl.getBoundingClientRect(),at=ev=>Math.max(0,Math.min(CB.total,(ev.clientX-rect().left)/rect().width*CB.total));
+    if(!m){v.currentTime=at(e);cbStopAt=null;return}
+    e.preventDefault();const i=+m.dataset.i;CB.sel=i;cbDraw();
+    const move=ev=>{const lo=(i?CB.cuts[i-1]:0)+1,hi=(i<CB.cuts.length-1?CB.cuts[i+1]:CB.total)-1;
+      CB.cuts[i]=Math.round(Math.max(lo,Math.min(hi,at(ev)))*10)/10;v.currentTime=CB.cuts[i];cbDraw()};
+    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};
+    window.addEventListener('pointermove',move);window.addEventListener('pointerup',up)});
+  $('cb-cut').addEventListener('click',()=>cbCut(v.currentTime));$('cb-del').addEventListener('click',()=>cbRemove(CB?CB.sel:-1));
+  $('cb-clear').addEventListener('click',()=>{if(CB)cbSet([])});$('cb-eq').addEventListener('click',cbEqual);$('cb-ev').addEventListener('click',cbEvery);
+  $('cb-make').addEventListener('click',cbMake);$('cb-drop').addEventListener('click',cbDrop);
+  $('cb-list').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(b)loadBoard(b.dataset.k)});
+  $('cb-rows').addEventListener('change',e=>{const i=e.target.dataset.seg;if(i!=null){CB.skip[+i]=!e.target.checked;cbDraw()}});
+  $('cb-rows').addEventListener('click',e=>{const b=e.target.closest('[data-play]');if(!b)return;const s=cbSegs()[+b.dataset.play];v.currentTime=s.a;cbStopAt=s.b;v.play().catch(()=>{})});
+  window.addEventListener('resize',cbDraw);
+  document.addEventListener('keydown',e=>{
+    if($('view-board').hidden||!CB||e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary')))return;
+    const k=e.key.toLowerCase(),step=d=>{v.currentTime=Math.max(0,Math.min(CB.total,v.currentTime+d))};
+    if(k===' '){v.paused?v.play().catch(()=>{}):v.pause()}else if(k==='arrowleft')step(e.shiftKey?-5:-1);else if(k==='arrowright')step(e.shiftKey?5:1)
+    else if(k===',')step(-.1);else if(k==='.')step(.1);else if(k==='c')cbCut(v.currentTime);else if(k==='delete'||k==='backspace')cbRemove(CB.sel);else return;
+    e.preventDefault()});
+}
+cbInit();
+
 /* ---------- tracker ---------- */
-function view(n){$('view-clips').hidden=n!=='clips';$('view-track').hidden=n!=='track';$('v-clips').className=n==='clips'?'on':'';$('v-track').className=n==='track'?'on':'';if(n==='track')loadTracker()}
+function view(n){for(const x of ['clips','track','board']){$('view-'+x).hidden=n!==x;$('v-'+x).className=n===x?'on':''}
+  if(n!=='board')$('cb-video').pause();if(n==='track')loadTracker();if(n==='board')loadBoard()}
 async function send(url,body){
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
     if(!r.ok)return {error:await r.text()}; return await r.json()}
@@ -755,6 +1016,7 @@ let cur=null;
 function shownCards(){return [...$('clips').children].filter(e=>e.offsetParent!==null)}
 function setCur(el){if(cur)cur.classList.remove('cur');cur=el||null;if(cur){cur.classList.add('cur');cur.scrollIntoView({block:'center',behavior:'smooth'})}}
 document.addEventListener('keydown',e=>{
+  if($('view-clips').hidden||!$('boxes').hidden)return;
   if(e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary,[contenteditable]')))return;
   const cards=shownCards(), i=cards.indexOf(cur), k=e.key.toLowerCase();
   if(k==='j'||k==='arrowdown'){setCur(cards[Math.min(cards.length-1,i+1)]);e.preventDefault()}

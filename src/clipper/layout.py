@@ -305,6 +305,31 @@ def _measured_choice(clip_dir: Path, channel: str, frames: Sequence[Sequence[Fac
     return choice
 
 
+def _framing_path(cfg: Config) -> Path:
+    return cfg.data_dir / "framing.json"
+
+
+def saved_framing(channel: str, cfg: Config) -> dict | None:
+    """The face and video boxes a person saved for this streamer on the review page, if any."""
+    from .work import read_json
+
+    return (read_json(_framing_path(cfg), {}) or {}).get(channel.lower()) if channel else None
+
+
+def save_framing(channel: str, framing: dict | None, cfg: Config) -> None:
+    """Remember (or with None, forget) the boxes to use for every new clip of this streamer."""
+    from .work import read_json, write_json
+
+    if not channel:
+        return
+    data = read_json(_framing_path(cfg), {}) or {}
+    if framing is None:
+        data.pop(channel.lower(), None)
+    else:
+        data[channel.lower()] = {k: framing.get(k) for k in ("layout", "facecam", "game", "source")}
+    write_json(_framing_path(cfg), data)
+
+
 def auto_layout(clip_dir: Path, state: dict, cfg: Config) -> dict:
     """Set layout / crop_x / facecam on a clip's state from its source video.
 
@@ -315,6 +340,19 @@ def auto_layout(clip_dir: Path, state: dict, cfg: Config) -> dict:
         return state
     profile = cfg.channels.get(str(state.get("channel", "")).lower(), {}) or {}
     channel = str(state.get("channel", ""))
+    saved = saved_framing(channel, cfg)
+    # Boxes are fractions of the picture, so they only fit a stream of the same shape as the one they were drawn on.
+    if saved and saved.get("layout") in ("crop", "split"):
+        sw, sh = (saved.get("source") or [16, 9])[:2]
+        if abs(sw / sh - float(state.get("source_width") or 16) / float(state.get("source_height") or 9)) < 0.02:
+            state["layout"], state["layout_auto"] = saved["layout"], True
+            state["layout_reason"] = "the boxes you saved for this streamer"
+            for k in ("facecam", "game"):
+                if saved.get(k):
+                    state[k] = list(saved[k])
+                else:
+                    state.pop(k, None)
+            return state
     try:
         frames = detect_faces(clip_dir / "source.mp4", cfg)
         known = profile.get("facecam") or learned_facecam(channel, cfg)
