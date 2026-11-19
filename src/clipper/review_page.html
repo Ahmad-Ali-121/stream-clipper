@@ -501,8 +501,13 @@ function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
 let known=[];
 /* What a card was drawn from: when any of this changes, the card is drawn again. */
 function sig(c){return [c.mtime,c.status,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
+let loadTurn=0;
 async function loadClips(){
+  /* Answers can arrive out of order: a refresh that started before you approved a clip may come back after
+     the newer one. Only the answer to the most recent request is used; older ones are dropped. */
+  const turn=++loadTurn;
   let clips;try{const r=await fetch('/api/clips');if(!r.ok)return;clips=await r.json()}catch(e){return}
+  if(turn!==loadTurn)return;
   known=clips;
   const box=$('clips'), want=new Set(clips.map(c=>domId(c.key)));
   for(const el of [...box.children])if(!want.has(el.id))el.remove();
@@ -522,6 +527,7 @@ async function save(key,extra){
   const body=Object.assign({hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,
     title:g('title').value,title_b:g('title_b').value,description:g('description').value,tags:g('tags').value,
     layout:g('layout').value,disclosure:g('disclosure').checked,cut_start_s:parseFloat(g('cut_start_s').value),cut_end_s:parseFloat(g('cut_end_s').value)},extra||{});
+  loadTurn++;
   let r;try{r=await fetch('/api/clip/'+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}catch(e){toast('The program is not answering: '+e,true);return}
   if(!r.ok){toast('Not saved: '+await r.text(),true);return}
   const s=await r.json();
