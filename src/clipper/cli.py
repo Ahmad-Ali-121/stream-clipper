@@ -86,7 +86,7 @@ def _print_clips(clips: list[dict]) -> None:
 def _cmd_find(args: argparse.Namespace) -> int:
     from .pipeline import stage_find
 
-    work, clips = stage_find(args.url, load_config(args.config), top=args.top, mode=args.mode, refresh_chat=args.refresh)
+    work, clips = stage_find(args.url, load_config(args.config), top=args.top, mode=args.mode, refresh_chat=args.refresh, signals=args.signals)
     _print_clips(clips)
     print(f"work folder: {work}")
     return 0
@@ -222,7 +222,7 @@ def _cmd_post(args: argparse.Namespace) -> int:
 def _cmd_run(args: argparse.Namespace) -> int:
     from .pipeline import stage_run
 
-    work = stage_run(args.url, load_config(args.config), top=args.top, mode=args.mode, refresh_chat=args.refresh)
+    work = stage_run(args.url, load_config(args.config), top=args.top, mode=args.mode, refresh_chat=args.refresh, signals=args.signals)
     print(f"drafts ready in {work}. Next: clipper review {args.url}")
     return 0
 
@@ -268,6 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("url", help="Twitch VOD URL or YouTube video URL")
     f.add_argument("--top", type=int)
     f.add_argument("--mode", choices=["symmetric", "trailing"])
+    f.add_argument("--signals", help="what finds moments: A or chat, B or audio (chat + sound), C or video (chat + picture), D or all")
     f.add_argument("--refresh", action="store_true", help="re-download chat (for a stream that is still live)")
     f.set_defaults(func=_cmd_find)
 
@@ -344,6 +345,7 @@ def build_parser() -> argparse.ArgumentParser:
     ru.add_argument("url")
     ru.add_argument("--top", type=int)
     ru.add_argument("--mode", choices=["symmetric", "trailing"])
+    ru.add_argument("--signals", help="what finds moments: A or chat, B or audio (chat + sound), C or video (chat + picture), D or all")
     ru.add_argument("--refresh", action="store_true", help="re-download chat (stream still live)")
     ru.set_defaults(func=_cmd_run)
 

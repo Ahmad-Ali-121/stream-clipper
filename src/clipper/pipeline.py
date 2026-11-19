@@ -54,8 +54,12 @@ def stage_find(
     top: int | None = None,
     mode: str | None = None,
     refresh_chat: bool = False,
+    signals: str | None = None,
 ) -> tuple[Path, list[dict]]:
-    """Download metadata and chat, score moments, and create a clip folder per moment."""
+    """Download metadata and chat, score moments, and create a clip folder per moment.
+
+    ``signals`` (chat, audio, video, all) also measures the stream's sound and/or picture and adds moments chat missed.
+    """
     source, work = open_work(url, cfg)
     t0 = time.monotonic()
     meta = fetch_meta(source, work, cfg)
@@ -73,7 +77,23 @@ def stage_find(
         "%s: %d chat messages over %s, %d moments, %.0fs",
         meta.get("channel") or source.key, len(messages), format_time(messages[-1].t), len(moments), time.monotonic() - t0,
     )
-    write_json(work / "moments.json", [m.to_dict() for m in moments])
+    found = [dict(m.to_dict(), trigger="chat") for m in moments]
+    from .signals import MODES, add_signal_moments, measure_vod, parse_mode, signal_peaks
+
+    audio, video = MODES[parse_mode(signals or cfg.moments.signals)]
+    if audio or video:
+        if live:
+            log.warning("this stream is still live, so its sound and picture are not measured here; use watch for that")
+        else:
+            path = measure_vod(source.url, work, cfg, audio, video)
+            peaks = signal_peaks(path, cfg, since_s=settings.skip_start_s)
+            peaks = {k: v for k, v in peaks.items() if (k == "audio" and audio) or (k == "video" and video)}
+            extra = max(2, settings.top // 2)
+            found = add_signal_moments(found, peaks, extra)
+            agree = sum(1 for m in found if "+" in m["trigger"])
+            log.info("sound and picture: %d unusual moment(s); %d agree with chat, %d added that chat missed (at most %d)",
+                     sum(len(v) for v in peaks.values()), agree, sum(1 for m in found if not m["trigger"].startswith("chat")), extra)
+    write_json(work / "moments.json", found)
 
     # Clips already reviewed keep their folder and status; ranks of the rest are refreshed.
     for d in clip_dirs(work):
@@ -82,19 +102,21 @@ def stage_find(
             state["rank"] = 999
             write_json(d / "clip.json", state)
     out: list[dict] = []
-    for m in moments:
-        d = clip_dir(work, clip_id(m.peak_s))
+    for m in found:
+        d = clip_dir(work, clip_id(m["peak_s"]))
         state = read_json(d / "clip.json", {})
         state.update(
             {
                 "id": d.name,
-                "rank": m.rank,
-                "score": m.score,
-                "activity": m.activity,
-                "messages": m.messages,
-                "peak_s": m.peak_s,
-                "start_s": m.start_s,
-                "end_s": m.end_s,
+                "rank": m["rank"],
+                "score": m["score"],
+                "activity": m["activity"],
+                "messages": m["messages"],
+                "trigger": m["trigger"],
+                "signals": m.get("signals", {}),
+                "peak_s": m["peak_s"],
+                "start_s": m["start_s"],
+                "end_s": m["end_s"],
                 "vod_url": source.url,
                 "platform": source.platform,
                 "channel": meta.get("channel", ""),
@@ -430,9 +452,10 @@ def stage_clean(cfg: Config, dry_run: bool = False) -> tuple[int, float]:
     return count, freed
 
 
-def stage_run(url: str, cfg: Config, top: int | None = None, mode: str | None = None, refresh_chat: bool = False) -> Path:
+def stage_run(url: str, cfg: Config, top: int | None = None, mode: str | None = None, refresh_chat: bool = False,
+              signals: str | None = None) -> Path:
     """find -> fetch -> transcribe -> render drafts, ready for review."""
-    work, _clips = stage_find(url, cfg, top=top, mode=mode, refresh_chat=refresh_chat)
+    work, _clips = stage_find(url, cfg, top=top, mode=mode, refresh_chat=refresh_chat, signals=signals)
     stage_fetch(url, cfg)
     stage_transcribe(url, cfg)
     stage_render(url, cfg)

@@ -11,6 +11,7 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **Finds moments from chat.** Counts chatters in 10-second slices and compares with the last five minutes. No AI, no key, almost no bandwidth.
 - **Optionally listens and looks too.** Modes B, C and D also measure loudness and on-screen motion from the stream's lowest-quality feed, to catch moments chat missed.
 - **Never downloads a whole stream.** Only the clip ranges are fetched, at full quality. For streams Twitch is not recording, a rolling copy of the last ten minutes of the live feed stands in for the recording.
+- **Listens to finished streams too.** `--signals B` (or the choice on the page) measures a finished stream's sound or picture and adds moments chat missed.
 - **Works live or on finished streams.** `watch` follows several live Twitch channels at once; `run` processes a finished Twitch VOD (or a YouTube recording with chat replay).
 - **Frames the clip by itself.** Detects a full-screen camera or a small facecam over gameplay, and measures each streamer's facecam box from the picture.
 - **Captions.** Local Whisper speech-to-text, word-by-word highlighted captions burned in.
@@ -64,7 +65,7 @@ The code is plain Python and FFmpeg, so it should run on macOS and Linux, but th
 | Command | What it does |
 |---|---|
 | `watch CHANNEL... [--mode A\|B\|C\|D] [--minutes N]` | Watch live Twitch channels and make a draft clip for each moment |
-| `run URL [--top 8]` | Process a finished stream: find moments, fetch, transcribe, draft |
+| `run URL [--top 8] [--signals A\|B\|C\|D]` | Process a finished stream: find moments (chat, or chat plus sound and picture), fetch, transcribe, draft |
 | `review [URL]` | Local page: options panel, and approve, reject or edit each clip |
 | `finish [URL] [--brief FILE]` | Render approved clips (A and B versions, explainers) and export them with upload text |
 | `explain URL [--clips a,b]` | Narrated "explained" version of approved clips |
@@ -103,7 +104,7 @@ src/clipper/
   tts.py         narration voice            compose.py   explained and top-N videos
   post.py        export and upload text     brief.py     campaign rule checks
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           110 unit tests (uv run pytest -q)
+tests/           113 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

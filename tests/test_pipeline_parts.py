@@ -378,3 +378,42 @@ def test_finished_stream_button_refuses_what_is_not_a_video_link(tmp_path):
         c.start_run({"url": "https://www.twitch.tv/somechannel"})
     with pytest.raises(ValueError):
         c.start_run({"url": "https://www.twitch.tv/videos/1234567890", "top": 99})
+
+
+def test_finished_stream_signal_rows_carry_the_stream_second(tmp_path):
+    import json
+
+    from clipper.signals import load_signals
+
+    p = tmp_path / "signals_vod.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in [{"k": "a", "t": 12.0, "v": -20.5}, {"k": "v", "t": 12.5, "v": 0.3}, {"k": "a", "t": 11.0, "v": -30.0}]), encoding="utf-8")
+    data = load_signals(p, feed_delay_s=8.0)
+    assert data["a"] == [(11.0, -30.0), (12.0, -20.5)] and data["v"] == [(12.5, 0.3)]  # no delay applied, sorted
+
+
+def test_signal_only_moments_are_added_after_the_chat_ones_and_limited():
+    from clipper.signals import add_signal_moments
+
+    chat = [{"rank": 1, "peak_s": 1000.0, "start_s": 980.0, "end_s": 1010.0, "score": 4.0, "activity": 30, "messages": 40, "hype": 0, "trigger": "chat"},
+            {"rank": 2, "peak_s": 5000.0, "start_s": 4980.0, "end_s": 5010.0, "score": 3.0, "activity": 20, "messages": 25, "hype": 0, "trigger": "chat"}]
+    peaks = {"audio": [(990.0, 6.0), (2000.0, 7.0), (3000.0, 9.0), (4000.0, 5.5)], "video": []}
+    out = add_signal_moments(chat, peaks, extra=2)
+    assert [m["trigger"] for m in out] == ["chat+audio", "chat", "audio", "audio"]
+    assert out[0]["signals"] == {"audio": 6.0}
+    assert [(m["peak_s"], m["rank"]) for m in out[2:]] == [(3000.0, 3), (2000.0, 4)]  # strongest first, the weakest left out
+
+
+def test_sound_returning_after_silence_is_not_a_loud_moment(tmp_path):
+    import json
+
+    from clipper.config import load_config
+    from clipper.signals import signal_peaks
+
+    rows = [{"k": "a", "t": float(t), "v": -90.0} for t in range(0, 300)]           # muted intro
+    rows += [{"k": "a", "t": float(t), "v": -25.0} for t in range(300, 2000)]        # normal talking
+    rows += [{"k": "a", "t": float(t), "v": -5.0} for t in range(2000, 2010)]        # a shout
+    rows += [{"k": "a", "t": float(t), "v": -25.0} for t in range(2010, 2600)]
+    p = tmp_path / "signals_vod.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    peaks = signal_peaks(p, load_config(), since_s=0)["audio"]
+    assert [round(t) for t, _z in peaks] == [2005]

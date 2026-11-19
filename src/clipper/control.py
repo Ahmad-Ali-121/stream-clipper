@@ -182,6 +182,7 @@ class Control:
 
         source = parse_source(str(raw.get("url") or ""))  # a clear ValueError for anything that is not a video link
         top = int(raw.get("top") or 8)
+        signals = parse_mode(str(raw.get("signals") or "chat"))
         if not 1 <= top <= 30:
             raise ValueError("the number of clips must be between 1 and 30")
         with self._lock:
@@ -190,11 +191,11 @@ class Control:
             self.run_problem, self.run_seen = "", True
             self.run_log_path.parent.mkdir(parents=True, exist_ok=True)
             out = self.run_log_path.open("w", encoding="utf-8")
-            out.write(f"{time.strftime('%H:%M:%S')} analysing {source.url}: the best {top} moments\n")
+            out.write(f"{time.strftime('%H:%M:%S')} analysing {source.url}: the best {top} moments, found by {signals}\n")
             out.flush()
             self.run_proc = subprocess.Popen(
                 [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())",
-                 "run", source.url, "--top", str(top)],
+                 "run", source.url, "--top", str(top), "--signals", signals],
                 stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(PROJECT_ROOT),
             )
         return self.status()

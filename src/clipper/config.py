@@ -43,6 +43,7 @@ class MomentSettings:
     hype_spikes: bool = True  # also score spikes in hype-word messages (for saturated chats)
     hype_spike_min_ratio: float = 0.15  # share of a bucket's messages that must be hype for that to count
     skip_start_s: float = 120.0  # ignore the greeting flood at the start of a stream
+    signals: str = "chat"  # finished streams: chat, audio (chat + sound), video (chat + picture) or all
     hype_words: list[str] = field(default_factory=list)
 
     def validate(self) -> None:

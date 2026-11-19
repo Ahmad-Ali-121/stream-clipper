@@ -139,12 +139,19 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <details class="log"><summary>Activity log</summary><pre class="log" id="wlog"></pre></details>
         </div>
         <div id="tab-vod" hidden>
-          <p class="help">Paste the link of a stream that has ended. Its chat replay is scored, and only the best moments are downloaded and turned into drafts.</p>
+          <p class="help">Paste the link of a stream that has ended. Its chat replay is scored, its sound and picture can be measured too, and only the best moments are downloaded and turned into drafts.</p>
           <label class="f" for="r-url">Twitch video link</label>
           <input type="text" id="r-url" placeholder="https://www.twitch.tv/videos/1234567890">
+          <label class="f" for="r-sig">What should find the moments?</label>
+          <select id="r-sig">
+            <option value="chat">Chat only (fastest, almost no internet)</option>
+            <option value="audio" selected>Chat + sound (about 100 MB per stream hour)</option>
+            <option value="video">Chat + picture (about 130 MB per stream hour)</option>
+            <option value="all">Chat + sound + picture (about 130 MB per stream hour)</option>
+          </select>
           <label class="f" for="r-top">How many clips</label>
           <select id="r-top"><option>5</option><option selected>8</option><option>12</option><option>20</option></select>
-          <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top')})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="act('/api/run/stop',{})">Stop</button></div>
+          <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig')})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="act('/api/run/stop',{})">Stop</button></div>
           <div class="note" id="r-note">Nothing running.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="rlog"></pre></details>
         </div>

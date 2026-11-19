@@ -48,6 +48,8 @@ MODE_TEXT = {
 }
 SIGNAL_BEFORE_S = 15.0  # a clip made from an audio or video moment starts this long before the peak
 SIGNAL_AFTER_S = 15.0
+SILENCE_DB = -60.0  # quieter than this is a muted stream, not a baseline to compare with
+AUDIO_OVER_USUAL_DB = 6.0  # a loud moment is at least this much louder than the stream's usual level
 CLOCK_JUMP_S = 30.0  # a change this big in a sample's lag means the feed's clock jumped (ad break)
 MIN_HISTORY = 12  # buckets of history needed before anything can count as unusual (two minutes)
 
@@ -207,6 +209,73 @@ class SignalReader(threading.Thread):
 # ---- turning the measurements into moments (pure logic) ----
 
 
+def vod_feed_url(url: str, cfg: Config, video: bool) -> str:
+    """Address of a finished stream's lowest-quality version (sound only, or the smallest picture)."""
+    from .fetch import _ytdlp
+
+    proc = run(
+        _ytdlp(cfg) + ["-g", "-f", "160p/worst[vcodec!=none]/worst" if video else "Audio_Only/audio_only/worstaudio/worst", url],
+        timeout_s=120, retries=2, retry_wait_s=5, what="finished stream's low-quality address",
+    )
+    found = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+    if not found.startswith("http"):
+        raise ToolError("no low-quality version of this finished stream was found to measure")
+    return found
+
+
+def measure_vod(url: str, work: Path, cfg: Config, audio: bool, video: bool) -> Path:
+    """Measure loudness and motion over a whole finished stream and write them to <work>/signals_vod.jsonl.
+
+    The lowest-quality version is read once, measured and thrown away; nothing of it is saved.
+    Rows carry the stream second directly ({"k", "t", "v"}), since a finished stream's clock needs no aligning.
+    """
+    out = work / "signals_vod.jsonl"
+    want = "".join(["a"] * audio + ["v"] * video)
+    mark = work / "signals_vod.done"
+    if out.exists() and mark.exists() and set(want) <= set(mark.read_text(encoding="utf-8").strip()):
+        return out
+    ffmpeg = find_tool("ffmpeg", cfg.data_dir)
+    feed = vod_feed_url(url, cfg, video)
+    log.info("measuring the finished stream's %s (reads its lowest-quality version once; about %d MB per stream hour)",
+             " and ".join(["sound"] * audio + ["picture"] * video), 130 if video else 100)
+    proc = subprocess.Popen(feed_command(ffmpeg, feed, audio, video), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            stdin=subprocess.DEVNULL, text=True, errors="replace")
+    lines: dict[str, list[str]] = {"a": [], "v": []}
+
+    def pump(stream, kind: str) -> None:
+        for line in stream:
+            lines[kind].append(line)
+
+    pumps = [threading.Thread(target=pump, args=(proc.stdout, "a" if audio else "v"), daemon=True),
+             threading.Thread(target=pump, args=(proc.stderr, "v"), daemon=True)]
+    for p in pumps:
+        p.start()
+    t0 = last_note = time.time()
+    while proc.poll() is None:
+        time.sleep(2)
+        if time.time() - last_note > 60:
+            last_note = time.time()
+            reached = max((parse_feed_lines(v[-6:]) or [(0.0, 0.0)])[-1][0] for v in lines.values())
+            log.info("  measured up to %d:%02d:%02d of the stream", reached // 3600, reached % 3600 // 60, reached % 60)
+    for p in pumps:
+        p.join(timeout=30)
+    rows = []
+    for kind, wanted in (("a", audio), ("v", video)):
+        if wanted:
+            rows += [{"k": kind, "t": round(t, 2), "v": round(v, 4)} for t, v in parse_feed_lines(lines[kind])]
+    if not rows:
+        raise ToolError(f"the finished stream could not be measured (FFmpeg ended with code {proc.returncode} and no values). "
+                        f"Its last words: {' '.join(x.strip() for x in lines['v'][-3:])[:300]}")
+    part = out.with_suffix(".part")
+    with part.open("w", encoding="utf-8") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+    part.replace(out)
+    mark.write_text(want, encoding="utf-8")
+    log.info("measured %d values in %.0fs", len(rows), time.time() - t0)
+    return out
+
+
 def load_signals(path: Path, feed_delay_s: float) -> dict[str, list[tuple[float, float]]]:
     """{"a": [(stream seconds, dB)], "v": [(stream seconds, motion)]} from a signals.jsonl file.
 
@@ -226,6 +295,10 @@ def load_signals(path: Path, feed_delay_s: float) -> dict[str, list[tuple[float,
     if not rows:
         return {"a": [], "v": []}
     out: dict[str, list[tuple[float, float]]] = {"a": [], "v": []}
+    for r in rows:  # a finished stream's rows already carry the stream second
+        if r.get("k") in out and "t" in r:
+            out[r["k"]].append((float(r["t"]), float(r["v"])))
+    rows = [r for r in rows if "t" not in r]
     stretch: list[dict] = []
     for r in [r for r in rows if r.get("k") in out] + [None]:
         if r is None or (stretch and abs(r["lag"] - stretch[-1]["lag"]) > CLOCK_JUMP_S):
@@ -305,6 +378,19 @@ def merge_moments(chat: list[dict], peaks: dict[str, list[tuple[float, float]]],
     return sorted(out, key=lambda m: m["peak_s"])
 
 
+def add_signal_moments(chat: list[dict], peaks: dict[str, list[tuple[float, float]]], extra: int) -> list[dict]:
+    """For a finished stream: the chat moments, marked where sound or picture agree, plus the ``extra`` strongest
+    moments that only sound or picture found. Ranks follow on from the chat moments'."""
+    merged = merge_moments(chat, peaks)
+    kept = [m for m in merged if m["trigger"].startswith("chat")]
+    only = sorted((m for m in merged if not m["trigger"].startswith("chat")), key=lambda m: -m["score"])[:max(0, extra)]
+    rank = max((m.get("rank", 0) for m in kept), default=0)
+    for m in only:
+        rank += 1
+        m["rank"] = rank
+    return kept + only
+
+
 def signal_peaks(path: Path, cfg: Config, since_s: float) -> dict[str, list[tuple[float, float]]]:
     """Unusual audio and video moments in a signals file, as {"audio": [(second, strength)], "video": [...]}."""
     w = cfg.watch
@@ -315,5 +401,15 @@ def signal_peaks(path: Path, cfg: Config, since_s: float) -> dict[str, list[tupl
     out: dict[str, list[tuple[float, float]]] = {}
     for kind, key, top, floor, threshold in (("audio", "a", 3, 1.5, w.audio_level), ("video", "v", 0, 0.004, w.video_level)):
         values = {i: v for i, v in bucket_values(data[key], bucket, top=top).items() if i * bucket >= since_s}
-        out[kind] = [(i * bucket + bucket / 2, z) for i, z in pick_peaks(unusual(values, window, floor), threshold, gap)]
+        scores = unusual(values, window, floor)
+        if kind == "audio" and values:
+            # Unusual is not enough: sound coming back after a muted intro or a quiet spell is unusual too.
+            # A loud moment must also be clearly louder than the stream usually is.
+            usual = median(values.values())
+            scores = {
+                i: z for i, z in scores.items()
+                if values[i] >= usual + AUDIO_OVER_USUAL_DB
+                and median([values[j] for j in range(i - window, i) if j in values] or [SILENCE_DB]) > SILENCE_DB
+            }
+        out[kind] = [(i * bucket + bucket / 2, z) for i, z in pick_peaks(scores, threshold, gap)]
     return out

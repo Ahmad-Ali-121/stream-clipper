@@ -119,6 +119,16 @@ Open the streamer's Videos tab on Twitch, copy the link of the stream (it looks 
 uv run clipper run https://www.twitch.tv/videos/123456789 --top 8
 ```
 
+Or paste the link on the review page: step 1, **Finished stream** tab.
+
+Chat does not catch everything. To also find moments from the stream's sound or picture, add `--signals B` (chat + sound), `C` (chat + picture) or `D` (all), or pick it on the page:
+
+```powershell
+uv run clipper run https://www.twitch.tv/videos/123456789 --top 8 --signals B
+```
+
+This reads the stream's lowest-quality version once to measure it (about 100 MB per stream hour for sound, 130 MB with picture) and saves none of it. You get the 8 best chat moments, each marked where sound or picture agree, plus up to 4 moments that only sound or picture found.
+
 Then do steps 2 to 4 above. This also works with a YouTube stream recording, if that video has chat replay.
 
 ### C. Commentary videos (for your own channel)

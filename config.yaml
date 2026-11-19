@@ -24,6 +24,8 @@ moments:
   audio_weight: 0.5       # score boost for the loudest buckets, when audio scores are supplied (0 disables)
   hype_spikes: true       # also score spikes in hype-word messages; needed when chat is so busy that volume is flat
   hype_spike_min_ratio: 0.15   # share of a bucket's messages that must be hype words for that to count
+  signals: chat           # finished streams: what finds moments. chat, audio (chat + sound), video (chat + picture), all.
+                          # audio and video read the stream's lowest-quality version once (about 100 to 130 MB per stream hour)
   skip_start_s: 120       # ignore the greeting flood in the first minutes of a stream
   hype_words: [W, LOL, LMAO, LMFAO, OMG, WTF, NO WAY, CLIP, CLIP IT, HOLY, BRO, WHAT, KEKW, LUL, OMEGALUL, POG, POGGERS, "💀", "😭", "😂"]
 
