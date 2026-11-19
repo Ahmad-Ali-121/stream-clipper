@@ -47,15 +47,16 @@ def _cuda_usable() -> tuple[bool, int]:
         if ctranslate2.get_cuda_device_count() < 1:
             return False, 0
         ctranslate2.get_supported_compute_types("cuda")  # raises when the CUDA libraries are missing
-    except Exception:
+    except Exception as e:
+        log.info("no usable NVIDIA card for speech-to-text (%s)", e)
         return False, 0
     vram = 0
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
                              capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=20).stdout
         vram = int(out.strip().splitlines()[0])
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("could not read the NVIDIA card's memory size (%s); assuming a small card", e)
     return True, vram
 
 
@@ -90,6 +91,41 @@ print("CUDA-OK")
 """
 
 
+CRASH_CODES = {
+    0xC0000005: "access violation: it read memory it should not, which usually means a damaged model file",
+    0xC000001D: "illegal instruction: this processor lacks something the speech library needs",
+    0xC0000135: "a required system library (DLL) is missing",
+    0xC0000409: "the speech library aborted",
+    0xC00000FD: "stack overflow",
+}
+
+
+def describe_exit(code: int) -> str:
+    """A crash exit code in words. Windows reports crashes as large negative numbers."""
+    unsigned = code & 0xFFFFFFFF
+    if 0 <= code < 256:
+        return f"it ended with an error (exit code {code})"
+    return f"it crashed: exit code {code} (0x{unsigned:08X}, {CRASH_CODES.get(unsigned, 'killed, or a crash inside a native library')})"
+
+
+def trial_load(model: str, device: str, compute_type: str, models_dir: str) -> tuple[bool, str]:
+    """Load the speech model and transcribe a second of silence in a separate process: (worked, everything it said).
+
+    A damaged model file or missing GPU libraries kill the process inside native code, with no Python error.
+    Trying it in a child first means that death is seen and reported instead of taking the program with it.
+    """
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-X", "faulthandler", "-c", _CUDA_TRIAL.replace('"cuda"', "sys.argv[4]"), model, compute_type, models_dir, device],
+            capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=3600,
+        )
+    except Exception as e:
+        return False, f"could not start the trial: {e}"
+    if "CUDA-OK" in proc.stdout:
+        return True, ""
+    return False, (describe_exit(proc.returncode) + "\n" + proc.stderr.strip()[-1500:]).strip()
+
+
 def confirm_cuda(cfg: Config, model: str, compute_type: str, models_dir: str) -> tuple[str, str]:
     """(device, compute_type) after proving once that speech really runs on the NVIDIA card.
 
@@ -102,20 +138,16 @@ def confirm_cuda(cfg: Config, model: str, compute_type: str, models_dir: str) ->
     if info.get("cuda_checked"):
         return info.get("whisper_device", "cpu"), info.get("whisper_compute_type", "int8")
     log.info("checking that speech-to-text really runs on the NVIDIA card (once; the first run also downloads the model)")
-    try:
-        proc = subprocess.run([sys.executable, "-c", _CUDA_TRIAL, model, compute_type, models_dir],
-                              capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=3600)
-        ok, why = "CUDA-OK" in proc.stdout, (proc.stderr.strip().splitlines() or [f"it stopped with code {proc.returncode}"])[-1]
-    except Exception as e:
-        ok, why = False, str(e)
+    ok, why = trial_load(model, "cuda", compute_type, models_dir)
     info["cuda_checked"] = True
     if ok:
         log.info("speech-to-text runs on the NVIDIA card")
     else:
-        info.update(whisper_device="cpu", whisper_compute_type="int8", cuda_problem=why[:300])
+        info.update(whisper_device="cpu", whisper_compute_type="int8", cuda_problem=why)
         log.warning(
-            "an NVIDIA card was found but speech-to-text cannot run on it (%s). Using the processor instead, which is slower. "
-            "The usual cause is missing NVIDIA libraries (cuBLAS and cuDNN); see GUIDE.md, 'When something goes wrong'", why[:300],
+            "an NVIDIA card was found but speech-to-text cannot run on it. Using the processor instead, which is slower. "
+            "The usual cause is missing NVIDIA libraries (cuBLAS and cuDNN); see GUIDE.md, 'When something goes wrong'. "
+            "What the trial said:\n%s", why,
         )
     write_json(path, info)
     return info.get("whisper_device", "cpu"), info.get("whisper_compute_type", "int8")

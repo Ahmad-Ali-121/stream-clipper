@@ -216,10 +216,14 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
     results: list[tuple[Path, bool]] = []
     for work in works:
         for d in select_clips(work, status="approved"):
+            from .watch import note_error
+
             try:
                 _finish_clip(work, d, cfg, brief, results)
+                note_error(d, None)
             except Exception as e:  # one bad clip must not stop the others
                 log.exception("clip %s/%s could not be finished", work.name, d.name)
+                note_error(d, f"finish failed: {e}")
                 if problems is not None:
                     problems.append(f"{work.name}/{d.name}: {e}")
     return results

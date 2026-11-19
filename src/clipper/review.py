@@ -41,7 +41,10 @@ button{padding:9px 16px;border:0;border-radius:5px;font-weight:600;cursor:pointe
 .panel{padding:14px 20px;background:#191c21;border-bottom:1px solid #2a2e36}
 .panel h2{font-size:14px;margin:0 0 8px;color:#cfd6de}.cols{display:flex;gap:26px;flex-wrap:wrap}.cols>div{flex:1;min-width:280px}
 .panel label{color:#e8e8e8;font-size:13px;margin-top:5px}.hint{color:#9aa3ad;font-size:12px;margin-top:6px}
-pre{background:#0f1114;color:#b8c0c9;padding:8px;border-radius:5px;font-size:11px;max-height:150px;overflow:auto;white-space:pre-wrap;margin:8px 0 0}
+pre{background:#0f1114;color:#b8c0c9;padding:8px;border-radius:5px;font-size:11px;max-height:320px;overflow:auto;white-space:pre-wrap;margin:8px 0 0}
+.lerr{color:#ff6b61;font-weight:600}.lwarn{color:#e5b84a}
+#errbox{display:none;background:#5c1f1b;color:#fff;border:1px solid #c0473f;padding:10px 14px;margin:0 0 12px;border-radius:6px;font-size:13px;white-space:pre-wrap}
+.cliperr{background:#5c1f1b;color:#fff;border:1px solid #c0473f;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:10px;white-space:pre-wrap}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#59606c;margin-right:6px}.dot.on{background:#2e9e5b}
 </style></head><body><header><h1>__TITLE__</h1><div class="sub">__SUB__</div></header>
 __PANEL__
@@ -58,15 +61,26 @@ function show(s){
   const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
   document.getElementById('o-ab').checked=s.ab_versions; document.getElementById('o-opening').checked=s.opening;
   document.getElementById('wdot').className='dot'+(s.watching?' on':'');
-  document.getElementById('wlog').textContent=(s.watching?'WATCHING\\n':'not watching\\n')+s.watch_log.join('\\n');
-  document.getElementById('flog').textContent=(s.finishing?'WORKING...\\n':'')+(s.finish_log.join('\\n')||'nothing made yet in this session');
+  logTo('wlog',[s.watching?'WATCHING':'not watching'].concat(s.watch_log));
+  logTo('flog',(s.finishing?['WORKING...']:[]).concat(s.finish_log.length?s.finish_log:['nothing made yet in this session']));
+  const bad=s.watch_log.concat(s.finish_log).filter(isBad);
+  const eb=document.getElementById('errbox');
+  eb.style.display=(bad.length||s.watch_problem)?'block':'none';
+  eb.textContent=(s.watch_problem?s.watch_problem+String.fromCharCode(10):'')+(bad.length?bad.length+' error or warning line(s) below, shown in colour. Latest: '+bad[bad.length-1]:'');
 }
 async function act(url,body){
   const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!r.ok){alert(await r.text());return} show(await r.json());
 }
 function saveOpts(){act('/api/options',{mode:mode(),ab_versions:document.getElementById('o-ab').checked,opening:document.getElementById('o-opening').checked})}
-async function poll(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){} setTimeout(poll,5000)}
+function isBad(l){return /ERROR|FAILED|NOT MADE|Traceback|Error:|fatal exception|STOPPED BY ITSELF/.test(l)}
+function logTo(id,lines){const el=document.getElementById(id);const stick=el.scrollTop+el.clientHeight>=el.scrollHeight-30;el.textContent='';
+  for(const l of lines){const d=document.createElement('div');d.textContent=l||' ';if(isBad(l))d.className='lerr';else if(/WARNING/.test(l))d.className='lwarn';el.appendChild(d)}
+  if(stick)el.scrollTop=el.scrollHeight}
+async function poll(){const eb=document.getElementById('errbox');
+  try{const r=await fetch('/api/options');if(r.ok)show(await r.json());else{eb.style.display='block';eb.textContent='The page could not read the program state: '+r.status+' '+await r.text()}}
+  catch(e){eb.style.display='block';eb.textContent='THE PROGRAM IS NOT ANSWERING ('+e+'). It has stopped or crashed: look at the terminal window where you started it; the reason is printed there.'}
+  setTimeout(poll,5000)}
 if(document.getElementById('panel'))poll();
 
 async function save(id, extra){
@@ -81,7 +95,7 @@ async function save(id, extra){
 </script></body></html>"""
 
 
-PANEL = """<div class="panel" id="panel"><div class="cols">
+PANEL = """<div class="panel" id="panel"><div id="errbox"></div><div class="cols">
 <div><h2><span class="dot" id="wdot"></span>Watch live streams</h2>
 <label>Twitch channels (names, separated by spaces)</label><input type="text" id="o-channels" placeholder="lacy xqc clix">
 <div id="o-modes"></div>
@@ -122,6 +136,7 @@ def _clip_html(d: Path) -> str:
 {c.get('activity')} chatters &middot; layout: {e(c.get('layout') or 'default')} ({e(c.get('layout_reason') or 'not checked')}) &middot; showing {video or 'nothing'}</div>
 {f'<div class="meta"><b>Note:</b> {e(c.get("notes"))}</div>' if c.get('notes') else ''}
 {f'<div class="meta"><b>{"AI suggests keeping" if c.get("ai_keep") else "AI suggests rejecting"}:</b> {e(c.get("ai_reason"))} &middot; tags: {e(" ".join(c.get("tags") or []))}</div>' if c.get('copy_at') else ''}
+{f'<div class="cliperr"><b>This clip has an error:</b> {e(c.get("error"))}</div>' if c.get('error') else ''}
 <div class="tr">{e(c.get('transcript') or '(no transcript yet)')}</div>
 <label>Hook text, version A (shown for the first seconds)</label><input type="text" name="hook" value="{e(c.get('hook'))}">
 <label>Hook text, version B (the second version made for A/B testing; empty = same as A)</label><input type="text" name="hook_b" value="{e(c.get('hook_b'))}">

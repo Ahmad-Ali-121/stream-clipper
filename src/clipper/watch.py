@@ -84,8 +84,10 @@ def channel_is_live(channel: str, cfg: Config) -> bool:
             _ytdlp(cfg) + ["--skip-download", "--print", "%(is_live)s", f"https://www.twitch.tv/{channel}"],
             timeout_s=60, retries=0, retry_wait_s=3, what=f"{channel} live check",
         )
-    except ToolError:
-        return False  # yt-dlp fails with "the channel is not currently live" when offline
+    except ToolError as e:
+        if "not currently live" not in str(e):  # that message is the normal answer for an offline channel
+            log.warning("%s: could not check whether it is live (%s)", channel, e)
+        return False
     return proc.stdout.strip().splitlines()[-1:] == ["True"]
 
 
@@ -275,6 +277,19 @@ def prepare_clip(d: Path, state: dict, cfg: Config) -> dict:
     return state
 
 
+def note_error(d: Path, message: str | None) -> None:
+    """Keep the reason a clip could not be made in its clip.json, so the review page can show it; None clears it."""
+    path = d / "clip.json"
+    state = read_json(path, {})
+    if not state or (message is None and "error" not in state):
+        return
+    if message is None:
+        state.pop("error", None)
+    else:
+        state["error"] = f"{time.strftime('%H:%M:%S')} {message}"
+    write_json(path, state)
+
+
 def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
     """Fetch, transcribe and render one moment from the live VOD."""
     from .render import render_clip
@@ -339,7 +354,12 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                         watched[name] = w
                     for moment in new_moments(w, cfg):
                         log.info("%s: moment at %s (%s, %.1f), making a draft", name, format_time(moment["peak_s"]), moment.get("trigger", "chat"), moment["score"])
-                        d = make_draft(w, moment, cfg)
+                        try:
+                            d = make_draft(w, moment, cfg)
+                        except Exception as e:
+                            note_error(clip_dir(w.work, clip_id(moment["peak_s"])), f"draft failed: {e}")
+                            raise
+                        note_error(d, None)
                         s = read_json(d / "clip.json")
                         print(f"DRAFT {name} {d.name}  {s.get('trigger', 'chat')} {s['score']}  ready {s['ready_seconds_after_moment']}s after the moment  {d / 'final.mp4'}")
                     if time.time() - w.last_live_check > cfg.watch.live_check_s:
@@ -349,7 +369,8 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                             w.stop()
                             watched.pop(name, None)
                 except Exception as e:  # one channel's failure must not stop the others
-                    log.error("%s: %s", name, e)
+                    # A ToolError's message is the whole story; anything else is a bug and gets its full traceback.
+                    log.error("%s: %s", name, e, exc_info=not isinstance(e, ToolError))
             time.sleep(cfg.watch.poll_s)
     except KeyboardInterrupt:
         pass

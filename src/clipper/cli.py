@@ -13,6 +13,7 @@ from . import __version__
 from .brief import ClipInfo, check_clip, load_brief, passes
 from .captions import build_ass, words_from_json
 from .chat import ChatFormatError, load_chat
+from .tools import ToolError
 from .config import ConfigError, load_config
 from .moments import find_moments, format_time
 
@@ -372,11 +373,22 @@ def main(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
         stream=sys.stderr,
     )
+    import faulthandler
+
+    try:
+        faulthandler.enable()  # a crash inside a native library prints where it happened instead of exiting silently
+    except (OSError, ValueError) as e:  # no real error stream to write to (output captured by another program)
+        log.debug("crash traces are off: %s", e)
     try:
         return args.func(args)
-    except (ConfigError, ChatFormatError, FileNotFoundError, ValueError, TypeError, RuntimeError) as e:
-        log.error("%s", e)
+    except (ConfigError, ChatFormatError, FileNotFoundError, ValueError, ToolError) as e:
+        log.error("%s", e)  # expected kinds of failure: the message says what to do
+        if args.verbose:
+            log.exception("details")
         return 2
+    except Exception:
+        log.exception("unexpected error; this is a bug, please report the lines below")
+        return 3
 
 
 if __name__ == "__main__":

@@ -103,7 +103,9 @@ def live_info(channel: str, cfg: Config) -> dict | None:
         proc = run(_ytdlp(cfg) + ["-J", "--skip-download", f"https://www.twitch.tv/{channel}"],
                    timeout_s=90, retries=0, what=f"{channel} live details")
         info = json.loads(proc.stdout)
-    except (ToolError, ValueError):
+    except (ToolError, ValueError) as e:
+        if "not currently live" not in str(e):  # that message is the normal answer for an offline channel
+            log.warning("%s: could not read its live details (%s)", channel, e)
         return None
     if not info.get("is_live") or not info.get("timestamp") or not info.get("id"):
         return None

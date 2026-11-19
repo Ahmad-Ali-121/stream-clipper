@@ -163,6 +163,7 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | "no chat replay" | That video cannot be scored from chat. Use a live watch instead |
 | A clip is framed wrong | On the review page, change Layout and save; then run `finish` again |
 | "an NVIDIA card was found but speech-to-text cannot run on it" | Not an error. The card is there but NVIDIA's cuBLAS and cuDNN libraries are not, so speech-to-text runs on the processor (slower, same result). Video encoding still uses the card. After installing those libraries, run `uv run clipper hardware --refresh` to try the card again |
+| A red box at the top of the page | The watcher stopped by itself, or the program is not answering. The red and yellow lines in the log under it, and the terminal window, say why. A clip that could not be made shows its own reason in red on its card |
 | Captions miss words | Normal on very noisy moments. The larger model is already the default |
 | Too many clips with nothing in them in mode B, C or D | Raise `audio_level` or `video_level` under `watch:` in `config.yaml` |
 | Anything else | Open an issue on the project's GitHub page, or open Claude Code in this folder and describe it |

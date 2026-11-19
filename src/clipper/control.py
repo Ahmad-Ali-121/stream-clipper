@@ -66,6 +66,7 @@ class Control:
         self.log_path = cfg.data_dir / "watch.log"
         self.finish_lines: list[str] = []
         self.finishing = False
+        self.watch_problem = ""  # why the watcher is not running although nobody stopped it
         self._lock = threading.Lock()
 
     def reload(self) -> Config:
@@ -76,14 +77,15 @@ class Control:
 
     def status(self) -> dict:
         cfg = self.cfg
+        self._notice_death()
         tail: list[str] = []
         if self.log_path.exists():
-            tail = self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-12:]
+            tail = self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-200:]
         return {
             "mode": parse_mode(cfg.watch.mode), "modes": MODE_TEXT, "channels": " ".join(cfg.watch.channels),
             "ab_versions": cfg.render.ab_versions, "opening": cfg.render.opening,
-            "watching": self.watching(), "watch_log": tail,
-            "finishing": self.finishing, "finish_log": self.finish_lines[-12:],
+            "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
+            "finishing": self.finishing, "finish_log": self.finish_lines[-200:],
         }
 
     def save(self, raw: dict) -> dict:
@@ -96,6 +98,20 @@ class Control:
     def watching(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
+    def _notice_death(self) -> None:
+        """A watcher that ended without Stop being pressed is an error: say so in its log and on the page."""
+        with self._lock:
+            if self.proc is None or self.proc.poll() is None:
+                return
+            from .hw import describe_exit
+
+            code = self.proc.returncode
+            self.proc = None
+            self.watch_problem = f"THE WATCHER STOPPED BY ITSELF at {time.strftime('%H:%M:%S')}: {describe_exit(code)}. The lines above it say why."
+            with self.log_path.open("a", encoding="utf-8") as fh:
+                fh.write(self.watch_problem + "\n")
+            log.error(self.watch_problem)
+
     def start_watch(self, raw: dict) -> dict:
         opts = clean_options({k: raw[k] for k in ("mode", "channels") if k in raw})
         names = opts.get("watch", {}).get("channels") or list(self.cfg.watch.channels)
@@ -106,12 +122,14 @@ class Control:
         with self._lock:
             if self.watching():
                 raise ValueError("already watching; stop it first")
+            self.watch_problem = ""
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             out = self.log_path.open("w", encoding="utf-8")
             out.write(f"{time.strftime('%H:%M:%S')} starting: {' '.join(names)} ({cfg.watch.mode})\n")
             out.flush()
             self.proc = subprocess.Popen(
-                [sys.executable, "-c", "from clipper.cli import main; raise SystemExit(main())", "watch", *names, "--mode", cfg.watch.mode],
+                # -u: unbuffered, so every line reaches the log the moment it is printed.
+                [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())", "watch", *names, "--mode", cfg.watch.mode],
                 stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(PROJECT_ROOT),
             )
         return self.status()
@@ -128,6 +146,7 @@ class Control:
                     self.proc.wait(timeout=15)
                 except subprocess.TimeoutExpired:
                     self.proc.kill()
+                self.proc = None  # stopped on purpose: not a death to report
                 with self.log_path.open("a", encoding="utf-8") as fh:
                     fh.write(f"{time.strftime('%H:%M:%S')} stopped\n")
         return self.status()
@@ -153,7 +172,9 @@ class Control:
             self.finish_lines += [f"NOT MADE {p}" for p in problems]
             self.finish_lines.append(f"{time.strftime('%H:%M:%S')} done: {len(results)} file(s) in {self.cfg.data_dir / 'ready'}")
         except Exception as e:  # shown on the page instead of killing the server
+            import traceback
+
             log.exception("finish failed")
-            self.finish_lines.append(f"FAILED: {e}")
+            self.finish_lines += [f"FAILED: {type(e).__name__}: {e}"] + traceback.format_exc().splitlines()
         finally:
             self.finishing = False

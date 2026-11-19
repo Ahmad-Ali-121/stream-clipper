@@ -65,6 +65,13 @@ def _local(path: Path, cfg: Config) -> list[dict]:
         models = cfg.data_dir / "models"
         models.mkdir(parents=True, exist_ok=True)
         log.info("loading whisper model %s (%s, %s); the first run downloads it", t.model, device, compute_type)
+        ok, why = hw.trial_load(t.model, device, compute_type, str(models))
+        if not ok:
+            raise ToolError(
+                f"the speech-to-text model could not be loaded ({device}, {compute_type}). What the trial said:\n{why}\n"
+                f"If nothing above explains it, the model file may be damaged: delete the folders starting with 'models--' in {models} "
+                "and try again (it downloads again, about 1.6 GB)."
+            )
         _model = WhisperModel(t.model, device=device, compute_type=compute_type, download_root=str(models))
         _model_key = key
     segments, _info = _model.transcribe(
