@@ -141,7 +141,8 @@ def fetch_range(source: Source, start_s: float, end_s: float, out: Path, cfg: Co
         run([ffmpeg, "-hide_banner", "-v", "error", "-stats", "-y", "-ss", f"{start_s:.3f}", "-i", source.url, "-t", f"{end_s - start_s:.3f}",
              "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "16", "-pix_fmt", "yuv420p",
              "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(part)],
-            timeout_s=cfg.fetch.timeout_s, what="cutting the range out of the video file", on_line=progress.from_tool(end_s - start_s))
+            timeout_s=max(cfg.fetch.timeout_s, 600 + 4 * (end_s - start_s)), what="cutting the range out of the video file",
+            on_line=progress.from_tool(end_s - start_s))
         if not done(part):
             raise ToolError("cutting the range out of the video file produced nothing")
         os.replace(part, out)
@@ -168,7 +169,9 @@ def fetch_range(source: Source, start_s: float, end_s: float, out: Path, cfg: Co
         ]
         what = "YouTube range download"
     (cfg.data_dir / "tmp").mkdir(parents=True, exist_ok=True)
-    run(cmd, timeout_s=cfg.fetch.timeout_s, retries=cfg.fetch.retries, retry_wait_s=cfg.fetch.retry_wait_s, what=what,
+    # The usual limit fits a clip. A long part for the cutting board gets four times its own length on top.
+    limit = max(cfg.fetch.timeout_s, 600 + 4 * (end_s - start_s))
+    run(cmd, timeout_s=limit, retries=cfg.fetch.retries, retry_wait_s=cfg.fetch.retry_wait_s, what=what,
         on_line=progress.from_tool(end_s - start_s))
     if not done(part):
         raise ToolError(f"{what} produced no file")

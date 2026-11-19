@@ -326,6 +326,10 @@ class Control:
         """Take the newest version from GitHub (fast-forward only), install what it needs, and restart if the launcher can."""
         from . import health
 
+        if self.watching() or self.running() or self.finishing:
+            raise ValueError("something is still running (watching, a job in step 1, or making videos). An update replaces the program's "
+                             "files and restarts it, which would cut that work off. Stop it or wait, then update")
+
         def work(say) -> None:
             say.step(1, 4, "asking GitHub what is new")
             state = health.update_state(fetch=True)
@@ -430,7 +434,10 @@ class Control:
 
     def _new_job(self) -> None:
         """Forget the last job's percentage, so a new job never starts by showing the old one's."""
-        self.progress_path.unlink(missing_ok=True)
+        try:
+            self.progress_path.unlink(missing_ok=True)
+        except OSError:  # the page is reading it this instant; the new job replaces it within half a second anyway
+            pass
 
     def _progress(self, path: Path, active: bool) -> dict | None:
         from . import progress
@@ -525,6 +532,8 @@ class Control:
         info = read_json(folder / "range.json", {}) if folder else {}
         if not info.get("ready") or not (folder / "range.mp4").exists():
             raise ValueError("this downloaded part is not there any more; download it again")
+        if not info.get("url") or not info.get("duration_s"):
+            raise ValueError("this downloaded part's notes are damaged; delete it on the cutting board and download it again")
         pieces = check_segments(raw.get("pieces"), float(info["duration_s"]))  # refuse a bad piece now, with its reason
         cmd = ["cut", info["url"], "--range", m.group(2), "--pieces", ",".join(f"{a:g}-{b:g}" for a, b in pieces)]
         cmd += ["--no-part-label"] if raw.get("part_label") is False else []

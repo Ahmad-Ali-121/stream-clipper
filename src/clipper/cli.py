@@ -472,9 +472,12 @@ def main(argv: list[str] | None = None) -> int:
         faulthandler.enable()  # a crash inside a native library prints where it happened instead of exiting silently
     except (OSError, ValueError) as e:  # no real error stream to write to (output captured by another program)
         log.debug("crash traces are off: %s", e)
+    from .fetch import NoChatError
+    from .pipeline import PipelineError
+
     try:
         return args.func(args)
-    except (ConfigError, ChatFormatError, FileNotFoundError, ValueError, ToolError) as e:
+    except (ConfigError, ChatFormatError, FileNotFoundError, ValueError, ToolError, PipelineError, NoChatError) as e:
         log.error("%s", e)  # expected kinds of failure: the message says what to do
         if args.verbose:
             log.exception("details")

@@ -48,7 +48,7 @@ def update_state(fetch: bool = False) -> dict:
         if _git("remote", "get-url", "origin").returncode != 0:
             return {"can": False, "behind": 0, "why": "this copy has no 'origin' to update from (a developer's copy)"}
         if fetch and (f := _git("fetch", "origin", "--quiet", timeout=120)).returncode != 0:
-            return {"can": False, "behind": 0, "why": f"GitHub could not be reached ({f.stderr.strip()[-200:] or 'no reason given'})"}
+            return {"can": False, "behind": 0, "unreachable": True, "why": f"GitHub could not be reached ({f.stderr.strip()[-200:] or 'no reason given'})"}
         target = "origin/main"
         if _git("rev-parse", "--verify", "--quiet", target).returncode != 0:
             return {"can": False, "behind": 0, "why": "no version from GitHub is known yet; run the full check"}
@@ -70,6 +70,8 @@ def check_update(cfg: Config) -> dict:
     path = cfg.data_dir / "health.json"
     state = update_state(fetch=True)
     saved = read_json(path, {}) or {}
+    if state.get("unreachable") and (saved.get("update") or {}).get("behind"):
+        return saved["update"]  # no internet this time: what was learned last time (a newer version exists) still stands
     saved["update"], saved["update_at"] = state, time.time()
     write_json(path, saved)
     return state

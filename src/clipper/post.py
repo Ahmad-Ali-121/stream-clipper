@@ -166,7 +166,9 @@ def export_clip(clip_dir: Path, ready_root: Path, brief: Brief | None = None, vi
     if not main:
         return video, ok
     write_text(clip_dir / "post.txt", sheet)
-    state.update({"exported": str(video), "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"), "brief": brief.name if brief else None, "brief_ok": ok if brief else None,
-                  "brief_issues": [{"level": i.level, "message": i.message} for i in issues] if brief else []})
-    write_json(clip_dir / "clip.json", state)
+    from .work import update_clip
+
+    update_clip(clip_dir / "clip.json", {
+        "exported": str(video), "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"), "brief": brief.name if brief else None, "brief_ok": ok if brief else None,
+        "brief_issues": [{"level": i.level, "message": i.message} for i in issues] if brief else []})
     return video, ok

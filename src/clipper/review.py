@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .moments import format_time
-from .work import clip_dirs, read_json, write_json
+from .work import FileInUse, clip_dirs, read_json, remove, write_json
 
 log = logging.getLogger(__name__)
 
@@ -134,6 +134,8 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
     from . import layout as layout_mod
     from .render import render_clip
 
+    from .work import update_clip
+
     work, state = d.parent.parent, read_json(d / "clip.json")
     if not (d / "source.mp4").exists():
         raise ValueError("this clip has no downloaded video yet, so there is nothing to frame")
@@ -145,8 +147,6 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
         layout_mod.save_framing(channel, None, cfg)
         state = layout_mod.auto_layout(d, state, cfg)
         write_json(d / "clip.json", state)
-        for name in RENDERS:
-            (d / name).unlink(missing_ok=True)
         edit = None
     else:
         if body.get("layout") not in ("split", "crop"):
@@ -162,20 +162,25 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
         if body.get("streamer") and channel:
             layout_mod.save_framing(channel, {**state, "source": [state.get("source_width"), state.get("source_height")]}, cfg)
     for name in RENDERS:
-        (d / name).unlink(missing_ok=True)
+        remove(d / name)
     render_clip(d, cfg)
     others: list[Path] = []
+    skipped: list[str] = []
     if edit and body.get("others"):
         for o in clip_dirs(work):
             st = read_json(o / "clip.json", {})
             same = (st.get("source_width"), st.get("source_height")) == (state.get("source_width"), state.get("source_height"))
             if o != d and same and (o / "source.mp4").exists() and st.get("status") in ("candidate", "approved"):
-                apply_edit(work, o.name, edit)
-                st = read_json(o / "clip.json")
-                st["layout_auto"], st["layout_reason"] = False, "boxes set by you"
-                write_json(o / "clip.json", st)
-                others.append(o)
-    return {"others": others}
+                try:
+                    apply_edit(work, o.name, edit)
+                    for name in RENDERS:
+                        remove(o / name)
+                    update_clip(o / "clip.json", {"layout_auto": False, "layout_reason": "boxes set by you"})
+                    others.append(o)
+                except (ValueError, KeyError) as e:  # one clip that cannot take the boxes must not stop the rest
+                    log.warning("clip %s: the boxes were not applied: %s", o.name, e)
+                    skipped.append(o.name)
+    return {"others": others, "skipped": skipped}
 
 
 def apply_edit(work: Path, cid: str, edit: dict) -> dict:
@@ -234,7 +239,7 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
     if "intro_b" in typed:
         stale |= {"explained_b.mp4", "intro_card_b.mp4"}
     for name in stale:
-        (d / name).unlink(missing_ok=True)
+        remove(d / name)  # FileInUse (a ValueError) if it is playing: the page shows why and the edit is not saved
     write_json(path, state)
     return state
 
@@ -273,6 +278,8 @@ def list_ranges(cfg) -> list[dict]:
         if not info.get("ready") or not video.exists():
             continue
         work = note.parent.parent.parent
+        if not info.get("duration_s") or info.get("id") != note.parent.name:
+            continue  # damaged notes: not offered (the folder can be deleted by hand)
         made = sum(1 for c in clip_dirs(work) if (s := read_json(c / "clip.json", {})).get("range_id") == info["id"] and s.get("status") != "deleted")
         out.append({**{k: info.get(k) for k in ("id", "start_s", "end_s", "duration_s", "width", "height", "title", "channel", "platform")},
                     "key": f"{work.name}/{info['id']}", "mb": round(video.stat().st_size / 1e6), "clips": made,
@@ -326,7 +333,7 @@ def save_words(d: Path, words: list) -> int:
     state["words_edited"] = True
     write_json(d / "clip.json", state)
     for name in RENDERS:  # captions are burned into every render
-        (d / name).unlink(missing_ok=True)
+        remove(d / name)
     return len(clean)
 
 
@@ -343,16 +350,23 @@ def delete_clip(d: Path) -> float:
     path = d / "clip.json"
     state = read_json(path)
     freed = 0
-    for f in d.iterdir():
-        if f.is_file() and f.name != "clip.json":
+    busy: list[str] = []
+    # The big video files first: if one of them is in use, nothing has been removed yet and the clip is left whole.
+    for f in sorted((f for f in d.iterdir() if f.is_file() and f.name != "clip.json"), key=lambda f: f.suffix != ".mp4"):
+        try:
             size = f.stat().st_size
-            try:
-                f.unlink()
-            except PermissionError:
-                # Windows refuses to delete a file that is open: a job is still working on this clip, or its video is playing.
-                raise ClipInUse(f"this clip cannot be deleted right now: its file {f.name} is in use. A job is still working on it "
-                                "(press Stop in step 1, or wait for it to end), or its video is playing. Then delete it again.") from None
+            remove(f, wait_s=0.5)
             freed += size
+        except FileNotFoundError:
+            continue  # a job renamed it away this instant
+        except FileInUse:
+            # Windows refuses to delete a file that is open: a job is still working on this clip, or its video is playing.
+            busy.append(f.name)
+            if not freed:
+                break
+    if busy:
+        raise ClipInUse(f"this clip cannot be deleted right now: its file {busy[0]} is in use. A job is still working on it "
+                        "(press Stop in step 1, or wait for it to end), or its video is playing. Then delete it again.")
     state["status"] = "deleted"
     state.pop("error", None)
     write_json(path, state)
@@ -512,17 +526,22 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             try:
-                with f.open("rb") as fh:
-                    fh.seek(start)
-                    left = end - start + 1
-                    while left > 0:
+                at, left = start, end - start + 1
+                while left > 0:
+                    # Opened for each piece only: a browser can keep a video's connection waiting for minutes, and a file
+                    # held open that long could not be replaced or deleted (Windows), so edits and deletes would be refused.
+                    with f.open("rb") as fh:
+                        fh.seek(at)
                         chunk = fh.read(min(256 * 1024, left))
-                        if not chunk:
-                            break
-                        self.wfile.write(chunk)
-                        left -= len(chunk)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    at += len(chunk)
+                    left -= len(chunk)
             except (BrokenPipeError, ConnectionError):
                 pass  # the browser stopped the download (seek or page close)
+            except OSError as e:
+                log.info("stopped sending %s: %s", f.name, e)  # the file was replaced or deleted while it was being watched
 
         def do_POST(self) -> None:
             # Only this page may give orders: a request sent by some other website carries its own Origin.
@@ -601,6 +620,11 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 if control and control.running():
                     return self._send(400, b"a job is still running; wait for it to end, then delete this download", "text/plain")
                 mb = sum(f.stat().st_size for f in d.glob("*") if f.is_file()) / 1e6 if d.is_dir() else 0
+                try:
+                    remove(d / "range.mp4", wait_s=3)  # the video first: if it is in use, the notes stay and it is still listed
+                except FileInUse:
+                    return self._send(400, b"this download is in use right now (its video is still open on the page, or a job is cutting "
+                                           b"from it). Reload the page or wait, then delete it again", "text/plain")
                 shutil.rmtree(d, ignore_errors=True)
                 log.info("deleted the downloaded part %s/%s, %.0f MB freed", m.group(1), m.group(2), mb)
                 return self._send(200, json.dumps({"deleted": 1, "mb": round(mb)}).encode(), "application/json")
@@ -646,7 +670,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 use = control.cfg if control else cfg
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
-                    others = set_framing(d, body, use)["others"]
+                    done_ = set_framing(d, body, use)
+                    others, skipped = done_["others"], done_.get("skipped", [])
                 except (ValueError, TypeError, KeyError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 except Exception as e:
@@ -668,7 +693,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                                 write_json(o / "clip.json", st)
 
                     threading.Thread(target=remake, daemon=True).start()
-                return self._send(200, json.dumps({"others": len(others)}).encode(), "application/json")
+                return self._send(200, json.dumps({"others": len(others), "skipped": skipped}).encode(), "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(delete|clear-error)", self.path)
             if m and m.group(1) in by_name:
                 d = by_name[m.group(1)] / "clips" / m.group(2)
@@ -716,6 +741,23 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 scoring.relearn(cfg.data_dir, all_states(list(by_name.values())))  # every decision teaches the ranking
             self._send(200, json.dumps({"status": state.get("status")}).encode(), "application/json")
 
+    def answered(fn):
+        """Whatever goes wrong inside a request, the page gets the reason instead of a dropped connection."""
+        def inner(self) -> None:
+            try:
+                fn(self)
+            except (BrokenPipeError, ConnectionError):
+                pass  # the browser went away
+            except Exception as e:
+                log.exception("%s %s failed", self.command, self.path)
+                try:
+                    self._send(400 if isinstance(e, ValueError) else 500, f"{type(e).__name__}: {e}".encode("utf-8", "replace"), "text/plain")
+                except Exception:
+                    pass  # the answer had already started; the log has the reason
+
+        return inner
+
+    Handler.do_GET, Handler.do_POST = answered(Handler.do_GET), answered(Handler.do_POST)
     try:
         server = OneAtATimeServer(("127.0.0.1", port), Handler)
     except OSError as e:

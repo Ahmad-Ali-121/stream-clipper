@@ -134,7 +134,7 @@ def _groq(path: Path, cfg: Config) -> list[dict]:
                 files={"file": (audio.name, fh, "audio/flac")},
                 data={
                     "model": cfg.transcribe.groq_model,
-                    "language": cfg.transcribe.language,
+                    **({"language": speech_language(cfg)} if speech_language(cfg) else {}),  # none given = detect
                     "response_format": "verbose_json",
                     "timestamp_granularities[]": "word",
                 },

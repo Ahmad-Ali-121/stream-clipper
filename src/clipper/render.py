@@ -17,7 +17,7 @@ from pathlib import Path
 from .captions import Overlay, build_ass, words_from_json
 from .config import Config, RenderSettings
 from .tools import ToolError, find_tool, run
-from .work import done, read_json, save_clip, write_json, write_text
+from .work import done, read_json, save_clip, write_json, write_text, update_clip
 
 log = logging.getLogger(__name__)
 
@@ -249,7 +249,22 @@ def opening_filters(r: RenderSettings) -> tuple[str, str]:
     return video, audio
 
 
+_render_locks: dict[str, "threading.Lock"] = {}
+_render_locks_guard = __import__("threading").Lock()
+
+
 def render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str = "final.mp4", hook: bool = True, variant: str = "a") -> Path:
+    """Render one clip. Two renders of the same clip in this program (boxes saved twice, a B preview during Make videos)
+    wait for each other: they write the same working files."""
+    import threading
+
+    with _render_locks_guard:
+        lock = _render_locks.setdefault(str(clip_dir.resolve()), threading.Lock())
+    with lock:
+        return _render_clip(clip_dir, cfg, force, out_name, hook, variant)
+
+
+def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str = "final.mp4", hook: bool = True, variant: str = "a") -> Path:
     """Render one clip. ``out_name``/``hook`` let other formats (top-moments videos)
     render a variant, e.g. the clip body without the hook text, beside the normal final.mp4.
 
@@ -335,9 +350,12 @@ def render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str 
     if not done(clip_dir / part):
         raise ToolError(f"render of clip {clip_dir.name} produced no file")
     os.replace(clip_dir / part, out)
-    state.update({"render_seconds": round(time.monotonic() - t0, 1), "duration_s": round(duration, 2), "width": r.width, "height": r.height,
-                  "layout_used": layout, "encoder_used": enc, "opening_used": bool(r.opening), "style_used": cfg.captions.preset, "caption_words": len(words), "has_disclosure_overlay": bool(state.get("disclosure"))})
+    made = {"render_seconds": round(time.monotonic() - t0, 1), "duration_s": round(duration, 2), "width": r.width, "height": r.height,
+            "layout_used": layout, "encoder_used": enc, "opening_used": bool(r.opening), "style_used": cfg.captions.preset, "caption_words": len(words), "has_disclosure_overlay": bool(state.get("disclosure"))}
+    state.update(made)
     if out_name == "final.mp4":  # variants must not overwrite the main render's record
-        save_clip(clip_dir / "clip.json", state)  # a render takes seconds; a person may have approved the clip meanwhile
+        # Only what this render produced is written: a render takes a while, and a person may have edited the clip meanwhile.
+        # The main video is new, so a copy exported earlier is out of date: "Make videos" must export it again.
+        update_clip(clip_dir / "clip.json", made, drop=("exported",))
     log.info("clip %s: rendered %.0fs %s layout in %.0fs", clip_dir.name, duration, layout, state["render_seconds"])
     return out

@@ -248,7 +248,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
               <div class="hms"><input type="number" min="0" id="m-eh" value="0" aria-label="end hours"><input type="number" min="0" max="59" id="m-em" value="1" aria-label="end minutes"><input type="number" min="0" max="59" id="m-es" value="0" aria-label="end seconds"></div></div>
           </div>
           <label class="check"><input type="checkbox" id="m-toend" onchange="ownHint()"> Until the end of the video</label>
-          <div class="btns"><button class="btn primary" id="b-board" onclick="getRange()">Download this part and open the cutting board</button><button class="btn bad" id="b-ownstop" onclick="act('/api/run/stop',{})">Stop</button></div>
+          <div class="btns"><button class="btn primary" id="b-board" onclick="getRange()">Download this part and open the cutting board</button><button class="btn bad" id="b-ownstop" onclick="stopRun()">Stop</button></div>
           <p class="help" style="margin-top:8px">The part is downloaded once. Then you play it, mark the cuts on a timeline, see how many clips that gives, and make them.</p>
           <details class="sec"><summary>Or make clips straight away <small>without the cutting board</small></summary>
           <label class="f" for="m-split">One clip, or several parts?</label>
@@ -276,7 +276,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <label class="switch" style="margin-top:8px"><input type="checkbox" id="r-ai"><span><b>Let AI read the whole stream</b>Turns all the speech into text and has Claude pick moments from what was said. Slow on a processor (a 4-hour stream can take an hour) and costs a few cents. Needs a Claude key.</span></label>
           <label class="f" for="r-top">How many clips</label>
           <select id="r-top"><option>5</option><option selected>8</option><option>12</option><option>20</option></select>
-          <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig'),ai:$('r-ai').checked})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="act('/api/run/stop',{})">Stop</button></div>
+          <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig'),ai:$('r-ai').checked})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="stopRun()">Stop</button></div>
           <div class="bar indet" id="r-bar" hidden><i></i></div><div class="pct" id="r-pct" hidden></div>
           <div class="note" id="r-note">Nothing running.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="rlog"></pre></details>
@@ -346,7 +346,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <h2 id="cb-count" style="font-size:15px;margin-bottom:8px"></h2>
           <div id="cb-rows"></div>
           <label class="check"><input type="checkbox" id="cb-label" checked> Show "Part 1", "Part 2"… on the videos, and "Part 2 next" at the end</label>
-          <div class="btns"><button class="btn primary" id="cb-make">Make the clips</button><button class="btn bad" id="cb-stop" onclick="act('/api/run/stop',{})">Stop</button><button class="btn quiet" id="cb-drop">Delete this download</button></div>
+          <div class="btns"><button class="btn primary" id="cb-make">Make the clips</button><button class="btn bad" id="cb-stop" onclick="stopRun()">Stop</button><button class="btn quiet" id="cb-drop">Delete this download</button></div>
           <div class="bar indet" id="cb-bar" hidden><i></i></div><div class="pct" id="cb-pct" hidden></div>
           <div class="note" id="cb-note">Nothing running.</div>
         </div>
@@ -418,7 +418,7 @@ function closeErr(){for(const l of errShown)errClosed.add(l);$('errbox').style.d
 async function restartNow(){const r=await send('/api/restart');if(r.error){toast(r.error,true);return}
   toast('Restarting… this page reconnects by itself.');setTimeout(()=>location.reload(),6000)}
 function toast(msg,err){const t=$('toast');$('toasttext').textContent=msg;t.className=err?'err':'';t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',err?9000:2500)}
-let curTab='live';
+let curTab='live', tabRunning=false;
 function tab(name){curTab=name;for(const n of ['live','vod','own']){$('tab-'+n).hidden=n!==name;$('t-'+n).className=n===name?'on':''}}
 function mode(){return (document.querySelector('[name=o-mode]:checked')||{}).value}
 function isBad(l){return /ERROR|FAILED|NOT MADE|Traceback|Error:|fatal exception|STOPPED BY ITSELF/.test(l)}
@@ -487,7 +487,7 @@ function show(s){
   $('w-note').innerHTML=s.watching?'<b>Watching.</b> Drafts appear on the right as moments happen. '+esc(lastLine(s.watch_log)):(s.watch_problem?'<b>Stopped with a problem.</b> Open the activity log.':'Not watching.');
   logTo('wlog',s.watch_log);
   $('b-run').disabled=s.running; $('b-runstop').disabled=!s.running;
-  $('r-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?'<b>Done.</b> '+esc(lastLine(s.run_log)):'Nothing running.'));
+  $('r-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?(/ stopped$/.test(lastLine(s.run_log))?'<b>Stopped by you.</b>':'<b>Done.</b> '+esc(lastLine(s.run_log))):'Nothing running.'));
   logTo('rlog',s.run_log);
   const ready=s.finish_log.filter(l=>l.startsWith('READY ')), notMade=s.finish_log.filter(l=>l.startsWith('NOT MADE ')||l.startsWith('FAILED'));
   $('f-note').innerHTML=s.finishing?'<b>Working…</b> '+(fp.total?'clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total+(fp.now?': '+esc(fp.now):''):'starting')+'. About a minute per clip.':(s.finish_log.length?'<b>'+ready.length+' video file(s) made.</b> '+(notMade.length?notMade.length+' could not be made.':'')+' They are in the <b>ready</b> folder inside your data folder.':'Nothing made yet in this session.');
@@ -500,15 +500,16 @@ function show(s){
     +(s.health&&s.health.launcher?'Press Restart now.':'Close its window (or press Ctrl+C in it), then double-click Stream-Clipper.cmd to start it again.'));
   /* One banner line per distinct error, without counts, so closing it once keeps it closed. */
   setErr(probs.concat(bad.length?['An activity log has an error, shown in red there. Latest: '+bad[bad.length-1]]:[]));
-  if(s.running&&curTab==='live')tab('vod');
+  if(s.running&&!tabRunning&&curTab==='live')tab('vod');
+  tabRunning=s.running;
   $('b-own').disabled=s.running; $('b-ownstop').disabled=!s.running;
-  $('m-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?'<b>Done.</b> '+esc(lastLine(s.run_log)):'Nothing running.'));
+  $('m-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?(/ stopped$/.test(lastLine(s.run_log))?'<b>Stopped by you.</b>':'<b>Done.</b> '+esc(lastLine(s.run_log))):'Nothing running.'));
   logTo('mlog',s.run_log);
   $('b-board').disabled=s.running; $('cb-stop').disabled=!s.running; $('cb-note').innerHTML=$('m-note').innerHTML;
-  cbRunning=s.running; if(CB)cbRows();
+  if(cbRunning!==s.running){cbRunning=s.running;if(CB)cbRows()}
   /* A job started from this page has ended: go where its result is. */
   if(cbWasRunning&&!s.running&&cbJob){const job=cbJob;cbJob='';
-    if(!s.run_problem&&job==='range'){view('board');toast('Downloaded. Mark your cuts on the timeline.')}
+    if(!s.run_problem&&job==='range'){CB=null;view('board');toast('Downloaded. Mark your cuts on the timeline.')}
     if(!s.run_problem&&job==='pieces'){view('clips');setFilter('candidate');toast('Your clips are ready to review.')}
     if(s.run_problem)toast('It stopped with a problem. The activity log in step 1 says why.',true)}
   cbWasRunning=s.running;
@@ -680,12 +681,14 @@ function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
 let known=[];
 /* What a card was drawn from: when any of this changes, the card is drawn again. */
 function sig(c){return [c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
-let loadTurn=0;
+let loadTurn=0, clipsWhy='';
 async function loadClips(){
   /* Answers can arrive out of order: a refresh that started before you approved a clip may come back after
      the newer one. Only the answer to the most recent request is used; older ones are dropped. */
   const turn=++loadTurn;
-  let clips;try{const r=await fetch('/api/clips');if(!r.ok)return;clips=await r.json()}catch(e){return}
+  let clips;try{const r=await fetch('/api/clips');
+    if(!r.ok){const why=await r.text();if(why!==clipsWhy){clipsWhy=why;toast('The clip list could not be loaded: '+why,true)}return}
+    clips=await r.json();clipsWhy=''}catch(e){return}  /* the program not answering is reported by the status check */
   if(turn!==loadTurn)return;
   known=clips;
   const box=$('clips'), want=new Set(clips.map(c=>domId(c.key)));
@@ -693,24 +696,34 @@ async function loadClips(){
   let prev=null;
   for(const c of clips){
     let el=$(domId(c.key));
-    if(!el){el=document.createElement('div');el.className='card clip';el.id=domId(c.key);el.dataset.status=place(c);el.dataset.m=sig(c);el.innerHTML=cardHtml(c);
-      el.addEventListener('input',()=>{el.dataset.dirty='1';const s=el.querySelector('.acts .saved');s.textContent='Unsaved changes';s.className='saved warn'});
+    if(!el){el=document.createElement('div');el.className='card clip';el.id=domId(c.key);el.dataset.status=place(c);el.dataset.m=sig(c);el._c=c;el.innerHTML=cardHtml(c);
+      el.addEventListener('input',e=>{if(String(e.target.name||'').startsWith('t_'))return;
+        if(e.target.closest&&e.target.closest('.words'))el.dataset.wdirty='1';el.dataset.dirty='1';const s=el.querySelector('.acts .saved');s.textContent='Unsaved changes';s.className='saved warn'});
       if(prev)prev.after(el);else box.prepend(el)}
-    else if(sig(c)!==el.dataset.m&&!busy(el)){el.dataset.status=place(c);el.dataset.m=sig(c);el.innerHTML=cardHtml(c)}
+    else if(sig(c)!==el.dataset.m&&!busy(el)){el.dataset.status=place(c);el.dataset.m=sig(c);el._c=c;el.innerHTML=cardHtml(c)}
     prev=el;
   }
   drawFilters(clips);
 }
 async function save(key,extra){
   const el=$(domId(key)), g=n=>el.querySelector('[name='+n+']');
-  const body=Object.assign({hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,
+  if(!el){toast('That clip is not on the page any more.',true);return}
+  const all={hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,
     title:g('title').value,title_b:g('title_b').value,description:g('description').value,tags:g('tags').value,
-    layout:g('layout').value,disclosure:g('disclosure').checked,cut_start_s:parseFloat(g('cut_start_s').value),cut_end_s:parseFloat(g('cut_end_s').value)},extra||{});
+    layout:g('layout').value,disclosure:g('disclosure').checked,cut_start_s:parseFloat(g('cut_start_s').value),cut_end_s:parseFloat(g('cut_end_s').value)};
+  /* What the card showed when it was drawn. A field you did not touch is not sent: the card may be older than the clip
+     (text written by AI since), and sending it all would put the old text back as if you had typed it. */
+  const c=el._c||{}, was={hook:c.hook||'',hook_b:c.hook_b||'',intro:c.intro||'',intro_b:c.intro_b||'',explainer:!!c.explainer,title:c.title||'',title_b:c.title_b||'',
+    description:c.description||'',tags:(c.tags||[]).join(' '),layout:c.layout||'',disclosure:!!c.disclosure,cut_start_s:Number(c.cut_start_s??c.start_s),cut_end_s:Number(c.cut_end_s??c.end_s)};
+  const body={};for(const k in all)if(all[k]!==was[k])body[k]=all[k];
+  if(('cut_start_s' in body)!==('cut_end_s' in body)){body.cut_start_s=all.cut_start_s;body.cut_end_s=all.cut_end_s}
+  Object.assign(body,extra||{});
+  if(el.dataset.wdirty==='1'&&!(await sendWords(key)))return;  /* caption words you edited are saved with the rest */
   loadTurn++;
   let r;try{r=await fetch('/api/clip/'+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}catch(e){toast('The program is not answering: '+e,true);return}
   if(!r.ok){toast('Not saved: '+await r.text(),true);return}
   const s=await r.json();
-  el.dataset.dirty='';el.dataset.m='';  /* redraw from the saved state on the next load */
+  el.dataset.dirty='';el.dataset.wdirty='';el.dataset.m='';  /* redraw from the saved state on the next load */
   if(document.activeElement)document.activeElement.blur();
   const v=el.querySelector('video');if(v)v.pause();
   toast(extra&&extra.status?({approved:'Approved',rejected:'Rejected',candidate:'Moved back to review'}[s.status]):'Saved');
@@ -742,7 +755,7 @@ async function delRejected(n){
   const r=await post('/api/clips/delete-rejected'); if(!r)return;
   toast(r.deleted+' clip'+(r.deleted===1?'':'s')+' deleted ('+r.mb+' MB freed)'+(r.busy?'. '+r.busy+' could not be deleted because a job is still using them; try again when it has ended.':''),r.busy>0); loadClips();
 }
-async function clearErr(key){if(await post('/api/clip/'+key+'/clear-error')){const el=$(domId(key));el.dataset.m='';loadClips()}}
+async function clearErr(key){if(await post('/api/clip/'+key+'/clear-error')){const el=$(domId(key));if(document.activeElement)document.activeElement.blur();if(el)el.dataset.m='';loadClips()}}
 function showVid(key,name,btn){const el=$(domId(key)),v=el.querySelector('.vid video');const c=known.find(x=>x.key===key)||{};
   v.src='/media/'+key+'/'+name+'?v='+c.mtime;for(const b of btn.parentElement.children)b.classList.toggle('on',b===btn);v.play().catch(()=>{})}
 async function makeB(key,btn){btn.disabled=true;btn.textContent='Making B…';
@@ -780,7 +793,9 @@ async function initTrim(key){
   let stopAt=null;const ph=tl.querySelector('.ph');
   v.addEventListener('timeupdate',()=>{ph.style.display='block';ph.style.left=(v.currentTime/total*100)+'%';if(stopAt!=null&&v.currentTime>=stopAt){v.pause();stopAt=null}});
   box.querySelector('[data-a=play]').addEventListener('click',()=>{const [a,b]=get();v.currentTime=a;stopAt=b;v.play().catch(()=>{})});
-  iS.addEventListener('input',draw);iE.addEventListener('input',draw);window.addEventListener('resize',draw);draw();
+  v.addEventListener('pause',()=>{stopAt=null});
+  iS.addEventListener('input',draw);iE.addEventListener('input',draw);
+  const onSize=()=>{if(document.body.contains(tl))draw();else window.removeEventListener('resize',onSize)};window.addEventListener('resize',onSize);draw();
 }
 
 /* ---------- captions: edit the words ---------- */
@@ -792,18 +807,25 @@ async function initWords(key){
   box.innerHTML=words.map((w,i)=>(w.start>=a&&w.start<=b)?'<input type="text" data-i="'+i+'" value="'+esc(w.word)+'" size="'+Math.max(2,String(w.word).length)+'" aria-label="caption word">':'').join('')
     ||'<span class="help">No words were heard in this part of the clip.</span>';
 }
+async function sendWords(key){
+  const el=$(domId(key)); if(!el||!el._words)return true;
+  for(const inp of el.querySelectorAll('.words input'))el._words[+inp.dataset.i].word=inp.value;
+  let r;try{r=await fetch('/api/clip/'+key+'/words',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({words:el._words})})}catch(e){toast('The program is not answering: '+e,true);return false}
+  if(!r.ok){toast('Captions not saved: '+await r.text(),true);return false}
+  el.dataset.wdirty='';return true;
+}
 async function saveWords(key){
   const el=$(domId(key)); if(!el._words){toast('Open the captions first.',true);return}
-  for(const inp of el.querySelectorAll('.words input'))el._words[+inp.dataset.i].word=inp.value;
-  let r;try{r=await fetch('/api/clip/'+key+'/words',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({words:el._words})})}catch(e){toast('The program is not answering: '+e,true);return}
-  if(!r.ok){toast('Captions not saved: '+await r.text(),true);return}
-  el.dataset.dirty='';el.dataset.m='';if(document.activeElement)document.activeElement.blur();
-  toast('Captions saved. The draft is made again when you press Make videos, or use "Make B preview".');loadClips();
+  el.dataset.wdirty='1';
+  await save(key);  /* saves the caption words and anything else you typed on this card, so nothing is thrown away */
+  toast('Captions saved. The draft is made again when you press Make videos, or use "Make B preview".');
 }
 
 /* ---------- face box and video box ---------- */
 let BX=null;
 function openBoxes(key){
+  if(!$('boxes').hidden)return;
+  if(document.activeElement)document.activeElement.blur();
   const c=known.find(x=>x.key===key);
   if(!c||!c.framing||!(c.videos||[]).includes('source.mp4')){toast('This clip is not downloaded yet, so its boxes cannot be set.',true);return}
   const f=c.framing;
@@ -851,11 +873,13 @@ function closeBoxes(){const v=$('bx-video');v.pause();v.removeAttribute('src');v
 async function saveBoxes(auto){
   const key=BX.key,body=auto?{auto:true}:{layout:BX.layout,game:BX[bxKind()],facecam:BX.face,others:$('bx-others').checked,streamer:$('bx-streamer').checked};
   for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=true;
+  const card=$(domId(key)); if(card&&card.dataset.dirty==='1')await save(key);
   $('bx-note').className='saved';$('bx-note').textContent='Making the draft again… this takes up to a minute.';
   const r=await send('/api/clip/'+key+'/framing',body);
   if(r.error){for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=false;$('bx-note').textContent='';toast('The boxes were not saved: '+r.error,true);return}
   closeBoxes();const el=$(domId(key));if(el){el.dataset.dirty='';el.dataset.m=''}
-  toast(auto?'Back to automatic framing. The draft is made again.':'Boxes saved. The draft is made again'+(r.others?'; '+r.others+' other clip'+(r.others>1?'s are':' is')+' being made again too.':'.'));loadClips();
+  toast(auto?'Back to automatic framing. The draft is made again.':'Boxes saved. The draft is made again'+(r.others?'; '+r.others+' other clip'+(r.others>1?'s are':' is')+' being made again too.':'.')
+    +((r.skipped||[]).length?' Not applied to '+r.skipped.length+' clip(s) that could not take them: '+r.skipped.join(', ')+'.':''),(r.skipped||[]).length>0);loadClips();
 }
 function bxInit(){
   $('bx-v').addEventListener('pointerdown',bxDrag('video',false));$('bx-f').addEventListener('pointerdown',bxDrag('face',false));
@@ -869,6 +893,8 @@ bxInit();
 
 /* ---------- cutting board: mark cuts on a downloaded part ---------- */
 let CB=null, cbJob='', cbRunning=false, cbWasRunning=false, cbStopAt=null;
+/* Stopped by you: the job's end must not be announced as "downloaded" or "ready". */
+function stopRun(){cbJob='';act('/api/run/stop',{})}
 async function getRange(){
   const body={source:val('m-src').trim(),start:hms('m-s'),end:hms('m-e'),to_end:$('m-toend').checked};
   if(!body.source){toast('Paste a video link, or choose a file, first.',true);return}
@@ -911,7 +937,7 @@ function cbDraw(){
     +segs.map(s=>'<span class="segn'+(s.on?'':' off')+'" style="left:'+((s.a+s.b)/2/T*100)+'%">'+(s.on?++num:'skip')+'</span>').join('');
   cbRows();cbKeep();
 }
-function cbProblem(s){const len=s.b-s.a;return len<8?'too short (under 8 s)':(len>300?'too long (over 5 minutes)':'')}
+function cbProblem(s){const len=s.b-s.a;return len<7.95?'too short (under 8 s)':(len>300.05?'too long (over 5 minutes)':'')}
 function cbRows(){
   if(!CB)return;const segs=cbSegs(),on=segs.filter(s=>s.on),bad=on.filter(cbProblem);let num=0;
   $('cb-rows').innerHTML=segs.map(s=>{const len=s.b-s.a,p=s.on?cbProblem(s):'';
@@ -945,14 +971,17 @@ async function cbMake(){
 }
 async function cbDrop(){
   if(!CB||!confirm('Delete this downloaded part ('+CB.r.mb+' MB)?'+NL+NL+'Clips already made from it are kept. To cut it again you would have to download it again.'))return;
-  const r=await send('/api/range/'+CB.key+'/delete'); if(r.error){toast(r.error,true);return}
-  try{localStorage.removeItem('cb:'+CB.key)}catch(e){}
-  $('cb-video').removeAttribute('src');$('cb-video').load();CB=null;toast('Deleted ('+r.mb+' MB freed)');loadBoard();
+  const key=CB.key, v=$('cb-video'), src=v.getAttribute('src');
+  v.pause();v.removeAttribute('src');v.load();  /* let go of the file first, or Windows will not delete it */
+  const r=await send('/api/range/'+key+'/delete'); if(r.error){if(src){v.src=src}toast(r.error,true);return}
+  try{localStorage.removeItem('cb:'+key)}catch(e){}
+  CB=null;toast('Deleted ('+r.mb+' MB freed)');loadBoard();
 }
 function cbInit(){
   const v=$('cb-video'),tl=$('cb-tl');
   v.addEventListener('timeupdate',()=>{if(!CB)return;const ph=$('cb-ph');ph.style.display='block';ph.style.left=(v.currentTime/CB.total*100)+'%';
     if(cbStopAt!=null&&v.currentTime>=cbStopAt){v.pause();cbStopAt=null}});
+  v.addEventListener('pause',()=>{cbStopAt=null});
   tl.addEventListener('pointerdown',e=>{
     if(!CB)return;const m=e.target.closest('.cutm'),rect=()=>tl.getBoundingClientRect(),at=ev=>Math.max(0,Math.min(CB.total,(ev.clientX-rect().left)/rect().width*CB.total));
     if(!m){v.currentTime=at(e);cbStopAt=null;return}
@@ -1032,7 +1061,8 @@ function setCur(el){if(cur)cur.classList.remove('cur');cur=el||null;if(cur){cur.
 document.addEventListener('keydown',e=>{
   if($('view-clips').hidden||!$('boxes').hidden)return;
   if(e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary,[contenteditable]')))return;
-  const cards=shownCards(), i=cards.indexOf(cur), k=e.key.toLowerCase();
+  const cards=shownCards(); if(cur&&!cards.includes(cur)){cur.classList.remove('cur');cur=null}
+  const i=cards.indexOf(cur), k=e.key.toLowerCase();
   if(k==='j'||k==='arrowdown'){setCur(cards[Math.min(cards.length-1,i+1)]);e.preventDefault()}
   else if(k==='k'||k==='arrowup'){setCur(cards[Math.max(0,i<0?0:i-1)]);e.preventDefault()}
   else if(cur&&(k==='a'||k==='r')){const key=cur.id.slice(2).replace('--','/'), next=cards[i+1]||cards[i-1]||null;

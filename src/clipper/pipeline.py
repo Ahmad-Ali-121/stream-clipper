@@ -19,7 +19,7 @@ from .fetch import fetch_chat, fetch_meta, fetch_range, probe
 from .moments import find_moments, format_time
 from .sources import Source, parse_source
 from .tools import ToolError
-from .work import clip_dir, clip_dirs, clip_id, done, free_gb, read_json, save_clip, work_dir, write_json
+from .work import clip_dir, clip_dirs, clip_id, done, free_gb, read_json, remove, save_clip, work_dir, write_json
 
 log = logging.getLogger(__name__)
 
@@ -224,6 +224,13 @@ def split_range(start_s: float, end_s: float, parts: int = 1, part_s: float | No
     return segments
 
 
+def fresh_meta(source: Source, work: Path, cfg: Config) -> dict:
+    """The video's details. Ones saved while it was still live carry the length it had then, so they are asked for again."""
+    if (read_json(work / "meta.json", {}) or {}).get("is_live"):
+        (work / "meta.json").unlink(missing_ok=True)
+    return fetch_meta(source, work, cfg)
+
+
 def stage_cut(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None = None, parts: int = 1, part_s: float | None = None,
               part_label: bool = True) -> list[Path]:
     """Make draft clips from a range a person chose in a video (a link or a file), whole or split into numbered parts.
@@ -231,7 +238,7 @@ def stage_cut(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None =
     No chat is needed and nothing is searched for: the range is the clip. Each part gets its own draft.
     """
     source, work = open_work(url, cfg)
-    meta = fetch_meta(source, work, cfg)
+    meta = fresh_meta(source, work, cfg)
     start_s, end_s = _chosen_range(meta, float(start_s), end_s)
     segments = split_range(start_s, end_s, parts, part_s)
     return _make_own(url, cfg, _own_drafts(source, work, meta, segments, part_label))
@@ -261,7 +268,7 @@ def stage_range(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None
     Only this part is downloaded, never the whole video, and at most ``fetch.max_range_minutes`` of it.
     """
     source, work = open_work(url, cfg)
-    meta = fetch_meta(source, work, cfg)
+    meta = fresh_meta(source, work, cfg)
     a, b = _chosen_range(meta, start_s, end_s)
     if b - a < MIN_PART_S:
         raise PipelineError(f"this part is {b - a:.0f} seconds long; a clip needs at least {MIN_PART_S:g} seconds")
@@ -305,9 +312,9 @@ def check_segments(segments, length: float) -> list[tuple[float, float]]:
             raise ValueError("each piece needs a start and an end in seconds") from None
         if not (0 <= a < b <= length + 0.5):
             raise ValueError(f"a piece ({a:g} to {b:g} seconds) is outside the downloaded part ({length:g} seconds long)")
-        if b - a < MIN_PART_S:
+        if b - a < MIN_PART_S - 0.05:
             raise ValueError(f"piece {len(out) + 1} is {b - a:.1f} seconds long; a clip needs at least {MIN_PART_S:g} seconds. Move or remove a cut.")
-        if b - a > MAX_PART_S:
+        if b - a > MAX_PART_S + 0.05:
             raise ValueError(f"piece {len(out) + 1} is {b - a:.0f} seconds long; a clip can be at most {MAX_PART_S:.0f} seconds. Add a cut inside it.")
         out.append((a, min(b, length)))
     if not out:
@@ -325,7 +332,7 @@ def stage_cut_range(url: str, cfg: Config, rid: str, segments, part_label: bool 
     info = read_json(d / "range.json", {})
     if not info.get("ready") or not done(d / "range.mp4"):
         raise PipelineError(f"the downloaded part {rid} is not there any more; download it again from the Your own clip tab")
-    meta = fetch_meta(source, work, cfg)
+    meta = fresh_meta(source, work, cfg)
     base = float(info["start_s"])
     pieces = [(round(base + a, 2), round(base + b, 2)) for a, b in check_segments(segments, float(info["duration_s"]))]
     return _make_own(url, cfg, _own_drafts(source, work, meta, pieces, part_label, {"range_id": rid}))
@@ -340,8 +347,16 @@ def _own_drafts(source: Source, work: Path, meta: dict, segments: list[tuple[flo
         if state.get("source_range") != [a, b]:  # another range under the same name: its old files do not belong to it
             for f in d.iterdir() if d.exists() else []:
                 if f.is_file() and f.name != "clip.json":
-                    f.unlink()
-            state = {k: v for k, v in state.items() if k in ("status", "notes")}
+                    try:
+                        f.unlink()
+                    except PermissionError:
+                        raise PipelineError(f"an older clip that starts at the same second ({d.name}) is in use: its file {f.name} is open, "
+                                            "probably playing on the review page. Pause it or reload the page, then try again.") from None
+            state = {}  # a different clip: it has not been reviewed, whatever the old one was
+        if state.get("status") in ("deleted", "rejected"):
+            # Asked for again by a person: it comes back for review instead of being skipped without a word.
+            state.pop("status")
+            state.pop("exported", None)
         state.update({
             "id": d.name, "rank": n, "score": 0, "activity": 0, "messages": 0, "trigger": "manual", "signals": {},
             "peak_s": a, "start_s": a, "end_s": b, "cut_start_s": a, "cut_end_s": b, "cut_auto": False, "source_range": [a, b],
@@ -394,6 +409,11 @@ def _fetch_one(source: Source, d: Path, cfg: Config) -> Path | None:
     if state.get("status") in ("rejected", "deleted"):
         return None
     out = d / "source.mp4"
+    if done(out) and "fetch_start_s" not in state:
+        # A video with no record of where in the stream it starts (an older version stopped at the wrong moment):
+        # every cut made from it would be wrong, so it is downloaded again.
+        log.warning("clip %s: its downloaded video has no start time recorded; downloading it again", d.name)
+        out.unlink()
     if not done(out):
         if free_gb(cfg.data_dir) < MIN_FREE_GB:
             raise PipelineError(
@@ -416,13 +436,14 @@ def _fetch_one(source: Source, d: Path, cfg: Config) -> Path | None:
         state["fetch_start_s"] = fetch_start
         state["fetch_end_s"] = fetch_end
         state["fetch_seconds"] = round(time.monotonic() - t0, 1)
+        state = save_clip(d / "clip.json", state)  # now: a stop during the next steps must not leave a video with no start time
         log.info("clip %s: fetched %.0fs of video in %.0fs (%.1f MB)", d.name, fetch_end - fetch_start, state["fetch_seconds"], out.stat().st_size / 1e6)
     info = probe(out, cfg)
     state.update({"source_width": info["width"], "source_height": info["height"], "source_duration_s": round(info["duration_s"], 2), "source_fps": round(info["fps"], 2)})
     from .layout import auto_layout
 
     state = auto_layout(d, state, cfg)
-    write_json(d / "clip.json", state)
+    save_clip(d / "clip.json", state)
     return out
 
 
@@ -445,17 +466,18 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
         t0 = time.monotonic()
         try:
             words = transcribe_file(d / "source.mp4", cfg)
+            state = read_json(d / "clip.json")  # as it is now: a person may have edited the clip while it was transcribed
+            state["transcribe_seconds"] = round(time.monotonic() - t0, 1)
+            state["transcript"] = " ".join(w["word"] for w in words)
+            from .cuts import apply_snap
+
+            state = apply_snap(state, words, max_shift=cfg.fetch.pad_s)
+            (d / "final.mp4").unlink(missing_ok=True)  # the cut may have moved; an older render is stale
+            save_clip(d / "clip.json", state)
+            write_json(out, words)  # last: its presence is what marks this clip's captions as done
         except Exception as e:
             _clip_failed(d, "captions", e, failed)
             continue
-        write_json(out, words)
-        state["transcribe_seconds"] = round(time.monotonic() - t0, 1)
-        state["transcript"] = " ".join(w["word"] for w in words)
-        from .cuts import apply_snap
-
-        state = apply_snap(state, words, max_shift=cfg.fetch.pad_s)
-        (d / "final.mp4").unlink(missing_ok=True)  # the cut may have moved; an older render is stale
-        write_json(d / "clip.json", state)
         log.info("clip %s: %d words in %.0fs", d.name, len(words), state["transcribe_seconds"])
         count += 1
     return count
@@ -599,6 +621,7 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
     redo_plain = state.get("copy_source") == "plain" and llm.available(cfg)
     if state.get("copy_at") and not force and not redo_plain:
         return state
+    disk_before = read_json(d / "clip.json", {})  # to tell, after the slow AI call, what a person changed meanwhile
     tags: list[str] = []
     if cfg.trends.enabled:
         try:
@@ -625,6 +648,14 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
         copy = llm.fallback_copy(state, tags, cfg.trends.max_tags)
         state["copy_source"] = "plain"
         state["copy_problem"] = str(e)  # shown on the review page
+    # The call took a while. Text a person typed and saved meanwhile is theirs: carry on from the clip as it is now.
+    now = read_json(d / "clip.json", {})
+    for key in set(now) | set(disk_before):
+        if now.get(key) != disk_before.get(key):  # changed on disk during the call: that is the newer truth
+            if key in now:
+                state[key] = now[key]
+            else:
+                state.pop(key, None)
     auto = set(state.get("copy_auto") or [])
     before = {k: state.get(k) for k in SHOWS}
     for key in COPY_FIELDS:
@@ -637,7 +668,7 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
     for key, files in SHOWS.items():
         if state.get(key) != before[key]:  # the text is burned in, so the old render is stale
             for name in files:
-                (d / name).unlink(missing_ok=True)
+                remove(d / name)
     save_clip(d / "clip.json", state)
     return state
 
@@ -656,7 +687,11 @@ def stage_write(cfg: Config, url: str | None = None, only: list[str] | None = No
                 continue
             if state.get("copy_at") and not force:
                 continue
-            write_clip_copy(d, state, cfg, force=force)
+            try:
+                write_clip_copy(d, state, cfg, force=force)
+            except Exception as e:  # one clip's text must not stop the drafts of the others
+                _clip_failed(d, "writing the text", e, None)
+                continue
             count += 1
     return count
 

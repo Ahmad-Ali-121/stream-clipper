@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+import sys
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -39,6 +40,33 @@ def find_tool(name: str, data_dir: Path) -> str:
     if not path:
         raise ToolError(f"{name} was not found on PATH or under {data_dir / 'tools'}. Run setup.ps1 to see what is missing.")
     return path
+
+
+def kill_tree(proc: subprocess.Popen) -> None:
+    """Stop a program and the programs it started (yt-dlp and TwitchDownloader both run FFmpeg, which would
+    otherwise keep downloading and keep the unfinished file locked)."""
+    if proc.poll() is not None:
+        return
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, stdin=subprocess.DEVNULL)
+    else:
+        proc.kill()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+def _run_plain(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.Popen(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,  # never wait on a prompt
+                            text=True, encoding="utf-8", errors="replace", cwd=str(cwd) if cwd else None)
+    try:
+        out, err = proc.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        kill_tree(proc)
+        proc.communicate()
+        raise
+    return subprocess.CompletedProcess(list(cmd), proc.returncode, out, err)
 
 
 def _run_watched(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, on_line) -> subprocess.CompletedProcess[str]:
@@ -82,7 +110,7 @@ def _run_watched(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, 
     try:
         proc.wait(timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        proc.kill()
+        kill_tree(proc)
         reader.join(timeout=5)
         raise
     reader.join(timeout=10)
@@ -109,16 +137,7 @@ def run(
     for attempt in range(retries + 1):
         started = time.monotonic()
         try:
-            proc = _run_watched(cmd, timeout_s, cwd, on_line) if on_line else subprocess.run(
-                list(cmd),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout_s,
-                stdin=subprocess.DEVNULL,  # never let a tool sit waiting on a prompt
-                cwd=str(cwd) if cwd else None,
-            )
+            proc = _run_watched(cmd, timeout_s, cwd, on_line) if on_line else _run_plain(cmd, timeout_s, cwd)
         except subprocess.TimeoutExpired:
             last = f"timed out after {timeout_s:.0f}s"
         else:

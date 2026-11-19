@@ -284,9 +284,9 @@ def explained(clip_dir: Path, cfg: Config, force: bool = False, variant: str = "
     card = make_card(still_frame(clip_dir, cfg), intro, clip_dir / ("intro_card_b.mp4" if b else "intro_card.mp4"), cfg,
                      label=str(state.get("channel") or ""), variant=variant)
     concat([card, body], out, cfg)
-    state = read_json(clip_dir / "clip.json")
-    state["explained_seconds"] = round(time.monotonic() - t0, 1)
-    write_json(clip_dir / "clip.json", state)
+    from .work import update_clip
+
+    state = update_clip(clip_dir / "clip.json", {"explained_seconds": round(time.monotonic() - t0, 1)})
     log.info("clip %s: explained version made in %.0fs", clip_dir.name, state["explained_seconds"])
     return out
 

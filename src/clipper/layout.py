@@ -343,7 +343,8 @@ def auto_layout(clip_dir: Path, state: dict, cfg: Config) -> dict:
     saved = saved_framing(channel, cfg)
     # Boxes are fractions of the picture, so they only fit a stream of the same shape as the one they were drawn on.
     if saved and saved.get("layout") in ("crop", "split"):
-        sw, sh = (saved.get("source") or [16, 9])[:2]
+        size = saved.get("source") or []
+        sw, sh = size[:2] if len(size) >= 2 and size[0] and size[1] else (16, 9)
         if abs(sw / sh - float(state.get("source_width") or 16) / float(state.get("source_height") or 9)) < 0.02:
             state["layout"], state["layout_auto"] = saved["layout"], True
             state["layout_reason"] = "the boxes you saved for this streamer"
