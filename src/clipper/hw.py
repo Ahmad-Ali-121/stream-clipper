@@ -109,16 +109,27 @@ def describe_exit(code: int) -> str:
     return f"it crashed: exit code {code} (0x{unsigned:08X}, {CRASH_CODES.get(unsigned, 'killed, or a crash inside a native library')})"
 
 
-def trial_load(model: str, device: str, compute_type: str, models_dir: str, env: dict[str, str] | None = None) -> tuple[bool, str]:
+def trial_load(model: str, device: str, compute_type: str, models_dir: str, env: dict[str, str] | None = None,
+               library: str | None = None) -> tuple[bool, str]:
     """Load the speech model and transcribe a second of silence in a separate process: (worked, everything it said).
 
     A damaged model file or missing GPU libraries kill the process inside native code, with no Python error.
     Trying it in a child first means that death is seen and reported instead of taking the program with it.
     """
+    python = [sys.executable]
+    if library:  # the same trial with another version of the speech library, in a throwaway environment made by uv
+        import shutil
+
+        from .config import PROJECT_ROOT
+
+        uv = shutil.which("uv")
+        if not uv:
+            return False, "uv was not found, so another library version cannot be tried"
+        python = [uv, "run", "--quiet", "--project", str(PROJECT_ROOT), "--with", library, "python"]
     try:
         proc = subprocess.run(
-            [sys.executable, "-X", "faulthandler", "-c", _CUDA_TRIAL.replace('"cuda"', "sys.argv[4]"), model, compute_type, models_dir, device],
-            capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=3600,
+            python + ["-X", "faulthandler", "-c", _CUDA_TRIAL.replace('"cuda"', "sys.argv[4]"), model, compute_type, models_dir, device],
+            capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=900 if library else 3600,
             env={**os.environ, **(env or {})},
         )
     except Exception as e:
@@ -173,7 +184,10 @@ SPEECH_TRIALS = [
     ("usual model, processor, int8, plain instructions", None, "cpu", "int8", {"CT2_FORCE_CPU_ISA": "GENERIC"}),
     ("usual model, processor, int8, without Intel MKL", None, "cpu", "int8", {"CT2_USE_MKL": "0"}),
     ("usual model, NVIDIA card, int8_float16", None, "cuda", "int8_float16", {}),
+    ("tiny model, processor, NVIDIA card hidden from the library", "tiny", "cpu", "int8", {"CUDA_VISIBLE_DEVICES": "-1"}),
 ]
+# Older releases of the speech library, newest first, tried when the installed one fails.
+OLDER_LIBRARIES = ["ctranslate2==4.8.5", "ctranslate2==4.8.2", "ctranslate2==4.7.2"]
 
 
 def doctor(cfg: Config) -> bool:
@@ -184,14 +198,31 @@ def doctor(cfg: Config) -> bool:
         print(line)
     print(f"models folder: {models}")
     print("\nTrying speech-to-text several ways, each in its own process (a few minutes; nothing here can crash this window):")
-    default_ok = False
+    default_ok, seen = False, []
+
+    def report(label: str, ok: bool, why: str, extra: str = "") -> None:
+        print(f"\n[{'WORKS' if ok else 'FAILS'}] {label}{extra}", flush=True)
+        if ok:
+            return
+        import re
+
+        same = re.sub(r"0x[0-9a-fA-F]+", "0x", why)  # thread numbers differ on every run
+        if same in seen:
+            print("    exactly the same failure as the first one printed above with this text")
+        else:
+            seen.append(same)
+            print("    " + why.replace("\n", "\n    "))
+
     for label, model, device, compute_type, env in SPEECH_TRIALS:
         ok, why = trial_load(model or cfg.transcribe.model, device, compute_type, str(models), env)
-        print(f"\n[{'WORKS' if ok else 'FAILS'}] {label}" + (f"  {env}" if env else ""))
-        if not ok:
-            print("    " + why.replace("\n", "\n    "))
+        report(label, ok, why, f"  {env}" if env else "")
         if label.endswith("(the default)"):
             default_ok = ok
+    if not default_ok:
+        print("\nThe installed speech library fails, so older releases are tried (each is downloaded once, about 20 MB):")
+        for library in OLDER_LIBRARIES:
+            ok, why = trial_load("tiny", "cpu", "int8", str(models), library=library)
+            report(f"tiny model, processor, with {library}", ok, why)
     print("\nCopy everything above when reporting a problem.")
     return default_ok
 
