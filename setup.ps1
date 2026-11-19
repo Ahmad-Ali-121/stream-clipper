@@ -126,7 +126,7 @@ if (-not $NoShortcut) {
     try {
         $desktop = [Environment]::GetFolderPath('Desktop')
         $link = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'Stream Clipper.lnk'))
-        $link.TargetPath = (Join-Path $PSScriptRoot 'Stream Clipper.cmd')
+        $link.TargetPath = (Join-Path $PSScriptRoot 'Stream-Clipper.cmd')
         $link.WorkingDirectory = $PSScriptRoot
         $link.Description = 'Start Stream Clipper and open its page'
         $link.Save()

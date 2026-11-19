@@ -492,5 +492,6 @@ def stage_run(url: str, cfg: Config, top: int | None = None, mode: str | None = 
     work, _clips = stage_find(url, cfg, top=top, mode=mode, refresh_chat=refresh_chat, signals=signals, ai=ai)
     stage_fetch(url, cfg)
     stage_transcribe(url, cfg)
+    stage_write(cfg, url)  # opening text, titles and the AI rating, before rendering: the opening text is burned into the draft
     stage_render(url, cfg)
     return work
