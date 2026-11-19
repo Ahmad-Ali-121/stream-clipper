@@ -19,7 +19,7 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **Commentary formats.** A narrated "explained" version (free local voice) and a "top N moments" countdown.
 - **Upload text.** Hook, title, description and hashtags per platform. Hashtags come from what well-viewed YouTube Shorts on the topic use right now.
 - **Campaign briefs.** Optional rule files that check each clip (length, tags, disclosure) before you post.
-- **Uses your GPU when it has one.** NVIDIA, Intel or AMD video encoders and CUDA speech are picked automatically; everything also runs on a plain CPU.
+- **Uses your GPU when it has one.** NVIDIA, Intel or AMD video encoders are picked automatically. Speech-to-text on an NVIDIA card is optional: add `-Gpu` to the setup command (about 1 GB more). Everything also runs on a plain CPU.
 
 Everything in the core works with no paid service. Optional keys add nicer text and voices:
 
@@ -112,7 +112,7 @@ tests/           104 unit tests (uv run pytest -q)
 - The audio and video signals are new and their thresholds are not tuned on many streams.
 - Live YouTube streams are not supported yet.
 - A stream with recordings switched off costs about 3 GB of internet an hour to watch, and moments during advert breaks cannot be clipped.
-- The NVIDIA path is implemented but has not been run on NVIDIA hardware.
+- Speech-to-text on an NVIDIA card (`setup.ps1 -Gpu`) is new and has had almost no testing. If it cannot be used, the processor is used instead.
 - The first clip or two of a new streamer may be framed slightly off until the facecam box has been measured twice.
 
 ## Use it responsibly

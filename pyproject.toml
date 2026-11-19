@@ -24,6 +24,14 @@ dependencies = [
     "yt-dlp[default]>=2026.10.26",
 ]
 
+[project.optional-dependencies]
+# NVIDIA's libraries for speech-to-text on an NVIDIA card (about 1 GB). Installed by: setup.ps1 -Gpu
+# cuDNN is pinned to the version of the cudnn64_9.dll that ctranslate2 ships; its parts must match exactly.
+gpu = [
+    "nvidia-cublas-cu12==12.4.5.8; sys_platform == 'win32'",
+    "nvidia-cudnn-cu12==9.10.2.21; sys_platform == 'win32'",
+]
+
 [project.scripts]
 clipper = "clipper.cli:main"
 

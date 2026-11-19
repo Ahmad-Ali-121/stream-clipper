@@ -4,7 +4,8 @@
 # Downloads: FFmpeg (about 115 MB), TwitchDownloaderCLI (about 50 MB), a face model and a voice model (about 120 MB).
 # The Whisper speech model (about 1.6 GB) downloads by itself on the first transcribe.
 
-param([string]$DataDir = "data")
+# Add -Gpu on a PC with an NVIDIA card to also install NVIDIA's libraries (about 1 GB), so speech-to-text runs on the card.
+param([string]$DataDir = "data", [switch]$Gpu)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -97,7 +98,14 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) { Write-Host '  NVIDIA
 
 Write-Host ''
 Write-Host '== Python environment (pinned by uv.lock) =='
-uv sync --frozen
+# Once chosen, -Gpu stays chosen: a later run without it must not remove a 1 GB download.
+if (Test-Path '.venv\Lib\site-packages\nvidia\cublas') { $Gpu = $true }
+if ($Gpu) {
+    Write-Host "Installing the Python packages, with NVIDIA's libraries for speech on the graphics card (about 1 GB) ..."
+    uv sync --frozen --extra gpu
+} else {
+    uv sync --frozen
+}
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ''

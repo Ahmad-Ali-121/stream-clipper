@@ -177,7 +177,14 @@ def _cmd_top(args: argparse.Namespace) -> int:
 def _cmd_hardware(args: argparse.Namespace) -> int:
     from . import hw
 
-    info = hw.detect(load_config(args.config), refresh=args.refresh)
+    cfg = load_config(args.config)
+    info = hw.detect(cfg, refresh=args.refresh)
+    if info["whisper_device"] == "cuda" and cfg.transcribe.device == "auto":
+        # Seeing the card is not proof: load the model on it once, in a separate process, and keep the answer.
+        hw.confirm_cuda(cfg, cfg.transcribe.model, info["whisper_compute_type"], str(cfg.data_dir / "models"))
+        info = hw.detect(cfg)
+        if info.get("cuda_problem"):
+            print("NVIDIA card found, but speech-to-text cannot use it:\n  " + info["cuda_problem"].replace("\n", "\n  "))
     print(f"video encoder: {info['encoder']}")
     print(f"speech model runs on: {info['whisper_device']} ({info['whisper_compute_type']})" + (f", GPU memory {info['vram_mb']} MB" if info["vram_mb"] else ""))
     return 0

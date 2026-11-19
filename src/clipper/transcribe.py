@@ -55,6 +55,7 @@ def _local(path: Path, cfg: Config) -> list[dict]:
     t = cfg.transcribe
     from . import hw
 
+    hw.add_nvidia_dirs()
     device, compute_type = hw.whisper_device(cfg)
     if device == "cuda" and t.device == "auto":
         device, compute_type = hw.confirm_cuda(cfg, t.model, compute_type, str(cfg.data_dir / "models"))

@@ -40,8 +40,32 @@ def _encoder_works(ffmpeg: str, name: str) -> bool:
         return False
 
 
+def nvidia_dirs() -> list[str]:
+    """Folders holding NVIDIA's libraries installed as Python packages (setup.ps1 -Gpu), e.g. .../nvidia/cublas/bin."""
+    import sysconfig
+
+    root = Path(sysconfig.get_paths()["purelib"]) / "nvidia"
+    return sorted(str(p) for p in root.glob("*/bin") if any(p.glob("*.dll"))) if root.is_dir() else []
+
+
+def add_nvidia_dirs() -> list[str]:
+    """Let Windows find those libraries. Call before the speech library is imported; child processes inherit it."""
+    dirs = nvidia_dirs()
+    if sys.platform != "win32" or not dirs:
+        return dirs
+    have = os.environ.get("PATH", "").split(os.pathsep)
+    os.environ["PATH"] = os.pathsep.join([d for d in dirs if d not in have] + have)
+    for d in dirs:
+        try:
+            os.add_dll_directory(d)
+        except OSError as e:
+            log.warning("could not add the NVIDIA library folder %s (%s)", d, e)
+    return dirs
+
+
 def _cuda_usable() -> tuple[bool, int]:
     """(usable, VRAM in MB). Usable means the speech library can actually open a CUDA device."""
+    add_nvidia_dirs()
     try:
         import ctranslate2
 
@@ -166,6 +190,7 @@ def trial_load(model: str, device: str, compute_type: str, models_dir: str, env:
     A damaged model file or missing GPU libraries kill the process inside native code, with no Python error.
     Trying it in a child first means that death is seen and reported instead of taking the program with it.
     """
+    add_nvidia_dirs()  # the child inherits PATH
     python = [sys.executable]
     if library:  # the same trial with another version of the speech library, in a throwaway environment made by uv
         import shutil
@@ -214,6 +239,7 @@ def machine_facts() -> list[str]:
         facts.append(f"speech library: ctranslate2 {ctranslate2.__version__}, faster-whisper {faster_whisper.__version__}")
         facts.append(f"processor number formats: {sorted(ctranslate2.get_supported_compute_types('cpu'))}")
         facts.append(f"NVIDIA cards the library sees: {ctranslate2.get_cuda_device_count()}")
+        facts.append(f"NVIDIA libraries installed for speech (setup.ps1 -Gpu): {nvidia_dirs() or 'none'}")
         if sys.platform == "win32":
             v = vc_runtime_version()
             facts.append(f"Windows C++ runtime (msvcp140.dll): {'.'.join(map(str, v)) if v else 'MISSING'}; needs {VC_NEEDED[0]}.{VC_NEEDED[1]} or newer"
@@ -304,7 +330,7 @@ def confirm_cuda(cfg: Config, model: str, compute_type: str, models_dir: str) ->
         info.update(whisper_device="cpu", whisper_compute_type="int8", cuda_problem=why)
         log.warning(
             "an NVIDIA card was found but speech-to-text cannot run on it. Using the processor instead, which is slower. "
-            "The usual cause is missing NVIDIA libraries (cuBLAS and cuDNN); see GUIDE.md, 'When something goes wrong'. "
+            "If it names a missing cublas or cudnn file, run setup.ps1 again with -Gpu to install NVIDIA's libraries (about 1 GB). "
             "What the trial said:\n%s", why,
         )
     write_json(path, info)
