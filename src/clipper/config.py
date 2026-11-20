@@ -197,6 +197,8 @@ class LlmSettings:
     # Turning Urdu or Hindi captions into Latin letters is a simple job done for every clip: the small model does it
     # in a fraction of the time and of your plan's usage. Set it to the same model as above to go back.
     roman_model: str = "claude-haiku-5-5"
+    # The built-in help assistant. It reads the whole guide with every question, so a quick model keeps answers snappy.
+    help_model: str = "claude-sonnet-5-5"
     look_at_frames: bool = True  # also show AI three small frames of each clip, so it can rate what is on screen, not only the words
 
 

@@ -127,6 +127,17 @@ The drafts appear at the top of the list, in order. Review, approve and make the
 
 A part can be between 8 seconds and 5 minutes long. A video file can also be searched automatically: in the **Finished stream** tab paste its path and choose sound, picture or AI reading (a file has no chat).
 
+### Ask: the built-in help
+
+The **? Ask** button at the bottom right opens a chat. Type a question about the program, in English or Roman Urdu: "How do I clip a live stream?", "What does the score mean?", "Why is it not working?".
+
+- It answers in simple words, with numbered steps when there is something to do.
+- **Show me** beside a step takes you there: it opens the right tab or fold-out, scrolls to the button, highlights it and blurs everything else. **Walk me through it** does this for every step in turn; press **Next**, or **Done** (or Esc) to stop. You can press the highlighted button itself.
+- It knows what the program is doing right now, so it can explain an error that is on screen.
+- It only answers questions about this program.
+
+It needs Claude (your Claude Code plan or an API key). Without Claude it still answers, by showing the parts of this guide that match your question. Each question counts towards your Claude plan like any other use.
+
 ### Order, filters and the New tag
 
 Above the clip list:

@@ -246,6 +246,31 @@ kbd{background:rgba(255,255,255,.06)!important}
 .hero h1 em{font-style:normal;color:var(--accent)}
 .hero p{color:#e9dcf3;font-size:13.5px;position:relative;max-width:560px}
 @media (max-width:980px){.hero h1{font-size:24px}}
+
+/* ---------- the help assistant ---------- */
+#helpbtn{position:fixed;right:20px;bottom:20px;z-index:20;border:0;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;color:#0b0714;
+  background:linear-gradient(90deg,var(--accent2),#b6f04a);box-shadow:0 10px 28px rgba(88,232,247,.35)}
+#helpbox{position:fixed;right:20px;bottom:76px;z-index:20;width:min(400px,calc(100vw - 32px));height:min(600px,calc(100vh - 110px));display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden}
+#helpbox header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);background:linear-gradient(120deg,#1c0a36,#4b0f6e)}
+#helpbox header b{flex:1;font-size:14.5px}
+#helpmsgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.hq,.ha{max-width:92%;padding:9px 12px;border-radius:14px;font-size:13.5px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.hq{align-self:flex-end;background:linear-gradient(90deg,var(--accent),var(--hot));color:#fff;border-bottom-right-radius:4px}
+.ha{align-self:flex-start;background:var(--surface2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.ha ol{margin:8px 0 0;padding-left:20px}.ha li{margin:5px 0}
+.ha .show{display:inline-block;margin-left:6px;padding:1px 9px;border-radius:99px;border:1px solid var(--accent2);background:none;color:var(--accent2);font-size:12px;font-weight:700;cursor:pointer}
+.ha .show:hover{background:var(--accent2);color:#0b0714}
+.ha .tour{margin-top:8px}.ha small{display:block;margin-top:8px;color:var(--muted)}
+.hsug{display:flex;flex-wrap:wrap;gap:6px}.hsug button{border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--text);text-align:left}
+#helpform{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+#helpform input{flex:1}
+/* the spotlight: four panels blur and darken everything except the thing being shown */
+.spotp{position:fixed;z-index:30;background:rgba(6,3,12,.66);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+#spotring{position:fixed;z-index:31;border:3px solid var(--accent2);border-radius:12px;box-shadow:0 0 0 4px rgba(88,232,247,.25),0 0 30px rgba(88,232,247,.6);pointer-events:none;animation:spotpulse 1.2s infinite}
+@keyframes spotpulse{50%{box-shadow:0 0 0 9px rgba(88,232,247,.12),0 0 40px rgba(88,232,247,.8)}}
+#spottip{position:fixed;z-index:32;max-width:340px;padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--accent2);box-shadow:0 14px 40px rgba(0,0,0,.6);font-size:13.5px;line-height:1.45}
+#spottip .btns{margin-top:10px}
 </style>
 </head>
 <body>
@@ -568,6 +593,14 @@ kbd{background:rgba(255,255,255,.06)!important}
     <div class="btns"><button class="btn primary" id="bx-save">Save and make the draft again</button><button class="btn" id="bx-auto">Back to automatic</button><button class="btn" id="bx-cancel">Cancel</button><span class="saved" id="bx-note"></span></div>
   </div>
 </div>
+<button id="helpbtn" onclick="helpToggle()" title="Ask how something works">? Ask</button>
+<div id="helpbox" hidden>
+  <header><b>Ask about Stream Clipper</b><button class="btn quiet" style="margin:0;padding:4px 8px" onclick="helpClear()" title="Start a new chat">New chat</button><button class="x" style="position:static" onclick="helpToggle()" aria-label="Close help">×</button></header>
+  <div id="helpmsgs"></div>
+  <form id="helpform" onsubmit="event.preventDefault();helpAsk()"><input type="text" id="helpq" maxlength="600" placeholder="How do I…? What does … do?" autocomplete="off"><button class="btn primary" id="helpsend">Ask</button></form>
+</div>
+<div id="spot" hidden><div class="spotp" id="sp-t"></div><div class="spotp" id="sp-b"></div><div class="spotp" id="sp-l"></div><div class="spotp" id="sp-r"></div>
+  <div id="spotring"></div><div id="spottip"><div id="spottext"></div><div class="btns"><button class="btn primary" id="spotnext">Next</button><button class="btn" id="spotdone">Done</button></div></div></div>
 <div id="toast"><span id="toasttext"></span><button class="x" title="Close" aria-label="Close" onclick="$('toast').style.display='none'">×</button></div>
 
 <script>
@@ -1400,6 +1433,110 @@ function twInit(){
     catch(err){$('tw-ans').value=p.prompt;toast('Copying is blocked in this browser, so part '+p.n+' was put in the box below: select all of it and copy it from there.',true)}});
 }
 twInit();
+
+/* ---------- the help assistant: ask, and be shown where ---------- */
+let HELP={turns:[],map:new Map(),busy:false,tour:null,at:0,el:null};
+const HELP_STARTERS=['What does this program do?','How do I make my first clip?','How do I clip a live stream?','What do the scores and chips on a clip mean?','How do I change how the captions look?','Why is it not working?'];
+function helpToggle(){const b=$('helpbox');b.hidden=!b.hidden;if(!b.hidden){if(!$('helpmsgs').children.length)helpClear();$('helpq').focus()}}
+function helpClear(){HELP.turns=[];$('helpmsgs').innerHTML='<div class="ha">Ask me anything about this program, in English or Roman Urdu. I answer in simple words and can show you where things are.</div>'
+  +'<div class="hsug">'+HELP_STARTERS.map(q=>'<button type="button" data-q="'+esc(q)+'">'+esc(q)+'</button>').join('')+'</div>'}
+/* Where a thing sits, in words: the view, the step-1 tab, the box and any fold-out it is inside. */
+function helpWhere(el){
+  const out=[], view=el.closest('[id^="view-"]'), tabp=el.closest('[id^="tab-"]'), card=el.closest('.card'), clip=el.closest('.clip'), modal=el.closest('.modal');
+  if(view)out.push({clips:'Clips view',track:'Tracker view',board:'Cutting board view',words:'Transcript view'}[view.id.slice(5)]||view.id);
+  if(clip)out.push('on each clip\'s card (this is the first clip\'s)');
+  if(card&&!clip){const h=card.querySelector('h2');if(h)out.push(h.textContent.trim().replace(/\s+/g,' '))}
+  if(tabp)out.push('tab "'+({live:'Live streams',vod:'Finished stream',own:'Your own clip'}[tabp.id.slice(4)]||tabp.id)+'"');
+  for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details')){const s=d.querySelector('summary');if(s&&s!==el)out.push('inside the fold-out "'+s.textContent.trim().replace(/\s+/g,' ').slice(0,50)+'"')}
+  if(modal)out.push('in the box editor window');
+  if(el.closest('.top'))out.push('top bar');
+  return out.join(' > ')||'on the page'}
+function helpLabel(el){
+  let t='';const tag=el.tagName;
+  if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA'){
+    const lab=(el.id&&document.querySelector('label[for="'+el.id+'"]'))||el.closest('label');
+    /* a label that wraps its own control: only the label's words, not the choices inside the control */
+    let lt='';if(lab){const c=lab.cloneNode(true);for(const x of c.querySelectorAll('select,input,textarea,button'))x.remove();lt=c.textContent}
+    t=lt.trim()||el.getAttribute('aria-label')||el.placeholder||el.name||'';
+    if(el.closest('.clip')&&el.previousElementSibling&&el.previousElementSibling.tagName==='LABEL')t=el.previousElementSibling.textContent}
+  else t=el.textContent||el.title||el.getAttribute('aria-label')||'';
+  return t.trim().replace(/\s+/g,' ').slice(0,90)}
+/* Everything on the page that can be pressed, chosen or typed into, right now. Built fresh for every question, so new features are covered by themselves. */
+function helpTargets(){
+  HELP.map=new Map();const out=[];let n=0;const firstClip=document.querySelector('#clips .clip');
+  const kinds={BUTTON:'button',SELECT:'choice',TEXTAREA:'box',SUMMARY:'fold-out',A:'link',LABEL:'option'};
+  for(const el of document.querySelectorAll('button,select,input,textarea,summary,a.btn,label.mode,.pill')){
+    if(el.closest('#helpbox,#spot,#toast,#helpbtn')||el.type==='hidden'||el.type==='file')continue;
+    const clip=el.closest('.clip');if(clip&&clip!==firstClip)continue;   /* one clip's card stands for all */
+    if(el.classList.contains('x')&&!el.title)continue;
+    const label=helpLabel(el);if(!label)continue;
+    const key=(el.id&&!clip)?el.id:'k'+(++n);
+    if(HELP.map.has(key))continue;
+    HELP.map.set(key,el);
+    out.push({key:key,kind:el.tagName==='INPUT'?(el.type==='checkbox'||el.type==='radio'?'tick box':(el.type==='range'?'slider':'box')):(kinds[el.tagName]||'item'),label:label,where:helpWhere(el)});
+    if(out.length>=400)break}
+  return out}
+function helpState(){const s=last||{},h=s.health||{};
+  return {view:['clips','track','board','words'].find(v=>!$('view-'+v).hidden),tab:curTab,watching:s.watching?('yes: '+(s.channels||'')):false,running:!!s.running,finishing:!!s.finishing,
+    progress:s.run_progress?(Math.floor(s.run_progress.percent)+'% '+s.run_progress.stage+' '+(s.run_progress.text||'')):'',setup:h.summary?h.summary.text:'',
+    ai:s.ai?(s.ai.problem?('not available: '+s.ai.problem):'working')+((s.ai.local||{}).ready?', free local AI ready':''):'',clips:$('p-count').textContent,errors:errShown}}
+function helpAdd(cls,html){const d=document.createElement('div');d.className=cls;d.innerHTML=html;$('helpmsgs').appendChild(d);$('helpmsgs').scrollTop=1e9;return d}
+async function helpAsk(text){
+  const q=(text||val('helpq')).trim();if(!q||HELP.busy)return;
+  $('helpq').value='';for(const s of document.querySelectorAll('.hsug'))s.remove();
+  helpAdd('hq',esc(q));const wait=helpAdd('ha','Thinking…');HELP.busy=true;$('helpsend').disabled=true;
+  const r=await send('/api/help',{question:q,history:HELP.turns.slice(-6),targets:helpTargets(),state:helpState()});
+  HELP.busy=false;$('helpsend').disabled=false;wait.remove();
+  if(r.error){helpAdd('ha','<b style="color:var(--bad)">I could not answer:</b> '+esc(r.error));return}
+  HELP.turns.push({q:q,a:r.answer+' '+r.steps.map(s=>s.text).join(' ')});
+  const id=HELP.turns.length-1, pts=r.steps.filter(s=>s.target&&HELP.map.has(s.target)).length;
+  const box=helpAdd('ha',esc(r.answer)+(r.steps.length?'<ol>'+r.steps.map((s,i)=>'<li>'+esc(s.text)+(s.target&&HELP.map.has(s.target)?'<button class="show" data-step="'+i+'">Show me</button>':'')+'</li>').join('')+'</ol>':'')
+    +(pts>1?'<div class="tour"><button class="btn primary" data-tour="1">Walk me through it</button></div>':'')+(r.note?'<small>'+esc(r.note)+'</small>':''));
+  box._steps=r.steps;
+  if((r.follow_ups||[]).length)helpAdd('hsug',r.follow_ups.map(f=>'<button type="button" data-q="'+esc(f)+'">'+esc(f)+'</button>').join(''));
+  $('helpmsgs').scrollTop=1e9;$('helpq').focus();
+}
+/* Bring a thing into view: open its view, its tab and every fold-out around it. Returns the thing to highlight (the nearest visible one). */
+function helpReveal(el){
+  if(!document.body.contains(el))return null;
+  const view=el.closest('[id^="view-"]');if(view&&view.hidden)view_(view.id.slice(5));
+  const tabp=el.closest('[id^="tab-"]');if(tabp&&tabp.hidden)tab(tabp.id.slice(4));
+  for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details'))if(!d.open&&d.querySelector('summary')!==el)d.open=true;
+  const clip=el.closest('.clip');if(clip&&clip.offsetParent===null&&filter!=='all')setFilter('all');
+  let show=el;while(show&&show.offsetParent===null&&show.parentElement)show=show.parentElement;   /* hidden right now: point at what holds it */
+  return show===document.body?null:show}
+function view_(n){view(n)}
+function spotPlace(){
+  const el=HELP.el;if(!el||!document.body.contains(el)){spotEnd();return}
+  const r=el.getBoundingClientRect(),p=6,W=innerWidth,H=innerHeight,x=Math.max(0,r.left-p),y=Math.max(0,r.top-p),x2=Math.min(W,r.right+p),y2=Math.min(H,r.bottom+p);
+  const set=(id,l,t,w,h)=>{const s=$(id).style;s.left=l+'px';s.top=t+'px';s.width=Math.max(0,w)+'px';s.height=Math.max(0,h)+'px'};
+  set('sp-t',0,0,W,y);set('sp-b',0,y2,W,H-y2);set('sp-l',0,y,x,y2-y);set('sp-r',x2,y,W-x2,y2-y);set('spotring',x,y,x2-x,y2-y);
+  const tip=$('spottip'),tw=Math.min(340,W-24),below=H-y2>170||y<170;tip.style.width=tw+'px';tip.style.left=Math.max(12,Math.min(W-tw-12,x))+'px';
+  tip.style.top=below?(y2+12)+'px':'';tip.style.bottom=below?'':(H-y+12)+'px'}
+function spotShow(step,more){
+  const el=helpReveal(HELP.map.get(step.target));
+  if(!el){toast('That is not on the page right now. It may only appear after an earlier step.',true);if(more)spotNext();return}
+  HELP.el=el;$('spot').hidden=false;$('helpbox').hidden=true;
+  $('spottext').textContent=step.text+(el!==HELP.map.get(step.target)?' (It is not showing right now, so the area it belongs to is highlighted.)':'');
+  $('spotnext').hidden=!more;el.scrollIntoView({block:'center',behavior:'smooth'});
+  spotPlace();setTimeout(spotPlace,350);setTimeout(spotPlace,800)}
+function spotNext(){const t=HELP.tour;if(!t){spotEnd();return}
+  HELP.at++;while(HELP.at<t.length&&!(t[HELP.at].target&&HELP.map.has(t[HELP.at].target)))HELP.at++;
+  if(HELP.at>=t.length){spotEnd();return}
+  spotShow(t[HELP.at],t.slice(HELP.at+1).some(s=>s.target&&HELP.map.has(s.target)))}
+function spotEnd(){$('spot').hidden=true;HELP.el=null;HELP.tour=null;$('helpbox').hidden=false}
+function helpInit(){
+  $('helpmsgs').addEventListener('click',e=>{
+    const q=e.target.closest('[data-q]');if(q){helpAsk(q.dataset.q);return}
+    const box=e.target.closest('.ha');if(!box||!box._steps)return;
+    const one=e.target.closest('[data-step]');if(one){HELP.tour=null;spotShow(box._steps[+one.dataset.step],false);return}
+    if(e.target.closest('[data-tour]')){HELP.tour=box._steps;HELP.at=-1;spotNext()}});
+  $('spotnext').addEventListener('click',spotNext);$('spotdone').addEventListener('click',spotEnd);
+  for(const id of ['sp-t','sp-b','sp-l','sp-r'])$(id).addEventListener('click',spotEnd);
+  window.addEventListener('resize',()=>{if(HELP.el)spotPlace()});window.addEventListener('scroll',()=>{if(HELP.el)spotPlace()},true);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(HELP.el)spotEnd();else if(!$('helpbox').hidden)helpToggle()}});
+}
+helpInit();
 
 /* ---------- tracker ---------- */
 function view(n){for(const x of ['clips','track','board','words']){$('view-'+x).hidden=n!==x;$('v-'+x).className=n===x?'on':''}

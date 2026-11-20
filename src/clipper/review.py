@@ -713,6 +713,12 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 shutil.rmtree(d, ignore_errors=True)
                 log.info("deleted the downloaded part %s/%s, %.0f MB freed", m.group(1), m.group(2), mb)
                 return self._send(200, json.dumps({"deleted": 1, "mb": round(mb)}).encode(), "application/json")
+            if self.path == "/api/help" and cfg is not None:
+                from . import help as help_mod
+
+                body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", "0")), 400_000)) or b"{}")
+                result = help_mod.answer(control.cfg if control else cfg, body.get("question"), body.get("history"), body.get("targets"), body.get("state"))
+                return self._send(200, json.dumps(result).encode("utf-8"), "application/json")
             if self.path in ("/api/words", "/api/words/answers") and cfg is not None:
                 from . import words as words_mod
 
