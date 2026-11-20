@@ -48,6 +48,7 @@ transcribe:
   device: auto            # auto = NVIDIA GPU when usable, else CPU; or force cpu / cuda
   language: en
   groq_model: whisper-large-v3-turbo
+  youtube_captions: auto  # auto = for YouTube videos take the words from YouTube's own captions when it has them (seconds); off = always listen here
 
 render:
   width: 1080
@@ -102,6 +103,8 @@ llm:                      # writes hooks, titles, descriptions and narration. Ne
   model: claude-opus-5-5  # claude-haiku-5-5 costs about 40 times less and is usually enough for this job
   effort: low
   text_language: English  # opening text, titles and description are written in: English, Roman Urdu, Hinglish, Urdu or Hindi
+  local: auto             # the free AI on this computer (Ollama), used for clip text when Claude cannot be reached. auto = use it if it is set up; off = never
+  local_model: llama3.2:3b
   look_at_frames: true    # also show Claude three small frames of each clip, so it rates what is on screen and not only the words
 
 ai:                       # "AI reads the stream": transcribes a finished stream's speech and lets Claude pick moments. Needs ANTHROPIC_API_KEY

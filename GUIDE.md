@@ -127,6 +127,35 @@ The drafts appear at the top of the list, in order. Review, approve and make the
 
 A part can be between 8 seconds and 5 minutes long. A video file can also be searched automatically: in the **Finished stream** tab paste its path and choose sound, picture or AI reading (a file has no chat).
 
+### Faster on YouTube: its own captions
+
+For a YouTube video the program now asks YouTube for the words it has already written down, instead of listening to the video itself.
+
+- A clip's captions are ready in seconds. Before, a two-minute clip could take ten minutes on a laptop without a graphics card.
+- **Let AI read the whole stream** no longer needs up to an hour of listening first.
+- A YouTube video with **no chat** (an upload, not a stream) can now be searched: moments are found from what is said.
+- The card shows **Captions from YouTube**. If a word is wrong, fix it under **Captions** as usual.
+- If the captions of some video are poor, open **Language** in step 1 and set *Words of YouTube videos come from* to *Listening on this PC*.
+
+Twitch, live streams and video files are still listened to on this PC, because nobody has written their words down.
+
+### Excited words
+
+"Oh my god", "no way", "run run", "arre yaar", "bhaago", "bachao" and the like, in English, Hindi and Urdu, count as a signal. A clip full of them scores higher and shows an **Excited words** chip. On YouTube videos they also find moments that chat missed.
+
+### Clip the last 30 seconds (live)
+
+While watching live, the Live streams tab has **Clip the last** with a length next to it. Saw something chat did not react to? Press it right after the moment. A draft of that stretch appears at the top of the list in two or three minutes; trim it in Fine-tune. It needs a stream being watched.
+
+### Free local AI (optional)
+
+For a computer with no Claude plan or key. A small AI runs on the PC itself and writes the opening text, title and a rating, so clips do not get placeholder text.
+
+- The program checks by itself whether the PC can run it (about 8 GB of memory, 4 processor threads). A PC that cannot never downloads anything for it; the Claude box says so.
+- A PC that can shows **Set up free local AI** in the Claude box. One press installs Ollama and a model, about 3 GB in all; progress shows under Setup check.
+- Claude is always used first when it works. The local AI is the fallback, and its text is redone by Claude when Claude is back.
+- It is plainer than Claude, cannot look at the picture, and is not used to read whole streams or to turn captions into Latin letters.
+
 ### How far is it? The percentage bars
 
 Every job on the page has a bar with a line under it, for example **41% · Step 2 of 4: Downloading the clips · clip 3 of 8 · roughly 3 minutes left**.

@@ -12,6 +12,7 @@ off unless asked for. Progress is saved after every ten minutes of stream, so a 
 from __future__ import annotations
 
 import json
+import re
 import logging
 import subprocess
 import time
@@ -110,6 +111,18 @@ def transcribe_stream(url: str, work: Path, cfg: Config, duration_s: float | Non
         done_s = 0.0
     if target and done_s >= target - 1:
         return out
+    if re.match(r"https?://", url) and "youtu" in url.split("/")[2]:
+        # YouTube has usually written the whole stream down already; reading that takes seconds, listening takes up to an hour.
+        from . import progress, ytcaptions
+
+        words = ytcaptions.video_words(url, work, cfg)
+        if words:
+            rows = [r for r in ytcaptions.as_lines(words) if not target or r["t"] < target]
+            out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+            mark.write_text(f"{target or (rows[-1]['e'] if rows else 0):.1f}", encoding="utf-8")
+            log.info("the stream's speech was taken from YouTube's own captions: %d lines, no listening needed", len(rows))
+            progress.sub(0.95, "speech taken from YouTube's captions")
+            return out
     name = stream_model_name(cfg)
     model = load_model(cfg, name)
     feed = vod_feed_url(url, cfg, video=False)

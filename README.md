@@ -15,6 +15,10 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **AI can read a finished stream.** `--ai` turns all of its speech into text and has Claude pick moments from what was said (needs a Claude key; a few cents a stream).
 - **Works live or on finished streams, on Twitch and YouTube.** `watch` follows several live channels at once (Twitch names, YouTube handles like `@channel`); `run` processes a finished Twitch VOD or a YouTube recording with chat replay.
 - **Your own clips.** Give a YouTube or Twitch video link, or a video file such as a screen recording, with a start and an end; get one clip, or the range split into parts labelled "Part 1", "Part 2" on screen.
+- **YouTube's own captions as the words.** For YouTube videos the words come from YouTube's captions when it has them: a clip's captions in seconds instead of minutes, and a whole stream's speech read at once. The speech model stays the fallback.
+- **Excited words as a signal.** "Oh my god", "no way", "arre yaar", "bhaago" (English, Hindi, Urdu, Roman or their own letters) raise a clip's score, and find moments in a YouTube video even when it has no chat.
+- **Clip the last 30 seconds.** While watching live, one button makes a draft of what just happened.
+- **Free local AI (optional).** On a computer that can run it, a small AI on the PC (Ollama) writes clip text when Claude cannot be reached. A computer too small for it never downloads it.
 - **A percentage on every job.** Downloads, finding moments, captions, text, drafts, final videos, the setup check and file copies show how far they are ("41% · Step 2 of 4: Downloading the clips · clip 3 of 8") and roughly how long is left.
 - **Cutting board.** Download the part of a video you chose once, then mark the cuts on a timeline with the sound wave, see how many clips that gives and how long each is, and make them.
 - **Face box and video box.** On any clip, drag two boxes over the stream picture to choose what is shown on top (the face) and below (the video); a small preview shows the result. Can be kept for a streamer's next clips.
@@ -117,7 +121,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           188 unit tests (uv run pytest -q)
+tests/           201 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about
@@ -146,3 +150,7 @@ Issues and pull requests are welcome. Keep the core free to run, keep settings i
 [MIT](LICENSE). FFmpeg, TwitchDownloaderCLI, yt-dlp, faster-whisper, Kokoro and YuNet are downloaded by the setup script under their own licences.
 
 Suggested repository topics: `twitch`, `clips`, `youtube-shorts`, `tiktok`, `ffmpeg`, `whisper`, `captions`, `video-editing`, `streaming`, `python`.
+
+## Credits
+
+Some ideas were learned from other open-source clippers and written again in our own code: taking the words from YouTube's own captions, scoring excited words, a "clip now" button and a free local AI come from [NeonClipping](https://github.com/iamajmeena/neonclipping) (MIT) and the projects it credits, such as PeakCut.

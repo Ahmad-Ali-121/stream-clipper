@@ -104,7 +104,7 @@ def clip_view(d: Path, weights: dict | None = None, brief=None, cfg=None) -> dic
         videos=[n for n in ("final.mp4", "final_b.mp4", "explained.mp4", "explained_b.mp4", "source.mp4") if (d / n).exists()],
         fetch_start_s=c.get("fetch_start_s", 0), has_words=(d / "words.json").exists(),
         exported_name=Path(c["exported"]).name if c.get("exported") else "",
-        framing=_framing(c, cfg),
+        framing=_framing(c, cfg), said=float((c.get("signals") or {}).get("said") or 0), words_from=c.get("words_from") or "",
         campaign=brief.name if brief else "", campaign_issues=_campaign_issues(c, brief), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
         lo=c.get("fetch_start_s", c["start_s"]), hi=c.get("fetch_end_s", c["end_s"]),
         # Changes whenever the clip's data or its draft video changes, so the page knows to redraw it.
@@ -548,8 +548,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             origin = self.headers.get("Origin")
             if origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
                 return self._send(403, b"not allowed from another site", "text/plain")
-            actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch",
-                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check",
+            actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch", "/api/watch/clip-now": "clip_now",
+                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check", "/api/ai/local-setup": "start_local_ai",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
                        "/api/restart": "restart"}
             if self.path.startswith("/api/upload") and cfg is not None:
@@ -586,7 +586,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
                     name = actions[self.path]
-                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut") else getattr(control, name)()
+                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut", "clip_now") else getattr(control, name)()
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 if isinstance(result, dict) and "watching" in result:
@@ -719,7 +719,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 d = by_name[m.group(1)] / "clips" / m.group(2)
                 if not (d / "clip.json").exists():
                     return self._send(404, b"no such clip", "text/plain")
-                if not llm.available(cfg):
+                if not llm.text_available(cfg):
                     return self._send(400, f"AI is not available: {llm.why_unavailable(cfg)}.".encode(), "text/plain")
                 state = write_clip_copy(d, read_json(d / "clip.json"), cfg, force=True)
                 if state.get("copy_source") == "plain":

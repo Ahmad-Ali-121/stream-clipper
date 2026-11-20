@@ -4,6 +4,7 @@ Each signal is first squeezed to 0..1:
   chat      how many times the normal chat rate (2x is weak, 8x is as strong as it gets)
   audio     how unusual the loudness was
   video     how unusual the motion was
+  said      how many excited words are in it ("oh my god", "arre yaar", "bhaag")
   ai_pick   how sure AI was when it picked the moment from the stream's speech (1 to 10)
 
 They are combined so that agreement counts: two medium signals beat one medium signal, and nothing
@@ -21,7 +22,7 @@ from pathlib import Path
 
 from .work import read_json, write_json
 
-BASE_WEIGHTS = {"chat": 0.80, "audio": 0.50, "video": 0.40, "ai_pick": 0.70}
+BASE_WEIGHTS = {"chat": 0.80, "audio": 0.50, "video": 0.40, "said": 0.45, "ai_pick": 0.70}
 RATING_SHARE = 0.60  # how much of the score the AI rating of the finished draft gets, when there is one
 MIN_HISTORY = 8  # reviewed clips needed before a signal's weight is adjusted
 
@@ -42,6 +43,8 @@ def signal_strengths(state: dict) -> dict[str, float]:
         out["audio"] = _unit(float(signals.get("audio", score if trigger == ["audio"] else 0)) / 10.0)
     if "video" in trigger or "video" in signals:
         out["video"] = _unit(float(signals.get("video", score if trigger == ["video"] else 0)) / 12.0)
+    if "said" in trigger or "said" in signals:
+        out["said"] = _unit(float(signals.get("said", score if trigger == ["said"] else 0)) / 10.0)
     if state.get("ai_pick"):
         out["ai_pick"] = _unit(float(state.get("ai_strength") or (score if trigger == ["ai"] else 6)) / 10.0)
     return out

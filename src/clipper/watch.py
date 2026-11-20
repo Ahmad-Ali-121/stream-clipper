@@ -162,6 +162,7 @@ class Watched:
         self.feed = feed  # SignalReader when audio or video is being analysed, else None
         self.buffer = buffer  # LiveBuffer when Twitch is not recording this broadcast, else None
         self.last_live_check = time.time()
+        self.asked: list[dict] = []  # "clip the last N seconds" requests, waiting for the recording to reach them
 
     def stop(self) -> None:
         self.reader.stop()
@@ -322,6 +323,11 @@ def prepare_clip(d: Path, state: dict, cfg: Config) -> dict:
     words = transcribe_file(d / "source.mp4", cfg)
     write_json(d / "words.json", words)
     state["transcript"] = " ".join(x["word"] for x in words)
+    from . import said
+
+    heard = said.strength([{**x, "word": x.get("native") or x["word"]} for x in words], float(state.get("source_duration_s") or 0) or 60.0)
+    if heard:
+        state.setdefault("signals", {})["said"] = heard
     state = apply_snap(state, words, max_shift=cfg.fetch.pad_s)
     save_clip(d / "clip.json", state)
     state = write_clip_copy(d, state, cfg)  # hook, title, hashtags: by Claude when a key is set, plain text otherwise
@@ -340,6 +346,59 @@ def note_error(d: Path, message: str | None) -> None:
     else:
         state["error"] = f"{time.strftime('%H:%M:%S')} {message}"
     write_json(path, state)
+
+
+ASKED_FILE = "clip_now.jsonl"  # the review page writes a line here for each "clip the last N seconds" press
+
+
+def ask_clip_now(data_dir: Path, seconds: float) -> None:
+    """Called by the review page: note that a person wants the last ``seconds`` of every watched stream as a clip."""
+    if not 5 <= float(seconds) <= 180:
+        raise ValueError("the length must be between 5 and 180 seconds")
+    with (data_dir / ASKED_FILE).open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"at": time.time(), "seconds": float(seconds)}) + "\n")
+
+
+def take_asked(data_dir: Path) -> list[dict]:
+    """The requests written since the last look (the file is emptied). Old ones, from before a restart, are dropped."""
+    path = data_dir / ASKED_FILE
+    if not path.exists():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        path.unlink()
+    except OSError:
+        return []  # being written this instant; the next look gets it
+    out = []
+    for line in lines:
+        try:
+            r = json.loads(line)
+            if time.time() - float(r["at"]) < 300:
+                out.append(r)
+        except (ValueError, KeyError, TypeError):
+            continue
+    return out
+
+
+def asked_moment(w: Watched, request: dict, cfg: Config) -> dict:
+    """The stretch of the stream a person asked for: the ``seconds`` before they pressed the button.
+
+    What they were watching runs a few seconds behind the broadcast, so the stretch ends that much earlier and
+    starts a little earlier still; the trimmer on the review page takes off what is not wanted.
+    """
+    pressed = float(request["at"]) - float(w.meta["started_at"])
+    end = max(10.0, pressed - cfg.watch.feed_delay_s)
+    start = max(0.0, end - float(request["seconds"]) - 5.0)
+    return {"score": 0, "activity": 0, "messages": 0, "trigger": "manual", "signals": {}, "peak_s": round(start, 1),
+            "start_s": round(start, 1), "end_s": round(end, 1), "asked": True}
+
+
+def due_asked(w: Watched, cfg: Config) -> list[dict]:
+    """Asked-for clips the recording has now caught up with."""
+    live_now = time.time() - float(w.meta["started_at"])
+    ready = [m for m in w.asked if m["end_s"] + cfg.fetch.pad_s + (0 if getattr(w, "buffer", None) else cfg.watch.vod_delay_s) <= live_now]
+    w.asked = [m for m in w.asked if m not in ready]
+    return ready
 
 
 def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
@@ -414,6 +473,9 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
     print(f"Watching {', '.join(names)} using {cfg.watch.mode}. Drafts appear under {cfg.data_dir / 'work'}. Ctrl+C to stop.")
     try:
         while deadline is None or time.time() < deadline:
+            asked = take_asked(cfg.data_dir)
+            if asked and not watched:
+                log.warning("a clip of the last seconds was asked for, but no stream is being watched right now")
             for name in names:
                 try:
                     w = watched.get(name)
@@ -428,7 +490,10 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                         watched[name] = w
                     for key in [k for k, f in making.items() if f.done()]:
                         del making[key]
-                    for moment in new_moments(w, cfg):
+                    for request in asked:
+                        w.asked.append(asked_moment(w, request, cfg))
+                        log.info("%s: you asked for the last %.0f seconds; the clip is made as soon as the recording reaches it", name, request["seconds"])
+                    for moment in due_asked(w, cfg) + new_moments(w, cfg):
                         key = (name, clip_id(moment["peak_s"]))
                         if key in making:
                             continue  # already being made
@@ -444,7 +509,13 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                 except Exception as e:  # one channel's failure must not stop the others
                     # A ToolError's message is the whole story; anything else is a bug and gets its full traceback.
                     log.error("%s: %s", name, e, exc_info=not isinstance(e, ToolError))
-            time.sleep(cfg.watch.poll_s)
+            # Wait for the next look, but answer a "clip now" press within a couple of seconds.
+            wake = time.time() + cfg.watch.poll_s
+            while time.time() < wake:
+                waiting = any(w.asked for w in watched.values())
+                if (cfg.data_dir / ASKED_FILE).exists() or (waiting and time.time() > wake - cfg.watch.poll_s + 5):
+                    break
+                time.sleep(2)
     except KeyboardInterrupt:
         pass
     finally:

@@ -274,14 +274,44 @@ def clip_prompt(state: dict, trend_tags: list[str]) -> str:
     )
 
 
-def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str, images: list | None = None) -> dict:
+last_used = ""  # which AI answered the most recent question: a Claude connection's name, or "local"
+
+
+def _ask_local(cfg: Config, system: str, user: str, schema: dict, what: str, why_not_claude: str) -> dict:
+    """The question to the free AI on this computer. Only for jobs it is big enough for (a clip's text)."""
+    global last_used
+    from . import localai
+
+    try:
+        data = localai.ask(cfg, system, user, schema, what)
+    except localai.LocalAiError as e:
+        raise LlmUnavailable(f"{why_not_claude}; and {e}") from e
+    last_used = "local"
+    log.info("Claude was not used (%s); the free local AI wrote this instead: %s", why_not_claude, what)
+    return data
+
+
+def text_available(cfg: Config) -> bool:
+    """Can a clip's text be written by some AI right now: Claude, or the free one on this computer?"""
+    if available(cfg):
+        return True
+    from . import localai
+
+    return cfg.llm.enabled and localai.ready(cfg)
+
+
+def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str, images: list | None = None, local_ok: bool = False) -> dict:
     """One question to Claude with a JSON answer in the given shape. Raises LlmUnavailable with the reason when it cannot.
 
     With llm.backend "auto" the preferred connection is tried first; if it fails and llm.fallback is on,
     the other one is used and that is said out loud, because it can move work onto a paid key.
+    ``local_ok``: when Claude cannot be reached at all, the free AI on this computer may answer instead.
     """
+    global last_used
     problem = why_unavailable(cfg)
     if problem:
+        if local_ok and cfg.llm.enabled:
+            return _ask_local(cfg, system, user, schema, what, problem)
         raise LlmUnavailable(problem)
     order = candidates(cfg)
     if not cfg.llm.fallback:
@@ -299,7 +329,10 @@ def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str
                 _remember(cfg, note=note)
             continue
         _remember(cfg, backend, ok=True)
+        last_used = backend
         return data
+    if local_ok:
+        return _ask_local(cfg, system, user, schema, what, " | ".join(failures))
     raise LlmUnavailable(" | ".join(failures))
 
 
@@ -387,7 +420,7 @@ def language_note(cfg: Config) -> str:
 def write_copy(state: dict, trend_tags: list[str], cfg: Config, images: list | None = None) -> dict:
     """Ask Claude for this clip's text and rating. Raises LlmUnavailable when there is no key or the call fails."""
     return clean_copy(ask(cfg, cfg.llm.model, SYSTEM, clip_prompt(state, trend_tags) + language_note(cfg), SCHEMA,
-                          f"copy for clip {state.get('id')}", images))
+                          f"copy for clip {state.get('id')}", images, local_ok=True))
 
 
 ROMAN_SYSTEM = """You are given the words of a speech-to-text transcript of a Hindi or Urdu gaming stream, as a JSON list, in order.

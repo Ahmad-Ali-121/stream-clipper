@@ -223,7 +223,9 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <select id="l-script" onchange="saveLang()"><option value="roman">Latin letters: "bhai ne kamaal kar diya" (best with Claude)</option><option value="native">Urdu or Hindi letters</option></select>
           <label class="f" for="l-text">Opening text and titles written in</label>
           <select id="l-text" onchange="saveLang()"><option value="Roman Urdu">Roman Urdu mixed with English</option><option>English</option><option value="Hinglish">Hinglish (Roman Hindi mixed with English)</option><option value="Urdu">Urdu letters</option><option value="Hindi">Hindi letters</option></select>
-          <p class="help" style="margin-top:6px">Applies to clips made from now on. The narrator in explainer videos speaks English.</p>
+          <label class="f" for="l-yt">Words of YouTube videos come from</label>
+          <select id="l-yt" onchange="saveLang()"><option value="auto">YouTube's own captions when it has them (seconds)</option><option value="off">Listening on this PC (minutes; try it if the captions are poor)</option></select>
+          <p class="help" style="margin-top:6px">Applies to clips made from now on. The narrator in explainer videos speaks English. Twitch, live streams and video files are always listened to on this PC.</p>
         </details>
         <div id="tab-live">
           <p class="help">Watches the streams while they are live and makes a draft clip each time something happens.</p>
@@ -232,6 +234,9 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <label class="f">What should find the moments?</label>
           <div class="modes" id="o-modes"></div>
           <div class="btns"><button class="btn primary" id="b-start" onclick="startWatch()">Start watching</button><button class="btn bad" id="b-stop" onclick="act('/api/watch/stop',{})">Stop</button></div>
+          <div class="btns" style="align-items:center"><button class="btn" id="b-clipnow" onclick="clipNow()" disabled>Clip the last</button>
+            <select id="w-last" style="width:auto" aria-label="How many seconds to clip"><option value="15">15 seconds</option><option value="30" selected>30 seconds</option><option value="45">45 seconds</option><option value="60">60 seconds</option><option value="90">90 seconds</option></select></div>
+          <p class="help" style="margin-top:6px">Saw something chat did not react to? Press it right after the moment. The draft appears in a minute or two, at the top of the list.</p>
           <div class="note" id="w-note">Not watching.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="wlog"></pre></details>
         </div>
@@ -301,7 +306,9 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <div><label class="f" for="a-stream">Model for reading streams</label><select id="a-stream" onchange="saveAi()"></select></div>
         </div>
         <div class="note" id="a-note"></div>
-        <div class="btns"><button class="btn" id="b-aicheck" onclick="act2('/api/ai/check')">Check again</button></div>
+        <div class="note" id="a-local"></div>
+        <div class="btns"><button class="btn" id="b-aicheck" onclick="act2('/api/ai/check')">Check again</button>
+          <button class="btn" id="b-localai" hidden onclick="localAi()">Set up free local AI</button></div>
       </div>
     </section>
 
@@ -459,6 +466,11 @@ function show(s){
   $('a-ways').innerHTML=Object.entries(ways).map(([k,w])=>{
     const st=w.missing?['#98a1b0','Not set up',w.missing]:(w.ok===true?['var(--ok)','Works','']:(w.ok===false?['var(--bad)','Does not work',w.problem]:['var(--warn)',s.ai.checking?'Checking…':'Not checked yet','']));
     return '<div style="display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:3px 0"><span class="dot" style="background:'+st[0]+';flex:none;position:relative;top:-1px"></span><span><b>'+esc(w.name)+'</b>: '+st[1]+(st[2]?'<br><span style="color:var(--muted)">'+esc(st[2])+'</span>':'')+'</span></div>'}).join('');
+  const la=s.ai.local||{};
+  $('a-local').innerHTML='<b>Free local AI:</b> '+(la.ready?'ready ('+esc(la.model)+'). It writes clip text when Claude cannot be reached. Plainer than Claude, cannot look at frames or read whole streams.'
+    :(!la.supported?'not used on this computer ('+esc(la.why||'it cannot run it')+'). Nothing is downloaded for it.'
+      :'this computer can run it. Setting it up installs Ollama and a model, about 3 GB in all.'));
+  $('b-localai').hidden=!!la.ready||!la.supported; $('b-localai').disabled=!!(s.health&&s.health.maint.running);
   const use=ways[s.ai.using];
   $('a-note').innerHTML=(s.ai.problem?'<b>Claude cannot be used yet:</b> '+esc(s.ai.problem)+'.'
     :'<b>Using now:</b> '+esc(use?use.name:'')+'. '+(s.ai.using==='claude-code'?'Nothing is billed per use, but it counts towards your plan\'s usage limits.':'Each use is billed and written to the usage log.'))
@@ -473,7 +485,7 @@ function show(s){
       cp.style.fontFamily='"'+p.font+'",Arial,sans-serif'; cp.style.fontWeight=900; cp.style.webkitTextStroke=Math.max(1,p.outline/4)+'px #000'; cp.style.paintOrder='stroke fill';
       cp.innerHTML='<span style="color:#'+p.text_color+'">'+t[0]+' </span><span style="color:#'+p.active_color+';font-size:112%">'+t[1]+'</span><span style="color:#'+p.text_color+'"> '+t[2]+'</span>'}
     else cp.textContent='Custom style from the settings file'}
-  if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'roman';$('l-text').value=s.text_language||'English'}
+  if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'roman';$('l-text').value=s.text_language||'English';$('l-yt').value=s.youtube_captions||'auto'}
   $('lang-sum').textContent=({en:'English',ur:'Urdu',hi:'Hindi',auto:'detected automatically'})[s.speech_language||'en']+((s.speech_language||'en')!=='en'?', captions in '+(s.caption_script==='roman'?'Latin letters':'its own letters')+', text in '+(s.text_language||'English'):'');
   if(document.activeElement!==$('o-camp'))$('o-camp').value=s.campaign||'';
   const cc=(s.campaigns||[]).find(c=>c.id===s.campaign);
@@ -483,7 +495,7 @@ function show(s){
   const hm=s.health?s.health.maint:null, hs=hm&&hm.step;
   setBar('h',!!(hm&&hm.running),hs?{percent:(hs[0]-.5)/hs[1]*100,stage:hs[2],stage_no:hs[0],stages:hs[1],text:'',at:0,started:0,steps:true}:null);
   const pw=$('p-watch'); pw.className='pill'+(s.watching?' live':''); pw.lastElementChild.textContent=s.watching?'Watching '+(s.channels||'').split(' ').filter(Boolean).join(', '):'Not watching';
-  $('b-start').disabled=s.watching; $('b-stop').disabled=!s.watching;
+  $('b-start').disabled=s.watching; $('b-stop').disabled=!s.watching; $('b-clipnow').disabled=!s.watching;
   $('w-note').innerHTML=s.watching?'<b>Watching.</b> Drafts appear on the right as moments happen. '+esc(lastLine(s.watch_log)):(s.watch_problem?'<b>Stopped with a problem.</b> Open the activity log.':'Not watching.');
   logTo('wlog',s.watch_log);
   $('b-run').disabled=s.running; $('b-runstop').disabled=!s.running;
@@ -518,6 +530,16 @@ async function act(url,body){
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok){toast(await r.text(),true);return} show(await r.json())}
   catch(e){toast('The program is not answering: '+e,true)}
+}
+async function localAi(){
+  if(!confirm('Set up the free local AI on this computer?'+NL+NL+'It installs Ollama (a free program that runs AI models, about 1 GB) and downloads one model (about 2 GB). This takes a while. Progress shows under Setup check.'))return;
+  const r=await send('/api/ai/local-setup'); if(r.error){toast(r.error,true);return}
+  $('healthbox').open=true; toast('Setting up the free local AI. Watch the progress under Setup check.'); show(r);
+}
+async function clipNow(){
+  const n=+val('w-last'), r=await send('/api/watch/clip-now',{seconds:n});
+  if(r.error){toast(r.error,true);return}
+  toast('Asked for the last '+n+' seconds. The draft appears at the top of the list in a minute or two.');show(r);
 }
 function startWatch(){act('/api/watch/start',{channels:val('o-channels'),mode:mode()})}
 function pickMode(){for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);saveOpts()}
@@ -573,7 +595,7 @@ async function uploadFile(inp){
 function saveLang(){
   /* Choosing Urdu or Hindi for the first time: write the text in Roman letters too, which is what most people want. */
   if(val('l-speech')!=='en'&&(last.speech_language||'en')==='en'&&val('l-text')==='English'){$('l-text').value=val('l-speech')==='hi'?'Hinglish':'Roman Urdu'}
-  act('/api/options',{speech_language:val('l-speech'),caption_script:val('l-script'),text_language:val('l-text')})}
+  act('/api/options',{speech_language:val('l-speech'),caption_script:val('l-script'),text_language:val('l-text'),youtube_captions:val('l-yt')})}
 function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_prefer:val('a-prefer'),llm_fallback:$('a-fallback').checked,llm_model:val('a-model'),ai_model:val('a-stream')})}
 async function act2(url){if(await post(url))poll1()}
 async function poll1(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){}}
@@ -595,6 +617,8 @@ function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
   if(t.includes('chat'))parts.push('Chat spike ×'+c.score);
   if(t.includes('audio'))parts.push('Loud moment');
   if(t.includes('video'))parts.push('Fast action');
+  if(t.includes('said'))parts.push('Excited words');
+  else if(c.said>=5)parts.push('Excited words');
   if(t==='ai')parts.push('Found by AI from the speech');
   if(t==='manual')return [c.parts?'Part '+c.part+' of '+c.parts:'Chosen by you'];
   return parts.length?parts:[t]}
@@ -613,6 +637,8 @@ function cardHtml(c){
     +(c.ai_pick?'<span class="chip good">AI pick</span>':'')
     +(c.ai_judged?(c.copy_source==='plain'?'<span class="chip meh">Text written without AI</span>'
         :'<span class="chip '+(c.ai_keep?'good':'meh')+'">'+(c.ai_keep?'AI: worth posting':'AI: probably filler')+'</span>'):'')
+    +(String(c.copy_source||'').startsWith('local')?'<span class="chip" title="Claude could not be reached, so the free AI on this computer wrote the text. It is redone by Claude when Claude is available.">Text by free local AI</span>':'')
+    +(c.words_from==="YouTube's captions"?'<span class="chip" title="The captions are YouTube\'s own words for this video, not heard by the speech model. Fix any wrong word under Captions.">Captions from YouTube</span>':'')
     +(c.exported?'<span class="chip good">Videos made</span>':'');
   const lay=[['','Automatic'],['split','Split: facecam over gameplay'],['crop','Centre crop']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
   return '<div class="vid">'+vid+'</div><div class="info">'

@@ -15,7 +15,7 @@ from pathlib import Path
 from . import progress
 from .chat import load_chat
 from .config import Config
-from .fetch import fetch_chat, fetch_meta, fetch_range, probe
+from .fetch import NoChatError, fetch_chat, fetch_meta, fetch_range, probe
 from .moments import find_moments, format_time
 from .sources import Source, parse_source
 from .tools import ToolError
@@ -64,6 +64,7 @@ def stage_find(
     """
     source, work = open_work(url, cfg)
     t0 = time.monotonic()
+    no_chat = False
     # Details saved while the stream was live say "live" for ever. Ask again: it may have ended since.
     if (read_json(work / "meta.json", {}) or {}).get("is_live"):
         (work / "meta.json").unlink(missing_ok=True)
@@ -83,10 +84,21 @@ def stage_find(
         messages = []
     else:
         progress.stage("chat")
-        chat_path = fetch_chat(source, work, cfg, refresh=refresh_chat)
-        messages = load_chat(chat_path)
-        if not messages:
-            raise PipelineError("the chat log is empty; nothing to score")
+        try:
+            chat_path = fetch_chat(source, work, cfg, refresh=refresh_chat)
+            messages = load_chat(chat_path)
+            if not messages:
+                raise PipelineError("the chat log is empty; nothing to score")
+        except (NoChatError, PipelineError) as e:
+            # A YouTube upload (not a stream) has no chat. Its words are free to read, so moments can still be
+            # found from what is said, and from sound, picture or AI reading when those were chosen.
+            from . import ytcaptions
+
+            if source.platform != "youtube" or meta.get("is_live") or not ytcaptions.video_words(source.url, work, cfg):
+                raise
+            log.warning("%s Moments are found from what is said instead%s.", e,
+                        ", plus what you chose" if ai or (signals or cfg.moments.signals) not in ("chat", "A") else "")
+            messages, no_chat = [], True
     overrides = {k: v for k, v in (("top", top), ("mode", mode)) if v is not None}
     settings = replace(cfg.moments, **overrides)
     settings.validate()
@@ -114,6 +126,19 @@ def stage_find(
             agree = sum(1 for m in found if "+" in m["trigger"])
             log.info("sound and picture: %d unusual moment(s); %d agree with chat, %d added that chat missed (at most %d)",
                      sum(len(v) for v in peaks.values()), agree, sum(1 for m in found if not m["trigger"].startswith("chat")), extra)
+    if source.platform == "youtube" and not live:
+        # What is said costs nothing to read when YouTube has the captions: moments where exclamations pile up.
+        from . import said, ytcaptions
+
+        spoken = ytcaptions.video_words(source.url, work, cfg)
+        if spoken:
+            shouts = said.peaks(spoken, since_s=settings.skip_start_s)
+            before = sum(1 for m in found if not m["trigger"].startswith("chat"))
+            # With chat, words add a few moments chat missed. Without chat they are the main way: up to the number asked for.
+            found = add_signal_moments(found, {"said": shouts}, (settings.top if no_chat else max(2, settings.top // 2)) + before)
+            log.info("what is said: %d moment(s) with excited words; %d agree with ones already found, %d added",
+                     len(shouts), sum(1 for m in found if "said" in m["trigger"] and m["trigger"] != "said"),
+                     sum(1 for m in found if m["trigger"] == "said"))
     if ai:
         if live:
             log.warning("this stream is still live, so AI does not read it here; run it again when the stream has ended")
@@ -465,12 +490,29 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
             continue
         t0 = time.monotonic()
         try:
-            words = transcribe_file(d / "source.mp4", cfg)
+            words, where = None, "speech model"
+            if _source.platform == "youtube" and "fetch_start_s" in state:
+                # YouTube has usually written the words down already: a second or two instead of minutes of listening.
+                from . import ytcaptions
+                from .transcribe import caption_script
+
+                whole = ytcaptions.video_words(_source.url, work, cfg)
+                if whole:
+                    a = float(state["fetch_start_s"])
+                    b = a + float(state.get("source_duration_s") or (float(state.get("fetch_end_s", state["end_s"])) - a))
+                    words, where = caption_script(ytcaptions.window(whole, a, b), cfg), "YouTube's captions"
+            if words is None:
+                words = transcribe_file(d / "source.mp4", cfg)
             state = read_json(d / "clip.json")  # as it is now: a person may have edited the clip while it was transcribed
+            state["words_from"] = where
             state["transcribe_seconds"] = round(time.monotonic() - t0, 1)
             state["transcript"] = " ".join(w["word"] for w in words)
+            from . import said
             from .cuts import apply_snap
 
+            heard = said.strength([{**w, "word": w.get("native") or w["word"]} for w in words], float(state.get("source_duration_s") or 0) or 60.0)
+            if heard:
+                state.setdefault("signals", {})["said"] = max(heard, float((state.get("signals") or {}).get("said") or 0))
             state = apply_snap(state, words, max_shift=cfg.fetch.pad_s)
             (d / "final.mp4").unlink(missing_ok=True)  # the cut may have moved; an older render is stale
             save_clip(d / "clip.json", state)
@@ -618,7 +660,9 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
     from .trends import trending
 
     # Text written without AI (no key then, or the call failed) is redone once AI can be reached.
-    redo_plain = state.get("copy_source") == "plain" and llm.available(cfg)
+    # ... and text written by the small local AI is redone once Claude can be reached.
+    redo_plain = ((state.get("copy_source") == "plain" and llm.text_available(cfg))
+                  or (str(state.get("copy_source") or "").startswith("local") and llm.available(cfg)))
     if state.get("copy_at") and not force and not redo_plain:
         return state
     disk_before = read_json(d / "clip.json", {})  # to tell, after the slow AI call, what a person changed meanwhile
@@ -640,7 +684,7 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
             log.warning("clip %s: no frames for AI to look at (%s); it will judge from the words only", d.name, e)
     try:
         copy = llm.write_copy(state, tags, cfg, frames)
-        state["copy_source"] = cfg.llm.model
+        state["copy_source"] = f"local: {cfg.llm.local_model}" if llm.last_used == "local" else cfg.llm.model
         state["ai_saw_frames"] = len(frames)
         state.pop("copy_problem", None)
     except llm.LlmUnavailable as e:

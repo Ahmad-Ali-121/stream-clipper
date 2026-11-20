@@ -60,6 +60,10 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if value not in ("en", "ur", "hi", "auto"):
                 raise ValueError("the stream language must be en, ur, hi or auto")
             out.setdefault("transcribe", {})["language"] = value
+        elif key == "youtube_captions":
+            if value not in ("auto", "off"):
+                raise ValueError("YouTube's captions must be auto or off")
+            out.setdefault("transcribe", {})["youtube_captions"] = value
         elif key == "caption_script":
             if value not in ("native", "roman"):
                 raise ValueError("captions must be native or roman")
@@ -174,6 +178,7 @@ class Control:
             "mode": parse_mode(cfg.watch.mode), "modes": MODE_TEXT, "channels": " ".join(cfg.watch.channels),
             "ab_versions": cfg.render.ab_versions, "opening": cfg.render.opening,
             "campaign": cfg.render.campaign, "campaigns": campaigns(),
+            "youtube_captions": cfg.transcribe.youtube_captions,
             "speech_language": cfg.transcribe.language, "caption_script": cfg.captions.script, "text_language": cfg.llm.text_language,
             "caption_preset": cfg.captions.preset,
             "caption_presets": {k: {"label": v[0], **v[1]} for k, v in CAPTION_PRESETS.items()},
@@ -199,7 +204,30 @@ class Control:
         return {"backend": cfg.llm.backend, "backends": llm.CHOICES, "prefer": cfg.llm.prefer, "fallback": cfg.llm.fallback,
                 "model": cfg.llm.model, "stream_model": cfg.ai.model, "models": list(llm.PRICES),
                 "problem": llm.why_unavailable(cfg), "ways": ways, "using": order[0] if order else "", "note": checks["note"],
+                "local": self._local_ai(),
                 "checking": self.ai_checking}
+
+    def _local_ai(self) -> dict:
+        from . import localai
+
+        try:
+            return localai.status(self.cfg)
+        except Exception as e:  # never take the page down over an optional extra
+            log.error("the free local AI could not be looked at: %s", e, exc_info=True)
+            return {"supported": False, "why": str(e), "installed": False, "running": False, "has_model": False, "ready": False, "model": self.cfg.llm.local_model}
+
+    def start_local_ai(self) -> dict:
+        """Set up the free AI on this computer (Ollama and its model), if this computer can run it."""
+        from . import localai
+
+        ok, why = localai.supported(self.cfg)
+        if not ok:
+            raise ValueError(f"The free local AI is not set up on this computer: {why}. Nothing was downloaded.")
+
+        def work(say) -> None:
+            localai.setup(self.reload(), say, step=say.step)
+
+        return self._maintain("Free local AI setup", work)
 
     def start_ai_check(self) -> dict:
         """Really try each connection that is set up, in the background."""
@@ -411,6 +439,15 @@ class Control:
                 [sys.executable, "-u", "-X", "faulthandler", "-c", "from clipper.cli import main; raise SystemExit(main())", "watch", *names, "--mode", cfg.watch.mode],
                 stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(PROJECT_ROOT),
             )
+        return self.status()
+
+    def clip_now(self, raw: dict) -> dict:
+        """A person pressed "clip the last N seconds": pass it to the watcher, which cuts it from what it is recording."""
+        from .watch import ask_clip_now
+
+        if not self.watching():
+            raise ValueError("nothing is being watched right now, so there is no live stream to clip. Press Start watching first")
+        ask_clip_now(self.cfg.data_dir, float(raw.get("seconds") or 30))
         return self.status()
 
     def stop_watch(self) -> dict:

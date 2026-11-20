@@ -106,6 +106,9 @@ class TranscribeSettings:
     device: str = "auto"  # auto = NVIDIA GPU when usable, else CPU; or force "cpu" / "cuda"
     language: str = "en"  # what is spoken on the stream: en, ur (Urdu), hi (Hindi), or auto (detect; can mislabel mixed speech)
     groq_model: str = "whisper-large-v3-turbo"
+    # auto = for YouTube videos use YouTube's own captions when it has them (seconds, not minutes), else listen here.
+    # off = always listen with the speech model.
+    youtube_captions: str = "auto"
 
 
 @dataclass
@@ -154,6 +157,10 @@ class LlmSettings:
     model: str = "claude-opus-5-5"  # "claude-haiku-5-5" costs about 40 times less and is usually enough here
     effort: str = "low"
     text_language: str = "English"  # what the opening text, titles and description are written in: English, Roman Urdu, Hinglish, Urdu or Hindi
+    # The free AI that runs on this computer (Ollama), used for clip text when Claude cannot be reached.
+    # auto = use it if it is installed; off = never. It is only ever set up on a computer that can run it.
+    local: str = "auto"
+    local_model: str = "llama3.2:3b"
     look_at_frames: bool = True  # also show AI three small frames of each clip, so it can rate what is on screen, not only the words
 
 
