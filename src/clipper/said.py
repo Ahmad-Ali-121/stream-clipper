@@ -40,7 +40,7 @@ _WORDS: dict[str, int] = {
     "ارے": 2, "ابے": 2, "اوئے": 2, "اف": 2, "یار": 1, "بھاگ": 2, "بھاگو": 2, "بچاؤ": 3, "پولیس": 2, "مارو": 2, "گولی": 2, "دھماکہ": 2, "پاگل": 2,
     "زبردست": 2, "کمال": 2, "خطرناک": 2, "نہیں": 1, "رکو": 2, "جلدی": 2, "دیکھو": 1, "واہ": 2, "شاباش": 2,
 }
-_PHRASE_RX = [(re.compile(p, re.IGNORECASE), pts) for p, pts in _PHRASES]
+_PHRASE_RX = [(re.compile(f"(?:{p.strip()})(?= |$)", re.IGNORECASE), pts) for p, pts in _PHRASES]  # "what the f" is not "what the first"
 _STRIP = ".,!?…\"'।۔:;()[]"
 WINDOW_S = 15.0  # exclamations this close together count as one moment
 FULL = 18.0  # points inside one window that count as the strongest signal (10)

@@ -380,7 +380,7 @@ def merge_moments(chat: list[dict], peaks: dict[str, list[tuple[float, float]]],
 
     ``peaks``: {"audio": [(peak second, strength)], "video": [...]}.
     """
-    out = [dict(m, trigger="chat") for m in chat]
+    out = [dict(m, trigger=m.get("trigger") or "chat") for m in chat]  # a moment keeps what found it when this is called again
     for kind in ("audio", "video", "said"):
         for peak_s, z in peaks.get(kind, []):
             # Chat reacts a few seconds after the moment, so its peak sits later than the sound's.

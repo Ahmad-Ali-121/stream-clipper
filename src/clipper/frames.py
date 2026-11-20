@@ -61,7 +61,10 @@ def rounded_mask(path: Path, w: int, h: int, radius: int) -> Path:
     cv2.rectangle(m, (0, rad), (w - 1, h - rad - 1), 255, -1)
     for cx, cy in ((rad, rad), (w - rad - 1, rad), (rad, h - rad - 1), (w - rad - 1, h - rad - 1)):
         cv2.circle(m, (cx, cy), rad, 255, -1, lineType=cv2.LINE_AA)
-    cv2.imwrite(str(path), m)
+    ok, data = cv2.imencode(".png", m)  # encoded here and written by Python: OpenCV's own writer fails on folder names with other letters
+    if not ok:
+        raise ValueError("the rounded-corner mask for the template could not be made")
+    path.write_bytes(data.tobytes())
     return path
 
 

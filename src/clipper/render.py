@@ -104,12 +104,14 @@ def layout_filter(src_w: int, src_h: int, r: RenderSettings, layout: str) -> str
     if layout == "crop":
         return f"[0:v]crop={gw}:{gh}:{gx}:{gy},{_cover(W, H)}[v0]"
     if layout == "blur":
-        fit_h = min(H, _even(W * gh / gw))
+        fit_w, fit_h = W, _even(W * gh / gw)
+        if fit_h > H:  # taller than the screen: fit the height instead and leave blur at the sides
+            fit_w, fit_h = _even(H * gw / gh), H
         return (
             "[0:v]split=2[bg0][fg0];"
             f"[bg0]{_cover(W, H)},boxblur=24:3,eq=brightness=-0.10[bg];"
-            f"[fg0]crop={gw}:{gh}:{gx}:{gy},scale={W}:{fit_h}[fg];"
-            f"[bg][fg]overlay=0:{(H - fit_h) // 2}[v0]"
+            f"[fg0]crop={gw}:{gh}:{gx}:{gy},scale={fit_w}:{fit_h}[fg];"
+            f"[bg][fg]overlay={(W - fit_w) // 2}:{(H - fit_h) // 2}[v0]"
         )
     fx, fy, fw, fh = face
     if layout in ("split", "split_under"):
@@ -334,9 +336,50 @@ def render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str 
         return _render_clip(clip_dir, cfg, force, out_name, hook, variant)
 
 
+def _file_stamp(path: str) -> tuple:
+    """A file by what it holds, not only by its name: another image saved under the same name is another logo."""
+    try:
+        st = Path(path).stat()
+        return (str(path), st.st_size, int(st.st_mtime))
+    except OSError:
+        return (str(path), 0, 0)
+
+
 def look_signature(cfg: Config) -> str:
-    """Changes when anything that is burned into every clip changes: the caption look and the branding.
-    "Make videos" renders a clip again when its draft was made with another look."""
+    """Changes when something that can be SEEN or HEARD in every clip changes: the caption look, the template, the branding.
+
+    "Make videos" renders a clip again when its draft was made with another look, so this must not change for
+    things that make no difference: the name a caption look is saved under, 3 written as 3.0, the corner of a
+    logo that is switched off, the colours of a card that is not used.
+    """
+    import hashlib
+    from dataclasses import asdict
+
+    def num(v):
+        return round(float(v), 3)
+
+    c = asdict(cfg.captions)
+    for hidden in ("script", "preset"):  # the letters are chosen at transcription; the name is only a name
+        c.pop(hidden, None)
+    c = {k: (num(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else v) for k, v in c.items()}
+    b, r = cfg.brand, cfg.render
+    brand = (
+        (_file_stamp(b.logo), b.logo_corner, num(b.logo_size), num(b.logo_opacity)) if b.logo else None,
+        (b.outro_text.strip(), num(b.outro_seconds)) if b.outro_text.strip() else None,
+        (_file_stamp(b.music), num(b.music_volume), num(b.music_rise_s), num(b.music_peak) if float(b.music_rise_s or 0) >= 1 else 0) if b.music else None,
+    )
+    template = r.template if r.template else "none"
+    frame = [num(r.hook_seconds), template]
+    if template == "card":
+        frame += [r.card_bg, r.card_color if r.card_bg in ("color", "gradient") else "", r.card_color2 if r.card_bg == "gradient" else "",
+                  _file_stamp(r.card_image) if r.card_bg == "image" else ""]
+    if template.startswith("xpost"):
+        frame += [r.post_name, r.post_handle]
+    return "v2-" + hashlib.sha256(repr((sorted(c.items()), brand, frame)).encode()).hexdigest()[:12]
+
+
+def look_signature_v1(cfg: Config) -> str:
+    """The first way the look was recorded (in ``look_used``). Kept only to judge drafts made before ``look2_used`` existed."""
     import hashlib
     from dataclasses import asdict
 
@@ -497,7 +540,7 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
         raise ToolError(f"render of clip {clip_dir.name} produced no file")
     os.replace(clip_dir / part, out)
     made = {"render_seconds": round(time.monotonic() - t0, 1), "duration_s": round(duration, 2), "width": r.width, "height": r.height,
-            "layout_used": layout, "encoder_used": enc, "opening_used": bool(r.opening), "style_used": cfg.captions.preset, "look_used": look_signature(cfg), "caption_words": len(words), "has_disclosure_overlay": bool(state.get("disclosure"))}
+            "layout_used": layout, "encoder_used": enc, "opening_used": bool(r.opening), "style_used": cfg.captions.preset, "look_used": look_signature_v1(cfg), "look2_used": look_signature(cfg), "caption_words": len(words), "has_disclosure_overlay": bool(state.get("disclosure"))}
     state.update(made)
     if out_name == "final.mp4":  # variants must not overwrite the main render's record
         # Only what this render produced is written: a render takes a while, and a person may have edited the clip meanwhile.

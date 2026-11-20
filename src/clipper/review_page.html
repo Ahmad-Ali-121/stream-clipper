@@ -148,7 +148,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
 .saved{font-size:12.5px;color:var(--muted)}.saved.warn{color:var(--warn)}
 .empty{padding:40px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
 .empty b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}
-#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(640px,92vw);padding:10px 16px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.35);display:none;z-index:9;white-space:pre-wrap;padding-right:44px}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(640px,92vw);padding:10px 16px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.35);display:none;z-index:40;white-space:pre-wrap;padding-right:44px}
 .btn.quiet{background:none;border-color:transparent;color:var(--muted);margin-left:auto}.btn.quiet:hover{color:var(--bad);border-color:var(--bad)}
 #toast.err{border-color:var(--bad);background:var(--bad-soft)}
 .modal{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.62);display:grid;place-items:center;padding:16px;overflow:auto}
@@ -324,7 +324,7 @@ kbd{background:rgba(255,255,255,.06)!important}
           <p class="help">Watches the streams while they are live and makes a draft clip each time something happens.</p>
           <label class="f" for="o-channels">Channels, separated by spaces: Twitch names, YouTube handles starting with @</label>
           <input type="text" id="o-channels" placeholder="lacy xqc @youtubechannel">
-          <label class="check"><input type="checkbox" id="o-auto" onchange="act('/api/options',{watch_autostart:$('o-auto').checked,channels:val('o-channels')})"> Start watching this list by itself when the program opens</label>
+          <label class="check"><input type="checkbox" id="o-auto" onchange="act('/api/options',{watch_autostart:$('o-auto').checked})"> Start watching this list by itself when the program opens</label>
           <p class="help" style="margin-top:4px">Creators who are not live yet are checked every half minute and clipped as soon as they go live. Add only creators you have a campaign or permission for.</p>
           <label class="f">What should find the moments?</label>
           <div class="modes" id="o-modes"></div>
@@ -721,7 +721,7 @@ function show(s){
   $('m-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?(/ stopped$/.test(lastLine(s.run_log))?'<b>Stopped by you.</b>':'<b>Done.</b> '+esc(lastLine(s.run_log))):'Nothing running.'));
   logTo('mlog',s.run_log);
   $('b-board').disabled=s.running; $('cb-stop').disabled=!s.running; $('cb-note').innerHTML=$('m-note').innerHTML;
-  if(cbRunning!==s.running){cbRunning=s.running;if(CB)cbRows()}
+  if(cbRunning!==s.running){cbRunning=s.running;if(CB)cbRows();if(TW)twDraw()}
   /* A job started from this page has ended: go where its result is. */
   if(cbWasRunning&&!s.running&&cbJob){const job=cbJob;cbJob='';
     if(!s.run_problem&&job==='range'){CB=null;view('board');toast('Downloaded. Mark your cuts on the timeline.')}
@@ -845,7 +845,7 @@ function cardHtml(c){
     +(c.exported?'<span class="chip good">Videos made</span>':'');
   const lay=[['','Automatic'],['split','Face on top, video below'],['crop','Video only, full height'],['split_under','Video on top, face below'],['blur','Whole picture on a blurred background'],['pip','Face in a corner over the video'],['circle','Face in a circle over the video']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
   return '<div class="vid">'+vid+'</div><div class="info">'
-   +'<div class="chead"><h3>'+esc(c.channel||c.stream_title||'Your video')+'</h3>'+(isNew(c)?'<span class="newtag" title="Made in the last hour and not reviewed yet">NEW</span>':'')
+   +'<div class="chead"><h3>'+esc(c.channel||c.stream_title||'Your video')+'</h3>'+'<span class="newtag" title="Made in the last hour and not reviewed yet"'+(isNew(c)?'':' hidden')+'>NEW</span>'
    +'<span class="when2" title="When this clip was made'+(c.decided_at?'. Decided '+esc(c.decided_at):'')+'">'+madeText(c.made_at)+'</span><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[place(c)]+'</span></div>'
    +'<div class="chips">'+chips+'</div>'
    +(c.ai_pick?'<div class="ai"><b>Why AI picked it:</b> '+esc(c.ai_pick)+'</div>':'')
@@ -896,8 +896,8 @@ function cardHtml(c){
    +'<span class="saved"></span><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+k+'\')">Delete</button></div></div>';
 }
 function domId(k){return 'c-'+k.replace('/','--')}
-function busy(el){const v=el.querySelector('video');return el.dataset.dirty==='1'||(v&&!v.paused)||el.contains(document.activeElement)}
-function drawFilters(clips,total){
+function busy(el){return el.dataset.dirty==='1'||[...el.querySelectorAll('video')].some(v=>!v.paused)||el.contains(document.activeElement)}
+function drawFilters(clips,shownList){
   const n={candidate:0,approved:0,rejected:0};for(const c of clips)n[c.status]=(n[c.status]||0)+1;
   for(const c of clips)if(c.made){n.approved--;n.done=(n.done||0)+1}
   n.done=n.done||0;
@@ -906,15 +906,15 @@ function drawFilters(clips,total){
   if(filter==='rejected'&&n.rejected)$('filters').insertAdjacentHTML('beforeend','<button class="chipbtn" style="color:var(--bad);border-color:var(--bad)" onclick="delRejected('+n.rejected+')">Delete all rejected</button>');
   $('p-count').textContent=n.candidate+' to review · '+n.approved+' approved · '+n.done+' done';
   if(HAS_PANEL)$('b-finish').textContent=n.approved?'Make videos for '+n.approved+' approved clip'+(n.approved>1?'s':''):'Make videos (approve a clip first)';
-  const shown=filter==='all'?clips.length:n[filter], em=$('empty');
+  const shown=shownList.filter(c=>filter==='all'||place(c)===filter).length, em=$('empty');
   em.hidden=shown>0;
-  em.innerHTML=(total&&!clips.length)?'<b>No clip matches the filters.</b>Press Clear filters above the list.':clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',done:'finished yet. Approve a clip and press the green button',rejected:'rejected'}[filter]||'in this list')+'.'
+  em.innerHTML=(clips.length&&shownList.length<clips.length&&(filter==='all'?clips.length:n[filter])>0)?'<b>No clip matches the filters.</b>Press Clear filters above the list.':clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',done:'finished yet. Approve a clip and press the green button',rejected:'rejected'}[filter]||'in this list')+'.'
     :'<b>No clips yet.</b>'+(HAS_PANEL?'Start watching a live stream, or paste a finished stream, in step 1 on the left.':'Run find first.');
 }
 function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
 let known=[];
 /* What a card was drawn from: when any of this changes, the card is drawn again. */
-function sig(c){return [isNew(c),madeText(c.made_at),c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
+function sig(c){return [c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
 let loadTurn=0, clipsWhy='';
 /* ---------- order and filters ---------- */
 function isNew(c){return c.status==='candidate'&&c.made_at&&Date.now()/1000-c.made_at<3600}
@@ -954,7 +954,7 @@ async function loadClips(){
   /* the streamers there are, for the filter */
   const names=[...new Set(clips.map(c=>c.channel||c.stream_title||'Your video'))].sort(), who=$('s-who');
   if(who.dataset.sig!==names.join('|')){who.dataset.sig=names.join('|');const keep=who.value;
-    who.innerHTML='<option value="">All</option>'+names.map(n=>'<option>'+esc(n)+'</option>').join('');who.value=names.includes(keep)?keep:''}
+    who.innerHTML='<option value="">All</option>'+names.map(n=>'<option value="'+esc(n)+'">'+esc(n)+'</option>').join('');who.value=names.includes(keep)?keep:''}
   const box=$('clips'), want=new Set(clips.map(c=>domId(c.key)));
   for(const el of [...box.children])if(!want.has(el.id))el.remove();
   let prev=null;
@@ -965,7 +965,9 @@ async function loadClips(){
         if(e.target.closest&&e.target.closest('.words'))el.dataset.wdirty='1';el.dataset.dirty='1';const s=el.querySelector('.acts .saved');s.textContent='Unsaved changes';s.className='saved warn'});
       if(prev)prev.after(el);else box.prepend(el)}
     else if(sig(c)!==el.dataset.m&&!busy(el)){el.dataset.status=place(c);el.dataset.m=sig(c);el._c=c;el.innerHTML=cardHtml(c)}
-    el.hidden=!fits(c,a);
+    /* the clock on the card moves on without redrawing the card (a redraw would close fold-outs and rewind the video) */
+    const w2=el.querySelector('.when2'), nt=el.querySelector('.newtag');if(w2)w2.textContent=madeText(c.made_at);if(nt)nt.hidden=!isNew(c);
+    el.hidden=!fits(c,a)&&!busy(el);   /* a card you are typing in or watching is never hidden under you */
     prev=el;
   }
   /* Put the cards in the chosen order. A card that is playing or being typed in is not moved under you: next time. */
@@ -973,11 +975,11 @@ async function loadClips(){
   if(order.join()!==have.join()&&![...box.children].some(busy))for(const id of order)box.appendChild($(id));
   const shownNow=clips.filter(c=>fits(c,a)), filtering=!!(a.who||a.how||a.when||a.find);
   $('s-clear').hidden=!filtering;$('s-count').textContent=filtering?shownNow.length+' of '+clips.length+' clips match':'';
-  drawFilters(shownNow,clips.length);
+  drawFilters(clips,shownNow);
 }
 async function save(key,extra){
   const el=$(domId(key)), g=n=>el.querySelector('[name='+n+']');
-  if(!el){toast('That clip is not on the page any more.',true);return}
+  if(!el){toast('That clip is not on the page any more.',true);return false}
   const all={hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,
     title:g('title').value,title_b:g('title_b').value,description:g('description').value,tags:g('tags').value,
     layout:g('layout').value,disclosure:g('disclosure').checked,cut_start_s:parseFloat(g('cut_start_s').value),cut_end_s:parseFloat(g('cut_end_s').value)};
@@ -988,16 +990,17 @@ async function save(key,extra){
   const body={};for(const k in all)if(all[k]!==was[k])body[k]=all[k];
   if(('cut_start_s' in body)!==('cut_end_s' in body)){body.cut_start_s=all.cut_start_s;body.cut_end_s=all.cut_end_s}
   Object.assign(body,extra||{});
-  if(el.dataset.wdirty==='1'&&!(await sendWords(key)))return;  /* caption words you edited are saved with the rest */
+  if(el.dataset.wdirty==='1'&&!(await sendWords(key)))return false;  /* caption words you edited are saved with the rest */
   loadTurn++;
-  let r;try{r=await fetch('/api/clip/'+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}catch(e){toast('The program is not answering: '+e,true);return}
-  if(!r.ok){toast('Not saved: '+await r.text(),true);return}
+  let r;try{r=await fetch('/api/clip/'+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}catch(e){toast('The program is not answering: '+e,true);return false}
+  if(!r.ok){toast('Not saved: '+await r.text(),true);return false}
   const s=await r.json();
   el.dataset.dirty='';el.dataset.wdirty='';el.dataset.m='';  /* redraw from the saved state on the next load */
   if(document.activeElement)document.activeElement.blur();
   const v=el.querySelector('video');if(v)v.pause();
   toast(extra&&extra.status?({approved:'Approved',rejected:'Rejected',candidate:'Moved back to review'}[s.status]):'Saved');
   loadClips();
+  return true;
 }
 async function rewrite(key,btn){
   const el=$(domId(key));
@@ -1029,7 +1032,7 @@ async function clearErr(key){if(await post('/api/clip/'+key+'/clear-error')){con
 function showVid(key,name,btn){const el=$(domId(key)),v=el.querySelector('.vid video');const c=known.find(x=>x.key===key)||{};
   v.src='/media/'+key+'/'+name+'?v='+c.mtime;for(const b of btn.parentElement.children)b.classList.toggle('on',b===btn);v.play().catch(()=>{})}
 async function makeB(key,btn){btn.disabled=true;btn.textContent='Making B…';
-  if(await post('/api/clip/'+key+'/render-b')){const el=$(domId(key));el.dataset.m='';toast('Version B is ready');loadClips()}else{btn.disabled=false;btn.textContent='Make B preview'}}
+  if(await post('/api/clip/'+key+'/render-b')){const el=$(domId(key));if(document.activeElement)document.activeElement.blur();el.dataset.m='';toast('Version B is ready');loadClips()}else{btn.disabled=false;btn.textContent='Make B preview'}}
 
 /* ---------- trimmer: drag the start and end over the sound wave ---------- */
 async function initTrim(key){
@@ -1082,7 +1085,7 @@ async function subFile(inp,key){
   if(!confirm('Replace this clip\'s captions with the subtitles in '+f.name+'?'))return;
   let r;try{r=await fetch('/api/clip/'+key+'/captions-import',{method:'POST',body:await f.text()})}catch(e){toast('The program is not answering: '+e,true);return}
   if(!r.ok){toast('The subtitle file was not used: '+await r.text(),true);return}
-  const d=await r.json(), el=$(domId(key));if(el){el.dataset.dirty='';el.dataset.wdirty='';el.dataset.m=''}
+  const d=await r.json(), el=$(domId(key));if(document.activeElement)document.activeElement.blur();if(el){el.dataset.dirty='';el.dataset.wdirty='';el.dataset.m='';el._words=null}
   toast(d.lines+' subtitle lines are now this clip\'s captions. The draft is made again when you press Make videos.');loadClips();
 }
 async function sendWords(key){
@@ -1095,8 +1098,8 @@ async function sendWords(key){
 async function saveWords(key){
   const el=$(domId(key)); if(!el._words){toast('Open the captions first.',true);return}
   el.dataset.wdirty='1';
-  await save(key);  /* saves the caption words and anything else you typed on this card, so nothing is thrown away */
-  toast('Captions saved. The draft is made again when you press Make videos, or use "Make B preview".');
+  if(await save(key))  /* saves the caption words and anything else you typed on this card, so nothing is thrown away */
+    toast('Captions saved. The draft is made again when you press Make videos, or use "Make B preview".');
 }
 
 /* ---------- template, opening text, moment mix, safe zones ---------- */
@@ -1194,7 +1197,7 @@ function openBoxes(key){
   $('bx-others').checked=false;$('bx-streamer').checked=false;$('bx-note').textContent='';
   $('bx-strow').hidden=!c.channel;$('bx-stlabel').textContent='Remember these boxes for new clips of '+(c.channel||'');
   const v=$('bx-video');v.src='/media/'+key+'/source.mp4?v='+c.mtime;
-  v.onloadedmetadata=()=>{v.currentTime=Math.max(0,((c.cut_start_s??c.start_s)-(Number(c.fetch_start_s)||0))+1)};
+  v.onloadedmetadata=()=>{v.currentTime=Math.max(0,((c.cut_start_s??c.start_s)-(Number(c.fetch_start_s)||0))+1)};v.onended=()=>{$('bx-play').textContent='Play'};
   $('bx-stage').style.aspectRatio=BX.sw+' / '+BX.sh;$('bx-play').textContent='Play';
   for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=false;
   $('boxes').hidden=false;bxLayout();bxLoop();
@@ -1207,7 +1210,8 @@ function bxFit(b,asp){let w=b[2],h=bxH(w,asp);if(h>1){h=1;w=asp*BX.sh/BX.sw}if(w
   const cx=b[0]+b[2]/2,cy=b[1]+b[3]/2;return [Math.min(Math.max(0,cx-w/2),1-w),Math.min(Math.max(0,cy-h/2),1-h),w,h]}
 /* The layout changed: bring both boxes to the shapes it shows them in. */
 function bxLayout(){
-  BX.video=bxFit(BX.layout==='blur'?[0,0,1,1]:BX.video,bxAsp('video'));
+  if(BX.layout==='blur'){if(!BX.kept)BX.kept=BX.video.slice();BX.video=bxFit([0,0,1,1],bxAsp('video'))}
+  else{if(BX.kept){BX.video=BX.kept;BX.kept=null}BX.video=bxFit(BX.video,bxAsp('video'))}
   if(bxHasFace())BX.face=bxFit(BX.face,bxAsp('face'));
   $('bx-small').hidden=!(BX.layout==='pip'||BX.layout==='circle');
   bxDraw();
@@ -1463,16 +1467,18 @@ function helpLabel(el){
   return t.trim().replace(/\s+/g,' ').slice(0,90)}
 /* Everything on the page that can be pressed, chosen or typed into, right now. Built fresh for every question, so new features are covered by themselves. */
 function helpTargets(){
-  HELP.map=new Map();const out=[];let n=0;const firstClip=document.querySelector('#clips .clip');
+  HELP.map=new Map();HELP.meta={};const out=[];let n=0;const firstClip=document.querySelector('#clips .clip');
   const kinds={BUTTON:'button',SELECT:'choice',TEXTAREA:'box',SUMMARY:'fold-out',A:'link',LABEL:'option'};
   for(const el of document.querySelectorAll('button,select,input,textarea,summary,a.btn,label.mode,.pill')){
     if(el.closest('#helpbox,#spot,#toast,#helpbtn')||el.type==='hidden'||el.type==='file')continue;
     const clip=el.closest('.clip');if(clip&&clip!==firstClip)continue;   /* one clip's card stands for all */
+    /* likewise one row of a long table stands for all, so long lists cannot push everything else off the list */
+    const row=el.closest('#t-rows tr,#cb-rows .cbrow,#tw-picks .cbrow,#tw-parts button,#cb-list button');if(row&&row.previousElementSibling)continue;
     if(el.classList.contains('x')&&!el.title)continue;
     const label=helpLabel(el);if(!label)continue;
     const key=(el.id&&!clip)?el.id:'k'+(++n);
     if(HELP.map.has(key))continue;
-    HELP.map.set(key,el);
+    HELP.map.set(key,el);HELP.meta[key]={label:label,where:helpWhere(el)};
     out.push({key:key,kind:el.tagName==='INPUT'?(el.type==='checkbox'||el.type==='radio'?'tick box':(el.type==='range'?'slider':'box')):(kinds[el.tagName]||'item'),label:label,where:helpWhere(el)});
     if(out.length>=400)break}
   return out}
@@ -1480,6 +1486,13 @@ function helpState(){const s=last||{},h=s.health||{};
   return {view:['clips','track','board','words'].find(v=>!$('view-'+v).hidden),tab:curTab,watching:s.watching?('yes: '+(s.channels||'')):false,running:!!s.running,finishing:!!s.finishing,
     progress:s.run_progress?(Math.floor(s.run_progress.percent)+'% '+s.run_progress.stage+' '+(s.run_progress.text||'')):'',setup:h.summary?h.summary.text:'',
     ai:s.ai?(s.ai.problem?('not available: '+s.ai.problem):'working')+((s.ai.local||{}).ready?', free local AI ready':''):'',clips:$('p-count').textContent,errors:errShown}}
+/* An older answer points at things by the keys it was given. Bring those keys back; a thing whose card was redrawn since
+   is found again by its label and place. */
+function helpUse(box){
+  if(!box._map)return;const fresh=helpTargets(), now=HELP.map, old=new Map(box._map);
+  for(const [k,el] of old){if(document.body.contains(el))continue;const m=(box._meta||{})[k];
+    const same=m&&fresh.find(t=>t.label===m.label&&t.where===m.where);if(same)old.set(k,now.get(same.key))}
+  HELP.map=old}
 function helpAdd(cls,html){const d=document.createElement('div');d.className=cls;d.innerHTML=html;$('helpmsgs').appendChild(d);$('helpmsgs').scrollTop=1e9;return d}
 async function helpAsk(text){
   const q=(text||val('helpq')).trim();if(!q||HELP.busy)return;
@@ -1492,7 +1505,7 @@ async function helpAsk(text){
   const id=HELP.turns.length-1, pts=r.steps.filter(s=>s.target&&HELP.map.has(s.target)).length;
   const box=helpAdd('ha',esc(r.answer)+(r.steps.length?'<ol>'+r.steps.map((s,i)=>'<li>'+esc(s.text)+(s.target&&HELP.map.has(s.target)?'<button class="show" data-step="'+i+'">Show me</button>':'')+'</li>').join('')+'</ol>':'')
     +(pts>1?'<div class="tour"><button class="btn primary" data-tour="1">Walk me through it</button></div>':'')+(r.note?'<small>'+esc(r.note)+'</small>':''));
-  box._steps=r.steps;
+  box._steps=r.steps;box._map=HELP.map;box._meta=HELP.meta;
   if((r.follow_ups||[]).length)helpAdd('hsug',r.follow_ups.map(f=>'<button type="button" data-q="'+esc(f)+'">'+esc(f)+'</button>').join(''));
   $('helpmsgs').scrollTop=1e9;$('helpq').focus();
 }
@@ -1504,7 +1517,7 @@ function helpReveal(el){
   for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details'))if(!d.open&&d.querySelector('summary')!==el)d.open=true;
   const clip=el.closest('.clip');if(clip&&clip.offsetParent===null&&filter!=='all')setFilter('all');
   let show=el;while(show&&show.offsetParent===null&&show.parentElement)show=show.parentElement;   /* hidden right now: point at what holds it */
-  return show===document.body?null:show}
+  return (show===document.body||show===document.documentElement||show.id==='boxes')?null:show}
 function view_(n){view(n)}
 function spotPlace(){
   const el=HELP.el;if(!el||!document.body.contains(el)){spotEnd();return}
@@ -1529,6 +1542,7 @@ function helpInit(){
   $('helpmsgs').addEventListener('click',e=>{
     const q=e.target.closest('[data-q]');if(q){helpAsk(q.dataset.q);return}
     const box=e.target.closest('.ha');if(!box||!box._steps)return;
+    helpUse(box);
     const one=e.target.closest('[data-step]');if(one){HELP.tour=null;spotShow(box._steps[+one.dataset.step],false);return}
     if(e.target.closest('[data-tour]')){HELP.tour=box._steps;HELP.at=-1;spotNext()}});
   $('spotnext').addEventListener('click',spotNext);$('spotdone').addEventListener('click',spotEnd);
@@ -1591,7 +1605,7 @@ let cur=null;
 function shownCards(){return [...$('clips').children].filter(e=>e.offsetParent!==null)}
 function setCur(el){if(cur)cur.classList.remove('cur');cur=el||null;if(cur){cur.classList.add('cur');cur.scrollIntoView({block:'center',behavior:'smooth'})}}
 document.addEventListener('keydown',e=>{
-  if($('view-clips').hidden||!$('boxes').hidden)return;
+  if($('view-clips').hidden||!$('boxes').hidden||!$('spot').hidden)return;
   if(e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary,[contenteditable]')))return;
   const cards=shownCards(); if(cur&&!cards.includes(cur)){cur.classList.remove('cur');cur=null}
   const i=cards.indexOf(cur), k=e.key.toLowerCase();
@@ -1601,13 +1615,14 @@ document.addEventListener('keydown',e=>{
     save(key,{status:k==='a'?'approved':'rejected'});setCur(next);e.preventDefault()}
   else if(cur&&k===' '){const v=cur.querySelector('.vid video');if(v){v.paused?v.play().catch(()=>{}):v.pause()}e.preventDefault()}
 });
-async function clipLoop(){await loadClips();setTimeout(clipLoop,8000)}
+async function clipLoop(){try{await loadClips()}catch(e){setErr('THE PAGE HIT A FAULT OF ITS OWN while drawing the clips ('+e+'). The program is still running. Reload the page; if this stays, report this line.')}
+  setTimeout(clipLoop,8000)}
 $('scope').textContent=__TITLE__;
 if(HAS_PANEL){for(const id of ['m-sh','m-sm','m-ss','m-eh','m-em','m-es'])$(id).addEventListener('input',ownHint);ownHint()}
 if(HAS_PANEL)poll();else $('side').remove();
 if(!HAS_PANEL)document.querySelector('.layout').style.gridTemplateColumns='1fr';
 try{$('z-pick').value=localStorage.getItem('zones')||''}catch(e){}
-try{const a=JSON.parse(localStorage.getItem('arrange')||'{}');if(a.sort)$('s-sort').value=a.sort;if(a.how)$('s-how').value=a.how;if(a.when)$('s-when').value=a.when}catch(e){}
+try{const a=JSON.parse(localStorage.getItem('arrange')||'{}');if(['new','score','old'].includes(a.sort))$('s-sort').value=a.sort;if(a.how)$('s-how').value=a.how;if(a.when)$('s-when').value=a.when}catch(e){}
 setZones();
 clipLoop();
 </script>

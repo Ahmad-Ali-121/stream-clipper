@@ -147,12 +147,29 @@ def _ledger_key(clip_json: Path) -> str:
     return f"{clip_json.parents[2].name}/{clip_json.parent.name}"
 
 
+class LedgerUnreadable(Exception):
+    pass
+
+
 def _read_ledger(path: Path) -> dict:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
+    """The decisions record. Missing means none yet. There but unreadable (being replaced this instant, or damaged)
+    is NOT the same as empty: it is tried again briefly, then reported, so it is never written over with less."""
+    import time
+
+    if not path.exists():
         return {}
+    problem: Exception | None = None
+    for _ in range(5):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+            problem = ValueError("it does not hold a list of decisions")
+            break
+        except (OSError, ValueError) as e:
+            problem = e
+            time.sleep(0.05)
+    raise LedgerUnreadable(f"{path} cannot be read ({problem})")
 
 
 _ledger_lock = __import__("threading").Lock()
@@ -167,7 +184,12 @@ def _note_decision(clip_json: Path, status: str | None) -> None:
 
     key = _ledger_key(clip_json)
     with _ledger_lock:
-        data = _read_ledger(ledger)
+        try:
+            data = _read_ledger(ledger)
+        except LedgerUnreadable as e:
+            # The clip's own file still carries the decision; the record is left as it is and refilled at the next start.
+            logging.getLogger(__name__).error("THE DECISIONS RECORD COULD NOT BE READ, so this decision was not added to it: %s", e)
+            return
         if status in DECIDED:
             if (data.get(key) or {}).get("status") == status:
                 return
@@ -184,7 +206,13 @@ def _note_decision(clip_json: Path, status: str | None) -> None:
 def decided_status(clip_json: Path) -> str | None:
     """What a person decided about this clip according to the record, or None."""
     ledger = _ledger_path(clip_json)
-    return (_read_ledger(ledger).get(_ledger_key(clip_json)) or {}).get("status") if ledger else None
+    if not ledger:
+        return None
+    try:
+        return (_read_ledger(ledger).get(_ledger_key(clip_json)) or {}).get("status")
+    except LedgerUnreadable as e:
+        logging.getLogger(__name__).error("THE DECISIONS RECORD COULD NOT BE READ, so it could not be checked for this clip: %s", e)
+        return None
 
 
 def _keep_decision(path: Path, data: Any) -> None:
@@ -227,7 +255,17 @@ def restore_decisions(data_dir: Path) -> int:
     record from clips decided before the record existed.
     """
     ledger = data_dir / LEDGER
-    known = _read_ledger(ledger)
+    try:
+        known = _read_ledger(ledger)
+    except LedgerUnreadable as e:
+        # Kept aside, never deleted: a person can look at it. A new record is filled from the clips as they are.
+        aside = ledger.with_name(f"decisions.damaged-{__import__('time').strftime('%Y%m%d-%H%M%S')}.json")
+        logging.getLogger(__name__).error("THE DECISIONS RECORD IS DAMAGED (%s). It was moved to %s and a new one is filled from the clips as they are now.", e, aside.name)
+        try:
+            os.replace(ledger, aside)
+        except OSError:
+            return 0
+        known = {}
     restored = 0
     for clip_json in (data_dir / "work").glob("*/clips/*/clip.json"):
         try:

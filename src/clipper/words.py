@@ -100,7 +100,7 @@ def _clock(text: str) -> float | None:
     return float(t) if re.fullmatch(r"\d+(?:\.\d+)?", t) else None
 
 
-_RANGE = re.compile(r"\[?\(?\s*((?:\d+:)?\d{1,3}:\d{1,2}(?:\.\d+)?)\s*\]?\)?\s*(?:-|–|—|to|->|→)\s*\[?\(?\s*((?:\d+:)?\d{1,3}:\d{1,2}(?:\.\d+)?)\s*\]?\)?[\s|:\-–—.]*(.*)")
+_RANGE = re.compile(r"\[?\(?\s*((?:\d+:)?\d{1,3}:\d{1,2}(?:\.\d+)?)\s*\]?\)?\s*(?:-|‐|‑|‒|–|—|to|->|→)\s*\[?\(?\s*((?:\d+:)?\d{1,3}:\d{1,2}(?:\.\d+)?)\s*\]?\)?[\s|:\-–—.]*(.*)")
 
 
 def parse_answers(text: str, duration_s: float = 0.0) -> dict:
@@ -111,6 +111,7 @@ def parse_answers(text: str, duration_s: float = 0.0) -> dict:
     """
     found: list[tuple[float, float, str]] = []
     skipped: list[str] = []
+    text = re.sub(r"^\s*```[a-zA-Z]*\s*|\s*```\s*$", "", str(text).strip())  # an answer wrapped in a code fence
     stripped = text.strip()
     data = None
     if stripped[:1] in "[{":

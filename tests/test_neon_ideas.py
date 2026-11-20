@@ -203,7 +203,7 @@ def test_the_local_ai_writes_a_clips_text_when_claude_cannot_be_reached(tmp_path
         monkeypatch.setattr(llm, "why_unavailable", lambda cfg: "no Claude on this computer")
         assert localai.status(cfg, fresh=True)["ready"] and llm.text_available(cfg) and not llm.available(cfg)
         data = llm.ask(cfg, "claude-opus-5-5", "system", "the clip's words", llm.SCHEMA, "copy for a clip", local_ok=True)
-        assert data["hook"] == "He drives into the lake?!" and llm.last_used == "local"
+        assert data["hook"] == "He drives into the lake?!" and llm.used_last() == "local"
         assert asked["model"] == "llama3.2:3b" and asked["format"] == llm.SCHEMA and asked["messages"][1]["content"] == "the clip's words"
         with pytest.raises(llm.LlmUnavailable, match="no Claude"):  # reading a whole stream is not a job for the small model
             llm.ask(cfg, "claude-haiku-5-5", "system", "a whole stream", llm.SCHEMA, "moments")

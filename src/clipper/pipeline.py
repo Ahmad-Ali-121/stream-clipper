@@ -152,6 +152,9 @@ def stage_find(
             found = add_ai_moments(found, picks)
             log.info("AI picked %d moment(s) from the speech: %d agree with ones already found, %d are new",
                      len(picks), len(picks) - (len(found) - before), len(found) - before)
+    if no_chat and not found:
+        raise PipelineError("this video has no chat, and no moment stood out in what is said. Run it again with sound, picture or "
+                            "\"Let AI read the whole stream\", or pick the part yourself in Your own clip or the Transcript view")
     write_json(work / "moments.json", found)
 
     # Clips already reviewed keep their folder and status; ranks of the rest are refreshed.
@@ -399,6 +402,10 @@ def _own_drafts(source: Source, work: Path, meta: dict, segments: list[tuple[flo
     for n, (a, b) in enumerate(segments, 1):
         d = clip_dir(work, clip_id(a))
         state = read_json(d / "clip.json", {})
+        if state and state.get("trigger") != "manual" and not state.get("source_range"):
+            # That folder belongs to a clip the program found at the very same second: yours gets a folder of its own.
+            d = clip_dir(work, clip_id(a) + "x")
+            state = read_json(d / "clip.json", {})
         before_range = state.get("source_range")
         if state.get("source_range") != [a, b]:  # another range under the same name: its old files do not belong to it
             for f in d.iterdir() if d.exists() else []:
@@ -538,7 +545,9 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
                 if whole:
                     a = float(state["fetch_start_s"])
                     b = a + float(state.get("source_duration_s") or (float(state.get("fetch_end_s", state["end_s"])) - a))
-                    words, where = caption_script(ytcaptions.window(whole, a, b), cfg), "YouTube's captions"
+                    here = ytcaptions.window(whole, a, b)
+                    if here:  # none in this stretch (often only "[Music]" over loud gameplay): the speech model listens instead
+                        words, where = caption_script(here, cfg), "YouTube's captions"
             if words is None:
                 words = transcribe_file(d / "source.mp4", cfg)
             state = read_json(d / "clip.json")  # as it is now: a person may have edited the clip while it was transcribed
@@ -635,6 +644,18 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
     return results
 
 
+def _look_changed(state: dict, cfg: Config) -> bool:
+    """Was this clip's draft made with another caption look, template or branding than the ones chosen now?
+    Judged by the newest record the draft carries, so older drafts are not all remade because the record changed."""
+    from .render import look_signature, look_signature_v1
+
+    if state.get("look2_used"):
+        return state["look2_used"] != look_signature(cfg)
+    if state.get("look_used"):
+        return state["look_used"] != look_signature_v1(cfg)
+    return state.get("style_used", "bold") != cfg.captions.preset
+
+
 def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Path, bool]]) -> None:
     from .compose import explained
     from .post import export_clip
@@ -654,7 +675,7 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
     # A render made before the opening effects were switched on (or off) no longer matches the settings.
     fresh = (not done(d / "final.mp4") or bool(state.get("opening_used")) != bool(cfg.render.opening)
              # a render with another caption look or other branding is stale too (older drafts only recorded the style's name)
-             or (state["look_used"] != look_signature(cfg) if state.get("look_used") else state.get("style_used", "bold") != cfg.captions.preset))
+             or _look_changed(state, cfg))
     if fresh:
         render_clip(d, cfg, force=True)
         for name in ("explained.mp4", "explained_b.mp4", "final_b.mp4"):  # made with the old settings too
@@ -723,7 +744,7 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
             log.warning("clip %s: no frames for AI to look at (%s); it will judge from the words only", d.name, e)
     try:
         copy = llm.write_copy(state, tags, cfg, frames)
-        state["copy_source"] = f"local: {cfg.llm.local_model}" if llm.last_used == "local" else cfg.llm.model
+        state["copy_source"] = f"local: {cfg.llm.local_model}" if llm.used_last() == "local" else cfg.llm.model
         state["ai_saw_frames"] = len(frames)
         state.pop("copy_problem", None)
     except llm.LlmUnavailable as e:

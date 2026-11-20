@@ -189,8 +189,20 @@ def _ask_claude_code(cfg: Config, model: str, system: str, user: str, schema: di
     exe = shutil.which("claude")
     if not exe:
         raise LlmUnavailable(static_problem(cfg, "claude-code"))
-    folder = cfg.data_dir / "tmp" / "claude-code"  # an empty folder: no project files, settings or hooks get picked up
-    folder.mkdir(parents=True, exist_ok=True)
+    # An empty folder of its own for every question: no project files, settings or hooks get picked up, and two questions
+    # asked at the same moment (a help question while a clip's text is written) cannot read each other's files.
+    import tempfile
+
+    base = cfg.data_dir / "tmp" / "claude-code"
+    base.mkdir(parents=True, exist_ok=True)
+    folder = Path(tempfile.mkdtemp(prefix="q-", dir=str(base)))
+    try:
+        return _ask_claude_code_in(folder, exe, cfg, model, system, user, schema, what, images)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def _ask_claude_code_in(folder: Path, exe: str, cfg: Config, model: str, system: str, user: str, schema: dict, what: str, images: list | None) -> dict:
     prompt_file = folder / "system.txt"
     prompt_file.write_text(system, encoding="utf-8")
     cmd = [exe, "-p", "--model", model, "--output-format", "json", "--json-schema", json.dumps(schema),
@@ -274,19 +286,22 @@ def clip_prompt(state: dict, trend_tags: list[str]) -> str:
     )
 
 
-last_used = ""  # which AI answered the most recent question: a Claude connection's name, or "local"
+_used = __import__("threading").local()  # which AI answered this thread's most recent question: a Claude connection's name, or "local"
+
+
+def used_last() -> str:
+    return getattr(_used, "name", "")
 
 
 def _ask_local(cfg: Config, system: str, user: str, schema: dict, what: str, why_not_claude: str) -> dict:
     """The question to the free AI on this computer. Only for jobs it is big enough for (a clip's text)."""
-    global last_used
     from . import localai
 
     try:
         data = localai.ask(cfg, system, user, schema, what)
     except localai.LocalAiError as e:
         raise LlmUnavailable(f"{why_not_claude}; and {e}") from e
-    last_used = "local"
+    _used.name = "local"
     log.info("Claude was not used (%s); the free local AI wrote this instead: %s", why_not_claude, what)
     return data
 
@@ -307,7 +322,6 @@ def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str
     the other one is used and that is said out loud, because it can move work onto a paid key.
     ``local_ok``: when Claude cannot be reached at all, the free AI on this computer may answer instead.
     """
-    global last_used
     problem = why_unavailable(cfg)
     if problem:
         if local_ok and cfg.llm.enabled:
@@ -329,7 +343,7 @@ def ask(cfg: Config, model: str, system: str, user: str, schema: dict, what: str
                 _remember(cfg, note=note)
             continue
         _remember(cfg, backend, ok=True)
-        last_used = backend
+        _used.name = backend
         return data
     if local_ok:
         return _ask_local(cfg, system, user, schema, what, " | ".join(failures))

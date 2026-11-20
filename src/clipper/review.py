@@ -136,7 +136,7 @@ def clean_box(box, label: str) -> list[float]:
         x, y, w, h = (float(v) for v in box)
     except (TypeError, ValueError):
         raise ValueError(f"the {label} box must be four numbers: x, y, width, height") from None
-    if not (0 <= x < 1 and 0 <= y < 1 and 0.04 <= w <= 1 and 0.04 <= h <= 1):
+    if not (0 <= x <= 0.96 and 0 <= y <= 0.96 and 0.04 <= w <= 1 and 0.04 <= h <= 1):
         raise ValueError(f"the {label} box is too small or outside the picture")
     w, h = min(w, 1 - x), min(h, 1 - y)
     return [round(x, 4), round(y, 4), round(w, 4), round(h, 4)]
@@ -162,8 +162,9 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
             state.pop(k, None)
         state["layout_auto"] = True
         layout_mod.save_framing(channel, None, cfg)
-        state = layout_mod.auto_layout(d, state, cfg)
-        write_json(d / "clip.json", state)
+        state = layout_mod.auto_layout(d, state, cfg)  # looks at the video: takes a few seconds
+        keys = ("layout", "facecam", "game", "crop_x", "face_corner", "face_size", "layout_auto", "layout_reason")
+        state = update_clip(d / "clip.json", {k: state[k] for k in keys if k in state}, drop=tuple(k for k in keys if k not in state))
         edit = None
     else:
         from .render import LAYOUTS
@@ -366,13 +367,12 @@ def save_words(d: Path, words: list) -> int:
             raise ValueError(f"a caption word has an impossible time ({start}-{end})")
         clean.append({**{k: v for k, v in w.items() if k not in ("word", "start", "end")}, "word": text, "start": start, "end": end})
     clean.sort(key=lambda w: w["start"])
-    write_json(d / "words.json", clean)
-    state = read_json(d / "clip.json")
-    state["transcript"] = " ".join(w["word"] for w in clean)
-    state["words_edited"] = True
-    write_json(d / "clip.json", state)
-    for name in RENDERS:  # captions are burned into every render
+    for name in RENDERS:  # captions are burned into every render; if one is in use, nothing has been changed yet
         remove(d / name)
+    write_json(d / "words.json", clean)
+    from .work import update_clip
+
+    update_clip(d / "clip.json", {"transcript": " ".join(w["word"] for w in clean), "words_edited": True})
     return len(clean)
 
 
@@ -608,6 +608,11 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             origin = self.headers.get("Origin")
             if origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
                 return self._send(403, b"not allowed from another site", "text/plain")
+            try:
+                if int(self.headers.get("Content-Length", "0") or 0) < 0:
+                    raise ValueError
+            except ValueError:
+                return self._send(400, b"the request's length is not a valid number", "text/plain")
             actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch", "/api/watch/clip-now": "clip_now",
                        "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check", "/api/ai/local-setup": "start_local_ai",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
@@ -632,9 +637,12 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 data = self.rfile.read(left)
                 if len(data) != left:
                     return self._send(400, b"the file did not arrive completely; try again", "text/plain")
+                arriving = folder / f"{kind}.arriving"
+                arriving.write_bytes(data)
                 for old in folder.glob(f"{kind}.*"):
-                    old.unlink(missing_ok=True)
-                target.write_bytes(data)
+                    if old != arriving:
+                        old.unlink(missing_ok=True)
+                arriving.replace(target)
                 result = control.save({"card_image": str(target), "card_bg": "image"} if kind == "card" else {f"brand_{kind}": str(target)})
                 return self._send(200, json.dumps({**result, "stamp": RUNNING_STAMP}).encode(), "application/json")
             if self.path.startswith("/api/upload") and cfg is not None:
@@ -773,9 +781,10 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                         return self._send(200, json.dumps({"words": save_words(d, body.get("words") or [])}).encode(), "application/json")
                     from .render import render_clip
 
+                    now_cfg = control.cfg if control else cfg  # the look chosen on the page, not the one the program started with
                     if not (d / "final.mp4").exists():
-                        render_clip(d, cfg)
-                    render_clip(d, cfg, out_name="final_b.mp4", variant="b")
+                        render_clip(d, now_cfg)
+                    render_clip(d, now_cfg, out_name="final_b.mp4", variant="b", force=True)
                     return self._send(200, b"{}", "application/json")
                 except (ValueError, TypeError, KeyError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
@@ -795,6 +804,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
 
                 def remake_all() -> None:
                     from .render import render_clip
+                    from .work import update_clip
 
                     for d in todo:
                         try:
@@ -802,6 +812,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                                 if name != "final.mp4":
                                     remove(d / name)
                             render_clip(d, use, force=True)
+                            update_clip(d / "clip.json", {}, drop=("error",))
                         except Exception as e:
                             log.error("clip %s: the draft could not be made again: %s", d.name, e, exc_info=not isinstance(e, ValueError))
                             st = read_json(d / "clip.json", {})
@@ -869,7 +880,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     return self._send(404, b"no such clip", "text/plain")
                 if not llm.text_available(cfg):
                     return self._send(400, f"AI is not available: {llm.why_unavailable(cfg)}.".encode(), "text/plain")
-                state = write_clip_copy(d, read_json(d / "clip.json"), cfg, force=True)
+                state = write_clip_copy(d, read_json(d / "clip.json"), control.cfg if control else cfg, force=True)
                 if state.get("copy_source") == "plain":
                     return self._send(400, f"AI could not write the text: {state.get('copy_problem')}".encode(), "text/plain")
                 return self._send(200, json.dumps({"status": state.get("status")}).encode(), "application/json")

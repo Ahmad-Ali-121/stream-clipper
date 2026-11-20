@@ -25,6 +25,7 @@ from .work import done, read_json, write_json
 log = logging.getLogger(__name__)
 
 CACHE = "yt_words.json"
+_failed: dict[str, float] = {}  # work folder -> when asking YouTube last failed, so one run does not ask once per clip
 _NOTE = re.compile(r"^[\[(（].*[\])）]$")  # [Music], (applause)
 MAX_WORD_S = 0.8  # a word is never shown as lasting longer than this, however long the pause after it
 
@@ -80,18 +81,25 @@ def parse_json3(data: dict) -> list[dict]:
                 n += 1
                 out.append({"start": round(at / 1000, 3), "word": word.replace("।", ".")})  # the Hindi full stop
     out.sort(key=lambda w: w["start"])
-    # Sound descriptions: single ones, and ones spread over several words ("[Music", "playing]").
+    # Sound descriptions in square brackets are left out: single ones, and ones spread over several words
+    # ("[Music", "playing]"). Round brackets are ordinary speech in captions written by a person ("(which is rare),"),
+    # so those words stay and only the bracket signs go.
     kept, inside = [], False
     for w in out:
         text = w["word"]
         if inside:
-            inside = not text.endswith(("]", ")", "）"))
+            inside = "]" not in text  # the closing bracket may carry punctuation after it: "laughs]!"
             continue
-        if _NOTE.match(text) or text in (">>", "-", "--", "♪"):
+        bare = text.strip(".,!?;:")
+        if _NOTE.match(bare) and bare[:1] == "[" or text in (">>", "-", "--", "♪") or bare in ("(Music)", "(Applause)", "(Laughter)"):
             continue
-        if text[:1] in "[(（":
-            inside = True
+        if text[:1] == "[":
+            inside = "]" not in text
             continue
+        text = text.replace("(", "").replace(")", "").replace("（", "").replace("）", "")
+        if not text:
+            continue
+        w["word"] = text
         kept.append(w)
     for i, w in enumerate(kept):
         nxt = kept[i + 1]["start"] if i + 1 < len(kept) else w["start"] + 0.4
@@ -119,11 +127,17 @@ def video_words(url: str, work: Path, cfg: Config) -> list[dict] | None:
     """
     if cfg.transcribe.youtube_captions == "off":
         return None
+    import time
+
     cache = work / CACHE
     if done(cache):
         saved = read_json(cache, {})
-        if saved.get("language_asked") == cfg.transcribe.language:
+        # A video with words keeps them. "None yet" is asked again after six hours: YouTube writes captions a while after a stream ends.
+        if saved.get("language_asked") == cfg.transcribe.language and (saved.get("words") or time.time() - float(saved.get("at") or 0) < 6 * 3600):
             return saved.get("words") or None
+    # Asking failed a moment ago (no internet, still live): do not ask again for every clip of the same run.
+    if time.time() - _failed.get(str(work), 0.0) < 600:
+        return None
     try:
         from .fetch import _ytdlp
         from .tools import run
@@ -132,11 +146,12 @@ def video_words(url: str, work: Path, cfg: Config) -> list[dict] | None:
                               what="asking YouTube for this video's captions").stdout)
         if info.get("is_live"):
             log.info("this stream is still live, so YouTube has no finished captions for it yet; the speech model is used")
+            _failed[str(work)] = time.time()
             return None
         track = pick_track(info, cfg.transcribe.language)
         if not track:
             log.info("YouTube has no captions for this video in the language spoken (%s); the speech model is used", cfg.transcribe.language)
-            write_json(cache, {"language_asked": cfg.transcribe.language, "words": [], "why": "no caption track"})
+            write_json(cache, {"language_asked": cfg.transcribe.language, "words": [], "why": "no caption track", "at": time.time()})
             return None
         address, language, kind = track
         req = urllib.request.Request(address, headers={"User-Agent": "Mozilla/5.0"})
@@ -144,6 +159,7 @@ def video_words(url: str, work: Path, cfg: Config) -> list[dict] | None:
             words = parse_json3(json.loads(resp.read(60_000_000)))
     except Exception as e:
         log.warning("YouTube's captions could not be read (%s); the speech model is used instead", e)
+        _failed[str(work)] = time.time()
         return None
     write_json(cache, {"language_asked": cfg.transcribe.language, "language": language, "kind": kind, "words": words})
     log.info("YouTube's own captions: %d words (%s, %s)", len(words), language, kind)

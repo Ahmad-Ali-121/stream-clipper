@@ -299,7 +299,8 @@ def new_moments(w: Watched, cfg: Config) -> list[dict]:
     taken = []
     for other in (w.work / "clips").glob("*/clip.json"):
         st = read_json(other, {})
-        if st.get("start_s") is not None and st.get("end_s") is not None:
+        real = st.get("status") in ("approved", "rejected", "deleted") or st.get("draft_done") or st.get("exported") or (other.parent / "final.mp4").exists()
+        if real and st.get("start_s") is not None and st.get("end_s") is not None:
             taken.append((other.parent.name, float(st["start_s"]), float(st["end_s"]), st.get("status", "candidate")))
     for m in found:
         d = w.work / "clips" / clip_id(m["peak_s"])
@@ -373,8 +374,10 @@ def hype(samples: list[tuple[float, int]], now: float) -> dict:
     recent = [(t, n) for t, n in samples if now - t <= 600]
     if len(recent) < 2:
         return {"percent": 0, "label": "quiet", "per_minute": 0}
-    last = [(t, n) for t, n in recent if now - t <= 30] or recent[-1:]
-    span = max(5.0, now - last[0][0])
+    last = [(t, n) for t, n in recent if now - t <= 30]
+    if len(last) < 2:
+        last = recent[-2:]  # nothing was sampled for a while (the watcher was busy): use the last two readings there are
+    span = max(5.0, recent[-1][0] - last[0][0])
     rate = (recent[-1][1] - last[0][1]) / span  # messages a second, lately
     whole = max(1.0, recent[-1][0] - recent[0][0])
     usual = (recent[-1][1] - recent[0][1]) / whole
@@ -454,7 +457,8 @@ def asked_moment(w: Watched, request: dict, cfg: Config) -> dict:
 def due_asked(w: Watched, cfg: Config) -> list[dict]:
     """Asked-for clips the recording has now caught up with."""
     live_now = time.time() - float(w.meta["started_at"])
-    ready = [m for m in w.asked if m["end_s"] + cfg.fetch.pad_s + (0 if getattr(w, "buffer", None) else cfg.watch.vod_delay_s) <= live_now]
+    ready = [m for m in w.asked if m["end_s"] + cfg.fetch.pad_s + (0 if getattr(w, "buffer", None) else cfg.watch.vod_delay_s) <= live_now
+             and time.time() >= m.get("not_before", 0)]
     w.asked = [m for m in w.asked if m not in ready]
     return ready
 
@@ -512,6 +516,9 @@ def draft_job(w: Watched, moment: dict, cfg: Config) -> None:
             d = make_draft(w, moment, cfg)
         except Exception as e:
             note_error(clip_dir(w.work, clip_id(moment["peak_s"])), f"draft failed: {e}")
+            if moment.get("asked") and moment.get("tries", 0) < 2:
+                # Asked for by a person: tried again in half a minute (the recording may not have reached it yet), three times in all.
+                w.asked.append({**moment, "tries": moment.get("tries", 0) + 1, "not_before": time.time() + 30})
             raise
         note_error(d, None)
         s = read_json(d / "clip.json")
@@ -527,6 +534,7 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
     names = [channel_name(c) for c in channels]
     watched: dict[str, Watched] = {}
     pool = ThreadPoolExecutor(max_workers=max(1, int(cfg.watch.draft_workers)), thread_name_prefix="draft")
+    windows: dict[tuple[str, str], tuple[float, float]] = {}  # the stretch each draft in progress covers
     making: dict[tuple[str, str], object] = {}  # (channel, clip id) -> the draft being made, so a moment is not started twice
     deadline = time.time() + max_minutes * 60 if max_minutes else None
     print(f"Watching {', '.join(names)} using {cfg.watch.mode}. Drafts appear under {cfg.data_dir / 'work'}. Ctrl+C to stop.")
@@ -552,12 +560,17 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                     for request in asked:
                         w.asked.append(asked_moment(w, request, cfg))
                         log.info("%s: you asked for the last %.0f seconds; the clip is made as soon as the recording reaches it", name, request["seconds"])
-                    for moment in due_asked(w, cfg) + new_moments(w, cfg):
+                    fresh = new_moments(w, cfg)  # first: if this fails, the asked-for clips are still waiting, not lost
+                    for moment in due_asked(w, cfg) + fresh:
                         key = (name, clip_id(moment["peak_s"]))
                         if key in making:
                             continue  # already being made
+                        if not moment.get("asked") and any(k[0] == name and min(moment["end_s"], b) - max(moment["start_s"], a) > 0.5 * (moment["end_s"] - moment["start_s"])
+                                                           for k, (a, b) in windows.items() if k in making):
+                            continue  # the same moment under a shifted name is still being made
                         log.info("%s: moment at %s (%s, %.1f), making a draft%s", name, format_time(moment["peak_s"]), moment.get("trigger", "chat"),
                                  moment["score"], f" ({len(making)} other draft(s) in progress)" if making else "")
+                        windows[key] = (moment["start_s"], moment["end_s"])
                         making[key] = pool.submit(draft_job, w, moment, cfg)
                     if time.time() - w.last_live_check > cfg.watch.live_check_s:
                         w.last_live_check = time.time()
