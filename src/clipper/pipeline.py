@@ -75,11 +75,12 @@ def stage_find(
         # The stream has ended: put it aside and download the whole chat replay.
         chat_file.replace(work / "chat.watched.json")
         log.info("the stream has ended; downloading its whole chat instead of the part collected while watching")
-    if source.platform == "local":
+    if source.platform in ("local", "kick"):
         from .signals import MODES as _MODES, parse_mode as _parse_mode
 
         if not ai and not any(_MODES[_parse_mode(signals or cfg.moments.signals)]):
-            raise PipelineError("a video file has no chat to find moments from. Choose sound, picture or AI reading, "
+            what = "a Kick video" if source.platform == "kick" else "a video file"
+            raise PipelineError(f"{what} has no chat to find moments from. Choose sound, picture or AI reading, "
                                 "or use \"Your own clip\" to pick the range yourself")
         messages = []
     else:
@@ -415,7 +416,7 @@ def _own_drafts(source: Source, work: Path, meta: dict, segments: list[tuple[flo
             "peak_s": a, "start_s": a, "end_s": b, "cut_start_s": a, "cut_end_s": b, "cut_auto": False, "source_range": [a, b],
             "part": n if len(segments) > 1 else None, "parts": len(segments) if len(segments) > 1 else None, "part_label": bool(part_label),
             "vod_url": source.url, "platform": source.platform, "channel": meta.get("channel", ""),
-            "channel_handle": meta.get("channel_id", "") if source.platform == "youtube" else "",
+            "channel_handle": meta.get("channel_id", "") if source.platform in ("youtube", "kick") else "",
             "source_url": meta.get("channel_url") or source.url, "stream_title": meta.get("title", ""),
             "range_id": None, **(extra or {}),
         })

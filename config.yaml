@@ -152,7 +152,7 @@ captions:
   max_chars: 18
   max_gap_s: 0.6            # a pause longer than this starts a new caption line
   min_word_s: 0.12          # shortest time a word stays highlighted
-  animation: highlight      # how the words move: highlight, pop (the spoken word pops in), word (one big word at a time), build (the line fills in)
+  animation: highlight      # how the words move: highlight, pop, word (one big word at a time), build (the line fills in), popline (each line pops in), line (plain)
 
 brand:                      # your own mark on every clip; all optional, set on the review page under Branding
   logo: ""                  # an image file shown for the whole clip (PNG with a clear background is best)
@@ -163,3 +163,5 @@ brand:                      # your own mark on every clip; all optional, set on 
   outro_seconds: 4
   music: ""                 # a sound file played quietly under the voice; use only music you have the right to use
   music_volume: 0.12
+  music_rise_s: 0           # over the last this many seconds the music grows louder (0 = it stays level)
+  music_peak: 0.35          # how loud it gets at the very end

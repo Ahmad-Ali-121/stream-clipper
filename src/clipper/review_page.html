@@ -180,9 +180,68 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
 .twl:hover{background:var(--surface2)}.twl.on{background:color-mix(in srgb,var(--accent) 20%,transparent)}.twl b{color:var(--muted);font-weight:600}.twl mark{background:var(--accent);color:var(--accent-ink);border-radius:3px;padding:0 2px}
 .live1{display:grid;grid-template-columns:auto 90px 1fr;gap:8px;align-items:center;font-size:12.5px;margin-top:8px}.live1 b{max-width:110px;overflow:hidden;text-overflow:ellipsis}
 .hbar{height:8px;border-radius:99px;background:var(--surface2);overflow:hidden}.hbar i{display:block;height:100%;transition:width .6s}
+.vid{position:relative}
+.clips[data-zones]:not([data-zones=""]) .vid::after{content:"";position:absolute;left:0;right:0;top:0;aspect-ratio:9/16;pointer-events:none;
+  background:linear-gradient(rgba(255,60,90,.34),rgba(255,60,90,.34)) top/100% var(--zt) no-repeat,linear-gradient(rgba(255,60,90,.34),rgba(255,60,90,.34)) bottom/100% var(--zb) no-repeat,
+  linear-gradient(rgba(255,60,90,.34),rgba(255,60,90,.34)) right/var(--zr) 100% no-repeat}
 .cbrow{display:grid;grid-template-columns:74px minmax(0,1fr) auto auto auto;gap:12px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
 .cbrow.off{opacity:.55}.cbrow .badt{color:var(--bad);font-weight:600}.cbrow .warnt{color:var(--warn)}
 .cbrow label{display:flex;gap:6px;align-items:center;cursor:pointer}
+
+/* ---------- the neon look: one dark theme, pink and cyan accents (these rules come last, so they win) ---------- */
+:root{
+  --bg:#0b0714;--surface:#150d24;--surface2:#1f1535;--line:#34254f;--text:#f4f0fb;--muted:#a99dc0;
+  --accent:#ff3d8b;--accent-ink:#fff;--accent2:#58e8f7;--hot:#ff8a3d;--ok:#2fd27f;--ok-soft:#10301f;--bad:#ff5a6a;--bad-soft:#3a1420;--warn:#ffb84d;--warn-soft:#3a2a10;
+  --field:#0e0819;--shadow:0 1px 0 rgba(255,255,255,.03),0 10px 28px rgba(0,0,0,.38);
+}
+html{color-scheme:dark}
+body{background:radial-gradient(1100px 520px at 78% -12%,#4a1378 0,transparent 62%),radial-gradient(900px 420px at -5% 0,#3a0b45 0,transparent 55%),var(--bg);background-attachment:fixed}
+::selection{background:var(--accent);color:#fff}
+.top{background:rgba(11,7,20,.82);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);box-shadow:0 1px 0 rgba(255,61,139,.25)}
+.brand{font-weight:900;letter-spacing:1.2px;text-transform:uppercase;font-size:16px}
+.brand::first-line{background:linear-gradient(90deg,#fff,var(--accent2));-webkit-background-clip:text;background-clip:text}
+.brand small{letter-spacing:.3px;text-transform:none}
+.pill{background:rgba(255,255,255,.04);border-color:var(--line)}
+.pill.live{border-color:rgba(47,210,127,.6);box-shadow:0 0 0 1px rgba(47,210,127,.25),0 0 18px rgba(47,210,127,.18)}
+.card{border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 130px),var(--surface)}
+.card>header .step,.mainhead .step{display:inline-block;width:auto;height:auto;background:none;color:var(--accent);font-size:13px;font-weight:800;letter-spacing:1px;border-radius:0}
+.card>header .step::before,.mainhead .step::before{content:"0"}
+.card h2,.mainhead h2{font-weight:800;letter-spacing:.2px}
+.mainhead h2{font-size:19px}
+.btn{border-radius:12px;background:rgba(255,255,255,.05);transition:transform .08s,filter .15s,box-shadow .15s}
+.btn:hover{filter:brightness(1.12)}.btn:active{transform:translateY(1px)}
+.btn.primary{background:linear-gradient(90deg,var(--accent),var(--hot));color:#fff;box-shadow:0 8px 22px rgba(255,61,139,.30)}
+.btn.ok{background:linear-gradient(90deg,var(--accent2),#b6f04a);color:#0b0714;font-weight:800;box-shadow:0 8px 22px rgba(88,232,247,.22)}
+.btn.bad{border-color:rgba(255,90,106,.7)}
+.tabs{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:13px}
+.tabs button{border-radius:10px}
+.tabs button.on{background:linear-gradient(90deg,rgba(255,61,139,.26),rgba(88,232,247,.14));box-shadow:inset 0 0 0 1px rgba(255,61,139,.55);color:#fff}
+.chipbtn{background:rgba(255,255,255,.04)}
+.chipbtn.on{background:linear-gradient(90deg,var(--accent),var(--hot));border-color:transparent;color:#fff;box-shadow:0 6px 18px rgba(255,61,139,.28)}
+input[type=text],input[type=number],select,textarea{border-radius:10px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent2);outline-offset:1px}
+input[type=range]{accent-color:var(--accent)}input[type=checkbox]{accent-color:var(--accent)}
+.mode{background:rgba(255,255,255,.03)}.mode.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset,0 0 22px rgba(255,61,139,.16)}
+.mode.on b{background:linear-gradient(135deg,var(--accent),var(--hot))}
+.bar{background:rgba(255,255,255,.07)}.bar i{background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.pct b{color:var(--accent2)}
+.note{background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.capprev{background:linear-gradient(135deg,#3b0f66,#b3216f 70%,#ff6a4d)}
+.clip{border-left-width:3px}
+.clip.cur{box-shadow:0 0 0 1px var(--accent2),0 0 26px rgba(88,232,247,.16)}
+.chip.good{border-color:rgba(47,210,127,.6)}
+.tl{background:rgba(0,0,0,.35)}
+.modal{background:rgba(6,3,12,.74);backdrop-filter:blur(4px)}
+kbd{background:rgba(255,255,255,.06)!important}
+.hero{position:relative;overflow:hidden;border-radius:20px;padding:22px 26px;margin-bottom:16px;border:1px solid rgba(255,61,139,.35);
+  background:linear-gradient(120deg,#1c0a36 0%,#4b0f6e 45%,#b3216f 82%,#ff6a4d 110%)}
+.hero::after{content:"";position:absolute;right:-70px;top:-90px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,#ffd45a 0,#ff8a3d 45%,transparent 70%);opacity:.5}
+.hero::before{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2),#b6f04a)}
+.hero .kicker{font-size:11.5px;font-weight:800;letter-spacing:3px;color:var(--accent2)}
+.hero h1{font-size:30px;line-height:1.1;font-weight:900;letter-spacing:-.3px;margin:6px 0 4px;position:relative}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero p{color:#e9dcf3;font-size:13.5px;position:relative;max-width:560px}
+@media (max-width:980px){.hero h1{font-size:24px}}
 </style>
 </head>
 <body>
@@ -251,7 +310,7 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
         <div id="tab-own" hidden>
           <p class="help">Pick the part of a video yourself. Works with a YouTube or Twitch video link, or a video file on this PC such as a screen recording. No chat is needed.</p>
           <label class="f" for="m-src">Video link, or the path of a video file</label>
-          <input type="text" id="m-src" placeholder="https://www.youtube.com/watch?v=...   or   D:\Videos\recording.mp4">
+          <input type="text" id="m-src" placeholder="YouTube, Twitch or Kick video link, or D:\Videos\recording.mp4">
           <div class="btns" style="margin-top:6px"><button class="btn" onclick="$('m-file').click()">Choose a file from this PC</button><span class="saved" id="m-up"></span></div>
           <input type="file" id="m-file" accept="video/*,.mkv,.mp4,.mov,.webm,.avi" hidden onchange="uploadFile(this)">
           <div class="two">
@@ -287,6 +346,8 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
             <option value="all">Chat + sound + picture (about 130 MB per stream hour)</option>
           </select>
           <label class="switch" style="margin-top:8px"><input type="checkbox" id="r-ai"><span><b>Let AI read the whole stream</b>Turns all the speech into text and has Claude pick moments from what was said. Slow on a processor (a 4-hour stream can take an hour) and costs a few cents. Needs a Claude key.</span></label>
+          <label class="f" for="r-mix">What kind of moments</label>
+          <select id="r-mix" onchange="act('/api/options',{moment_mix:val('r-mix')})"></select>
           <label class="f" for="r-top">How many clips</label>
           <select id="r-top"><option>5</option><option selected>8</option><option>12</option><option>20</option></select>
           <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig'),ai:$('r-ai').checked})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="stopRun()">Stop</button></div>
@@ -346,6 +407,23 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <div class="btns"><button class="btn" onclick="useLook()">Use this style</button><button class="btn" onclick="useLook(true)">Save as a profile…</button><button class="btn quiet" id="k-del" hidden onclick="delLook()">Delete this profile</button></div>
           <p class="help" style="margin-top:6px">Clips already drafted get the new style when you press Make videos.</p>
         </details>
+        <details class="sec" id="tplbox"><summary>Template and opening text <small>a card, a post, a news banner</small></summary>
+          <label class="f" for="t-tpl">Template</label>
+          <select id="t-tpl" onchange="saveFrame()"></select>
+          <div id="t-card" hidden>
+            <label class="f" for="t-bg">Behind the card</label>
+            <select id="t-bg" onchange="saveFrame()"></select>
+            <div class="two" id="t-cols" hidden><div><label class="f" for="t-c1">Colour</label><input type="color" id="t-c1" style="height:38px;padding:2px" onchange="saveFrame()"></div>
+              <div id="t-c2w"><label class="f" for="t-c2">Second colour</label><input type="color" id="t-c2" style="height:38px;padding:2px" onchange="saveFrame()"></div></div>
+            <div class="btns" id="t-img" hidden style="margin-top:8px"><button class="btn" onclick="$('t-imgfile').click()">Choose an image</button><span class="saved" id="t-imgname"></span></div>
+            <input type="file" id="t-imgfile" accept=".png,.jpg,.jpeg,.webp" hidden onchange="brandFile(this,'card')">
+          </div>
+          <div class="two" id="t-post" hidden><div><label class="f" for="t-name">Name on the post</label><input type="text" id="t-name" maxlength="40" placeholder="the streamer's name" onchange="saveFrame()"></div>
+            <div><label class="f" for="t-handle">Handle</label><input type="text" id="t-handle" maxlength="40" placeholder="@yourpage" onchange="saveFrame()"></div></div>
+          <label class="f" for="t-hook">Opening text stays for <b id="t-hookv"></b> seconds</label>
+          <input type="range" id="t-hook" min="2" max="60" step="1" oninput="$('t-hookv').textContent=this.value" onchange="act('/api/options',{hook_seconds:+this.value})">
+          <p class="help" style="margin-top:6px">The post, news and hook-box templates show the opening text for the whole clip. Clips already drafted get the template when you press Make videos, or use "Make this video's drafts again" on a clip.</p>
+        </details>
         <details class="sec" id="brandbox"><summary>Branding <small>your logo, an outro line, music</small></summary>
           <label class="f">Logo or watermark</label>
           <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-logofile').click()">Choose an image</button><span class="saved" id="g-logoname"></span><button class="btn quiet" id="g-logooff" hidden onclick="act('/api/options',{brand_logo:''})">Take it off</button></div>
@@ -359,6 +437,8 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-musicfile').click()">Choose a sound file</button><span class="saved" id="g-musicname"></span><button class="btn quiet" id="g-musicoff" hidden onclick="act('/api/options',{brand_music:''})">Take it off</button></div>
           <input type="file" id="g-musicfile" accept=".mp3,.m4a,.wav,.ogg,.aac,.flac" hidden onchange="brandFile(this,'music')">
           <label class="f" for="g-vol">Music loudness</label><input type="range" id="g-vol" min="0" max="50" onchange="saveBrand()">
+          <label class="f" for="g-rise">Music grows louder over the last <b id="g-risev">0</b> seconds <small>(0 = stays level)</small></label>
+          <input type="range" id="g-rise" min="0" max="20" oninput="$('g-risev').textContent=this.value" onchange="saveBrand()">
           <p class="help" style="margin-top:6px">Use only music you have the right to use: platforms mute or remove clips with other people's songs. Branding is added when a draft or a video is made; press Make videos to add it to clips already drafted.</p>
         </details>
         <div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button></div>
@@ -371,6 +451,8 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
   </aside>
 
   <main>
+    <div class="hero"><div class="kicker">FIND · CHECK · POST</div><h1>Long streams. <em>Short clips.</em></h1>
+      <p>The program finds the moments. You check every clip. Only what you approve becomes a video.</p></div>
     <div class="tabs" style="max-width:640px"><button id="v-clips" class="on" onclick="view('clips')">Clips</button><button id="v-track" onclick="view('track')">Tracker</button><button id="v-board" onclick="view('board')">Cutting board</button><button id="v-words" onclick="view('words')">Transcript</button></div>
     <div id="view-words" hidden>
       <div class="mainhead"><h2>Transcript: find a moment by what was said</h2></div>
@@ -440,6 +522,9 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
       <h2><span class="step">2</span>Review the clips</h2>
       <div class="filters" id="filters"></div>
     </div>
+    <p class="keys" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><label for="z-pick">Show where an app covers the video:</label>
+      <select id="z-pick" style="width:auto;padding:3px 8px" onchange="setZones()"><option value="">Off</option><option value="tiktok">TikTok</option><option value="reels">Instagram Reels</option><option value="shorts">YouTube Shorts</option></select>
+      <span>(only on these previews, never in the video)</span></p>
     <p class="keys">Keys: <kbd>J</kbd> <kbd>K</kbd> next and previous clip · <kbd>Space</kbd> play or pause · <kbd>A</kbd> approve · <kbd>R</kbd> reject</p>
     <div class="clips" id="clips" data-filter="candidate"></div>
     <div class="empty" id="empty" hidden></div>
@@ -549,7 +634,7 @@ function show(s){
   const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!r.checked&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
   for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);
   $('o-ab').checked=s.ab_versions; $('o-opening').checked=s.opening;
-  drawLooks(s);
+  drawLooks(s);drawFrame(s);
   if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'roman';$('l-text').value=s.text_language||'English';$('l-yt').value=s.youtube_captions||'auto'}
   $('lang-sum').textContent=({en:'English',ur:'Urdu',hi:'Hindi',auto:'detected automatically'})[s.speech_language||'en']+((s.speech_language||'en')!=='en'?', captions in '+(s.caption_script==='roman'?'Latin letters':'its own letters')+', text in '+(s.text_language||'English'):'');
   if(document.activeElement!==$('o-camp'))$('o-camp').value=s.campaign||'';
@@ -746,7 +831,8 @@ function cardHtml(c){
    +'<div><label class="f">End</label><input type="number" step="0.5" name="cut_end_s" value="'+esc(c.cut_end_s??c.end_s)+'"></div>'
    +'<div><label class="f">Framing</label><select name="layout">'+lay+'</select></div></div>'
    +'<p class="help" style="margin-top:6px">Can be set anywhere from '+esc(c.lo)+' to '+esc(c.hi)+' seconds. Framing now: '+esc(c.layout_reason||'not checked yet')+'.</p>'
-   +(c.framing?'<div class="btns" style="margin-top:0"><button class="btn" onclick="openBoxes(\''+k+'\')">Set the face box and the video box</button></div>':'')
+   +(c.framing?'<div class="btns" style="margin-top:0"><button class="btn" onclick="openBoxes(\''+k+'\')">Set the face box and the video box</button>'
+       +'<button class="btn" title="Draft every unfinished clip of this video again with the caption style, template and branding chosen now" onclick="remakeAll(\''+k+'\')">Make this video\'s drafts again</button></div>':'')
    +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
    +(c.exported?'<details class="sec"><summary>Posted it? Log it <small>keeps views, payouts and rejections in the Tracker</small></summary>'
      +'<div class="three"><div><label class="f">Where</label><select name="t_platform"><option>YouTube Shorts</option><option>TikTok</option><option>Instagram Reels</option><option>Facebook Reels</option><option>Other</option></select></div>'
@@ -929,6 +1015,33 @@ async function saveWords(key){
   toast('Captions saved. The draft is made again when you press Make videos, or use "Make B preview".');
 }
 
+/* ---------- template, opening text, moment mix, safe zones ---------- */
+function drawFrame(s){
+  const f=s.frame||{}, tp=$('t-tpl'), bg=$('t-bg');
+  if(!tp.options.length&&f.templates){tp.innerHTML=Object.entries(f.templates).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('');
+    bg.innerHTML=Object.entries(f.backgrounds).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('');
+    $('r-mix').innerHTML=(s.moment_mixes||[]).map(k=>'<option value="'+k+'">'+({balanced:'Balanced: a bit of everything',action:'Action: loud, fast, shouted',dialogue:'Dialogue: stories, jokes, what is said'}[k]||k)+'</option>').join('')}
+  if(!$('tplbox').contains(document.activeElement)){tp.value=f.template||'none';bg.value=f.card_bg||'blur';$('t-c1').value=hex(f.card_color||'151225');$('t-c2').value=hex(f.card_color2||'FF3D8B');
+    $('t-name').value=f.post_name||'';$('t-handle').value=f.post_handle||'';$('t-hook').value=s.hook_seconds||3;$('t-hookv').textContent=Math.round(s.hook_seconds||3)}
+  const t=tp.value, b=bg.value;
+  $('t-card').hidden=t!=='card';$('t-post').hidden=!t.startsWith('xpost');$('t-cols').hidden=!(b==='color'||b==='gradient');$('t-c2w').hidden=b!=='gradient';$('t-img').hidden=b!=='image';
+  $('t-imgname').textContent=f.card_image_name?'In use: '+f.card_image_name:'No image chosen';
+  if(document.activeElement!==$('r-mix'))$('r-mix').value=s.moment_mix||'balanced';
+  const b2=s.brand||{};if(!$('brandbox').contains(document.activeElement)){$('g-rise').value=Math.round(b2.music_rise_s||0);$('g-risev').textContent=Math.round(b2.music_rise_s||0)}
+}
+function saveFrame(){if(document.activeElement)document.activeElement.blur();
+  act('/api/options',{template:val('t-tpl'),card_bg:val('t-bg'),card_color:val('t-c1').slice(1),card_color2:val('t-c2').slice(1),post_name:val('t-name'),post_handle:val('t-handle')})}
+/* Where each app covers the video with its own buttons and text. Shown over the previews only; never in the video. */
+const ZONES={tiktok:{top:8,bottom:22,right:15},reels:{top:10,bottom:24,right:14},shorts:{top:8,bottom:20,right:13}};
+function setZones(){const z=val('z-pick');try{localStorage.setItem('zones',z)}catch(e){}
+  const c=$('clips');c.dataset.zones=z;const k=ZONES[z];
+  if(k){c.style.setProperty('--zt',k.top+'%');c.style.setProperty('--zb',k.bottom+'%');c.style.setProperty('--zr',k.right+'%')}}
+async function remakeAll(key){
+  if(!confirm('Make the drafts of every unfinished clip of this video again, with the caption style, template and branding chosen now?'+NL+NL+'This takes about half a minute per clip. Their text, cuts and boxes are kept.'))return;
+  const r=await send('/api/clip/'+key+'/remake-all'); if(r.error){toast(r.error,true);return}
+  toast(r.clips+' draft'+(r.clips===1?' is':'s are')+' being made again. Each card updates when its draft is ready.');
+}
+
 /* ---------- caption looks and branding ---------- */
 let lookSeen='';
 function hex(c){return '#'+String(c||'FFFFFF').replace('#','')}
@@ -971,7 +1084,7 @@ function useLook(asProfile){
 function delLook(){const name=last.caption_preset;if(!confirm('Delete the caption profile "'+name+'"? Clips already made keep their look.'))return;
   act('/api/options',{caption_profile_delete:name,caption_preset:'bold'})}
 function saveBrand(){if(document.activeElement)document.activeElement.blur();
-  act('/api/options',{brand_logo_corner:val('g-corner'),brand_logo_size:val('g-size')/100,brand_logo_opacity:val('g-op')/100,brand_outro_text:val('g-outro'),brand_music_volume:val('g-vol')/100})}
+  act('/api/options',{brand_logo_corner:val('g-corner'),brand_logo_size:val('g-size')/100,brand_logo_opacity:val('g-op')/100,brand_outro_text:val('g-outro'),brand_music_volume:val('g-vol')/100,brand_music_rise_s:+val('g-rise')})}
 async function brandFile(inp,kind){
   const f=inp.files[0];inp.value='';if(!f)return;
   try{const r=await fetch('/api/brand/upload?kind='+kind+'&name='+encodeURIComponent(f.name),{method:'POST',body:f});
@@ -1305,6 +1418,8 @@ $('scope').textContent=__TITLE__;
 if(HAS_PANEL){for(const id of ['m-sh','m-sm','m-ss','m-eh','m-em','m-es'])$(id).addEventListener('input',ownHint);ownHint()}
 if(HAS_PANEL)poll();else $('side').remove();
 if(!HAS_PANEL)document.querySelector('.layout').style.gridTemplateColumns='1fr';
+try{$('z-pick').value=localStorage.getItem('zones')||''}catch(e){}
+setZones();
 clipLoop();
 </script>
 </body>

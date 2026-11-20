@@ -204,6 +204,13 @@ def clean_picks(raw: list[dict], top: int, duration_s: float | None = None) -> l
     return out
 
 
+MIX_NOTES = {
+    "action": "The person wants ACTION this time: prefer chases, fights, crashes, wins, fails and loud reactions over talk.\n",
+    "dialogue": "The person wants DIALOGUE this time: prefer stories, jokes, arguments, opinions and surprising statements over action. "
+                "A quiet funny exchange beats a loud nothing.\n",
+}
+
+
 def pick_moments(work: Path, meta: dict, cfg: Config, top: int) -> list[dict]:
     """Ask Claude for the best moments in the stream's text. Raises LlmUnavailable with the reason if it cannot."""
     from . import llm
@@ -213,7 +220,8 @@ def pick_moments(work: Path, meta: dict, cfg: Config, top: int) -> list[dict]:
         raise ToolError("no speech was found in this stream, so there is nothing for AI to read")
     user = (
         f"Streamer: {meta.get('channel', '')}\nStream title: {meta.get('title', '')}\n"
-        f"Return at most {top} moments.\n\nSpeech, with the time in seconds at the start of each line:\n" + "\n".join(lines)
+        f"Return at most {top} moments.\n" + MIX_NOTES.get(cfg.moments.mix, "") +
+        "\nSpeech, with the time in seconds at the start of each line:\n" + "\n".join(lines)
     )
     log.info("asking Claude (%s) to pick moments from %d lines of speech", cfg.ai.model, len(lines))
     data = llm.ask(cfg, cfg.ai.model, SYSTEM, user, SCHEMA, f"moments from the speech of {work.name}")

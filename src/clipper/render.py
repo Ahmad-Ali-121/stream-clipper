@@ -238,6 +238,8 @@ def credit_text(state: dict) -> str:
         handle = str(state.get("channel_handle") or "")
         # A YouTube address needs the channel's handle; its display name ("Live Insaan") is not one.
         return f"Clip: youtube.com/{handle}" if handle.startswith("@") else f"Clip: {channel} on YouTube"
+    if state.get("platform") == "kick" and state.get("channel_handle"):
+        return f"Clip: kick.com/{state['channel_handle']}"
     site = {"twitch": "twitch.tv/"}.get(state.get("platform", ""), "")
     return f"Clip: {site}{channel}" if site else f"Clip: {channel}"
 
@@ -340,7 +342,9 @@ def look_signature(cfg: Config) -> str:
 
     c = asdict(cfg.captions)
     c.pop("script", None)  # which letters captions use is decided when a clip is transcribed, not when it is rendered
-    return hashlib.sha256(repr((sorted(c.items()), sorted(asdict(cfg.brand).items()))).encode()).hexdigest()[:12]
+    r = cfg.render
+    frame = tuple(getattr(r, k, None) for k in ("hook_seconds", "template", "card_bg", "card_color", "card_color2", "card_image", "post_name", "post_handle"))
+    return hashlib.sha256(repr((sorted(c.items()), sorted(asdict(cfg.brand).items()), frame)).encode()).hexdigest()[:12]
 
 
 def _corner_xy(corner: str, top: int, bottom: int, side: int = 40) -> tuple[str, str]:
@@ -399,16 +403,29 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
     top_h = _even(r.height * r.split_top)
     # In the split layout the hook sits on the seam between facecam and gameplay, not over the face.
     hook_margin = top_h - 60 if layout == "split" else 170
+    # A template frames the finished picture (a card, a post, a news banner) and may show the opening text itself.
+    from . import frames
+    from .captions import script_font
+
+    frame = frames.build(r if is_final else replace(r, template="none"), clip_dir, hook_text if hook else "", str(state.get("channel") or ""), duration,
+                         script_font([hook_text or "", str(state.get("channel") or "")]) or captions.font, captions.active_color, first_input=1)
+    if frame.shows_hook:
+        overlays = [o for o in overlays if o.style not in ("Hook", "HookB")]
+    if frame.caption_margin is not None:
+        captions = replace(captions, margin_v=max(frame.caption_margin, captions.margin_v if face_low else 0))
+    if frame.hook_margin is not None:
+        hook_margin = frame.hook_margin
     write_text(
         clip_dir / f"{stem}.ass",
         build_ass(words, captions, overlays, hook_size=r.hook_font_size, credit_size=r.credit_font_size, hook_margin_v=hook_margin,
-                  progress_s=duration if r.opening else 0.0),
+                  progress_s=duration if r.opening else 0.0, extra_styles=frame.styles, extra_events=frame.events),
     )
     zoom, whoosh = opening_filters(r)
 
     graph = layout_filter(int(state["source_width"]), int(state["source_height"]), r, layout)
-    graph += f";[v0]fps={r.fps},{zoom + ',' if r.opening else ''}ass={stem}.ass[v1]"
-    inputs = ["-ss", f"{offset:.3f}", "-t", f"{duration:.3f}", "-i", "source.mp4"]
+    graph += f";[v0]fps={r.fps}{',' + zoom if r.opening else ''}[vz];{frame.graph};[t0]ass={stem}.ass[v1]"
+    inputs = ["-ss", f"{offset:.3f}", "-t", f"{duration:.3f}", "-i", "source.mp4"] + frame.inputs
+    extra = 1 + frame.inputs.count("-i")  # the number the next input file gets
     last = "[v1]"
     logo = state.get("logo")
     if logo:
@@ -417,9 +434,9 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
             raise ToolError(f"clip {clip_dir.name}: logo file not found: {logo}")
         # Animated logos loop for the whole clip; still images are held.
         inputs += (["-ignore_loop", "0"] if logo_path.suffix.lower() == ".gif" else ["-loop", "1"]) + ["-i", str(logo_path)]
-        graph += f";[1:v]scale={r.width}:{r.height}[lg];[v1][lg]overlay=0:0:shortest=1[v2]"
+        graph += f";[{extra}:v]scale={r.width}:{r.height}[lg];[v1][lg]overlay=0:0:shortest=1[v2]"
         last = "[v2]"
-    extra = 2 if logo else 1  # the number the next input file gets
+        extra += 1
     if brand.logo:
         mark = Path(brand.logo)
         if not mark.exists():
@@ -449,7 +466,14 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
             raise ToolError(f"the music file is missing: {brand.music}. Choose it again under Branding, or take it off there")
         inputs += ["-stream_loop", "-1", "-i", str(music)]  # repeated if it is shorter than the clip
         volume = min(0.5, max(0.0, float(brand.music_volume)))
-        graph += (f";[{extra}:a:0]volume={volume:.3f},afade=t=in:d=1.5,afade=t=out:st={max(0.0, duration - 2.0):.2f}:d=2,aresample=48000[music];"
+        rise = min(float(brand.music_rise_s or 0), max(0.0, duration - 3.0))
+        if rise >= 1:
+            # A riser: level for most of the clip, then steadily louder up to the peak at the very end.
+            peak, begin = min(0.8, max(volume, float(brand.music_peak))), duration - rise
+            level = f"volume='if(lt(t,{begin:.2f}),{volume:.3f},{volume:.3f}+({peak:.3f}-{volume:.3f})*(t-{begin:.2f})/{rise:.2f})':eval=frame,afade=t=in:d=1.5,afade=t=out:st={max(0.0, duration - 0.35):.2f}:d=0.35"
+        else:
+            level = f"volume={volume:.3f},afade=t=in:d=1.5,afade=t=out:st={max(0.0, duration - 2.0):.2f}:d=2"
+        graph += (f";[{extra}:a:0]{level},aresample=48000[music];"
                   "[a][music]amix=inputs=2:duration=first:normalize=0[amix]")
         sound = "[amix]"
         extra += 1

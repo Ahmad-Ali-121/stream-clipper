@@ -457,7 +457,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             if self.path == "/api/clips":
                 from . import scoring
 
-                weights = scoring.load_weights(cfg.data_dir) if cfg is not None else None
+                use_cfg = control.cfg if control else cfg
+                weights = scoring.mixed(scoring.load_weights(cfg.data_dir), use_cfg.moments.mix) if cfg is not None else None
                 brief = current_brief(control.cfg if control else cfg)
                 views = []
                 for d in list_clips(list(by_name.values()), weights):
@@ -591,7 +592,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 q = parse_qs(urlparse(self.path).query)
                 kind = (q.get("kind") or [""])[0]
                 ext = Path((q.get("name") or [""])[0]).suffix.lower()
-                allowed = {"logo": (".png", ".jpg", ".jpeg", ".webp", ".gif"), "music": (".mp3", ".m4a", ".wav", ".ogg", ".aac", ".flac")}
+                allowed = {"logo": (".png", ".jpg", ".jpeg", ".webp", ".gif"), "music": (".mp3", ".m4a", ".wav", ".ogg", ".aac", ".flac"),
+                           "card": (".png", ".jpg", ".jpeg", ".webp")}
                 if kind not in allowed or ext not in allowed[kind]:
                     return self._send(400, ("a logo must be an image (png, jpg, webp, gif); music must be a sound file (mp3, m4a, wav, ogg)").encode(), "text/plain")
                 left = int(self.headers.get("Content-Length", "0"))
@@ -606,7 +608,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 for old in folder.glob(f"{kind}.*"):
                     old.unlink(missing_ok=True)
                 target.write_bytes(data)
-                result = control.save({f"brand_{kind}": str(target)})
+                result = control.save({"card_image": str(target), "card_bg": "image"} if kind == "card" else {f"brand_{kind}": str(target)})
                 return self._send(200, json.dumps({**result, "stamp": RUNNING_STAMP}).encode(), "application/json")
             if self.path.startswith("/api/upload") and cfg is not None:
                 # A video file chosen on the page is saved under the data folder, piece by piece, and its path is given back.
@@ -747,6 +749,34 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 except Exception as e:
                     log.error("clip %s: %s failed: %s", d.name, m.group(3), e, exc_info=True)
                     return self._send(500, f"{type(e).__name__}: {e}".encode(), "text/plain")
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/remake-all", self.path)
+            if m and m.group(1) in by_name and cfg is not None:
+                # Every unfinished clip of this video is drafted again with the look chosen now (caption style, template, branding).
+                import threading
+
+                use = control.cfg if control else cfg
+                todo = [d for d in clip_dirs(by_name[m.group(1)])
+                        if read_json(d / "clip.json", {}).get("status") in ("candidate", "approved") and (d / "source.mp4").exists()]
+                if not todo:
+                    return self._send(400, b"this video has no downloaded clips to make again", "text/plain")
+
+                def remake_all() -> None:
+                    from .render import render_clip
+
+                    for d in todo:
+                        try:
+                            for name in RENDERS:
+                                if name != "final.mp4":
+                                    remove(d / name)
+                            render_clip(d, use, force=True)
+                        except Exception as e:
+                            log.error("clip %s: the draft could not be made again: %s", d.name, e, exc_info=not isinstance(e, ValueError))
+                            st = read_json(d / "clip.json", {})
+                            st["error"] = f"the draft could not be made again: {type(e).__name__}: {e}"
+                            write_json(d / "clip.json", st)
+
+                threading.Thread(target=remake_all, daemon=True, name="remake-all").start()
+                return self._send(200, json.dumps({"clips": len(todo)}).encode(), "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/framing", self.path)
             if m and m.group(1) in by_name and cfg is not None:
                 d = by_name[m.group(1)] / "clips" / m.group(2)

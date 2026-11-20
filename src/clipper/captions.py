@@ -78,7 +78,8 @@ def group_words(words: Sequence[Word], max_words: int = 3, max_chars: int = 18, 
 
 
 ANIMATIONS = {"highlight": "The spoken word changes colour", "pop": "The spoken word pops in", "word": "One big word at a time",
-              "build": "The line fills in word by word"}
+              "build": "The line fills in word by word", "popline": "Each line pops in, the spoken word changes colour",
+              "line": "Plain lines, no highlight"}
 
 
 def build_events(words: Sequence[Word], settings: CaptionSettings) -> list[CaptionEvent]:
@@ -125,6 +126,13 @@ def _event_text(ev: CaptionEvent, s: CaptionSettings) -> str:
         size = f"\\fscx70\\fscy70\\t(0,70,\\fscx{big + 10}\\fscy{big + 10})\\t(70,160,\\fscx{big}\\fscy{big})"
     else:
         size = f"\\fscx{big}\\fscy{big}"
+    if s.animation == "line":
+        return " ".join(ev.words)  # the whole line as it is; nothing follows the voice
+    if s.animation == "popline":
+        # The line arrives with a small bounce (only when its first word is spoken); after that only the colour moves.
+        # Colours are switched by hand here, not with a reset, because a reset would also undo the bounce.
+        pop = "{\\fscx80\\fscy80\\t(0,80,\\fscx106\\fscy106)\\t(80,170,\\fscx100\\fscy100)}" if ev.active == 0 else ""
+        return pop + " ".join(f"{{\\c&H{_bgr(s.active_color)}&}}{w}{{\\c&H{_bgr(s.text_color)}&}}" if i == ev.active else w for i, w in enumerate(ev.words))
     parts = []
     for i, word in enumerate(ev.words):
         if i == ev.active:
@@ -171,6 +179,8 @@ def build_ass(
     credit_size: int = 40,
     hook_margin_v: int = 170,
     progress_s: float = 0.0,
+    extra_styles: Sequence[str] = (),
+    extra_events: Sequence[str] = (),
 ) -> str:
     # Urdu or Hindi letters anywhere (captions, opening text, credit): switch to a font that has them, and never upper-case.
     font = script_font([w.text for w in words] + [o.text for o in (overlays or [])])
@@ -208,6 +218,7 @@ def build_ass(
             f"Style: Outro,{s.font},{credit_size + 18},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,12,0,2,70,70,380,1",
             # The same ribbon near the top, for layouts that keep a small face in a bottom corner.
             f"Style: OutroTop,{s.font},{credit_size + 18},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,12,0,8,70,70,330,1",
+            *extra_styles,  # a template's own styles (see frames.py)
             "",
             "[Events]",
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -228,6 +239,7 @@ def build_ass(
         # \q0 turns smart line wrapping on for this event (captions themselves never wrap).
         pop = "\\fscx60\\fscy60\\t(0,140,\\fscx109\\fscy109)\\t(140,250,\\fscx100\\fscy100)" if ov.pop else ""
         lines.append(f"Dialogue: 1,{ass_time(ov.start)},{ass_time(ov.end)},{ov.style},,0,0,0,,{{\\q0{pop}}}{text}")
+    lines += list(extra_events)  # a template's drawings and texts
     if progress_s > 0:
         lines.append(progress_bar(progress_s, s.play_res_x, _bgr(s.active_color)))
     return header + "\n" + "\n".join(lines) + "\n"

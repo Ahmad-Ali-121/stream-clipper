@@ -51,6 +51,18 @@ def fetch_meta(source: Source, work: Path, cfg: Config) -> dict:
         }
         write_json(out, meta)
         return meta
+    if source.platform == "kick":
+        from . import kick
+
+        info = kick.details(source.video_id)
+        meta = {
+            "url": source.url, "platform": "kick", "video_id": source.video_id, "title": info["title"],
+            "channel": info["channel_name"], "channel_id": info["channel"], "channel_url": f"https://kick.com/{info['channel']}" if info["channel"] else "",
+            "duration_s": info["duration_s"] or None, "is_live": info["is_live"], "started_at": None, "width": None, "height": None,
+            "playlist": info["playlist"],
+        }
+        write_json(out, meta)
+        return meta
     proc = run(
         _ytdlp(cfg) + ["-J", "--skip-download", source.url],
         timeout_s=180,
@@ -84,6 +96,8 @@ def fetch_chat(source: Source, work: Path, cfg: Config, refresh: bool = False) -
     out = work / "chat.json"
     if source.platform == "local":
         raise NoChatError("a video file on this computer has no chat")
+    if source.platform == "kick":
+        raise NoChatError("a Kick video has no chat replay that can be read")
     if done(out) and not refresh:
         return out
     tmp_dir = cfg.data_dir / "tmp"
@@ -145,6 +159,14 @@ def fetch_range(source: Source, start_s: float, end_s: float, out: Path, cfg: Co
             on_line=progress.from_tool(end_s - start_s))
         if not done(part):
             raise ToolError("cutting the range out of the video file produced nothing")
+        os.replace(part, out)
+        return out
+    if source.platform == "kick":
+        from . import kick
+
+        kick.fetch_range(kick.details(source.video_id)["playlist"], start_s, end_s, part, cfg, on_line=progress.from_tool(end_s - start_s))
+        if not done(part):
+            raise ToolError("the Kick download produced no file")
         os.replace(part, out)
         return out
     if source.platform == "twitch":

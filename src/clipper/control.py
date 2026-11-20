@@ -35,6 +35,7 @@ CAPTION_PRESETS = {
 }
 
 
+_SAVE_LOCK = threading.Lock()
 LOOK_KEYS = ("font", "font_size", "text_color", "active_color", "outline", "uppercase", "max_words", "animation")  # what a caption profile holds
 
 
@@ -143,8 +144,9 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
                 if value not in ("top-left", "top-right", "bottom-left", "bottom-right"):
                     raise ValueError("the logo corner must be top-left, top-right, bottom-left or bottom-right")
                 b[field] = value
-            elif field in ("logo_size", "logo_opacity", "music_volume", "outro_seconds"):
-                lo, hi = {"logo_size": (0.05, 0.5), "logo_opacity": (0.1, 1.0), "music_volume": (0.0, 0.5), "outro_seconds": (2.0, 10.0)}[field]
+            elif field in ("logo_size", "logo_opacity", "music_volume", "outro_seconds", "music_rise_s", "music_peak"):
+                lo, hi = {"logo_size": (0.05, 0.5), "logo_opacity": (0.1, 1.0), "music_volume": (0.0, 0.5), "outro_seconds": (2.0, 10.0),
+                          "music_rise_s": (0.0, 20.0), "music_peak": (0.05, 0.8)}[field]
                 try:
                     number = float(value)
                 except (TypeError, ValueError):
@@ -176,6 +178,44 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if value not in PRICES:
                 raise ValueError(f"unknown model {value!r}; choose one of: {', '.join(PRICES)}")
             out.setdefault("llm" if key == "llm_model" else "ai", {})["model"] = value
+        elif key == "moment_mix":
+            from .scoring import MIXES
+
+            if value not in MIXES:
+                raise ValueError(f"the moment mix must be one of: {', '.join(MIXES)}")
+            out.setdefault("moments", {})["mix"] = value
+        elif key == "hook_seconds":
+            try:
+                seconds = float(value)
+            except (TypeError, ValueError):
+                raise ValueError("the opening text's time must be a number of seconds") from None
+            if not 2 <= seconds <= 60:
+                raise ValueError("the opening text can stay from 2 to 60 seconds")
+            out.setdefault("render", {})["hook_seconds"] = seconds
+        elif key in ("template", "card_bg", "card_color", "card_color2", "card_image", "post_name", "post_handle"):
+            from .frames import CARD_BACKGROUNDS, TEMPLATES
+
+            r = out.setdefault("render", {})
+            if key == "template":
+                if value not in TEMPLATES:
+                    raise ValueError(f"the template must be one of: {', '.join(TEMPLATES)}")
+                r[key] = value
+            elif key == "card_bg":
+                if value not in CARD_BACKGROUNDS:
+                    raise ValueError(f"the card background must be one of: {', '.join(CARD_BACKGROUNDS)}")
+                r[key] = value
+            elif key in ("card_color", "card_color2"):
+                colour = str(value or "").lstrip("#").upper()
+                if len(colour) != 6 or any(ch not in "0123456789ABCDEF" for ch in colour):
+                    raise ValueError("a colour must look like 151225")
+                r[key] = colour
+            elif key == "card_image":
+                path = str(value or "").strip()
+                if path and not Path(path).is_file():
+                    raise ValueError(f"that image file is not there: {path}")
+                r[key] = path
+            else:
+                r[key] = " ".join(str(value or "").split())[:40]
         elif key == "watch_autostart":
             if not isinstance(value, bool):
                 raise ValueError("watch_autostart must be on or off")
@@ -259,7 +299,14 @@ class Control:
             "caption_preset": cfg.captions.preset,
             "caption_now": {k: getattr(cfg.captions, k) for k in LOOK_KEYS}, "caption_profiles": self.caption_profiles(),
             "caption_animations": __import__("clipper.captions", fromlist=["ANIMATIONS"]).ANIMATIONS,
-            "brand": {**{k: getattr(cfg.brand, k) for k in ("logo", "logo_corner", "logo_size", "logo_opacity", "outro_text", "outro_seconds", "music", "music_volume")},
+            "moment_mix": cfg.moments.mix, "hook_seconds": cfg.render.hook_seconds,
+            "frame": {**{k: getattr(cfg.render, k) for k in ("template", "card_bg", "card_color", "card_color2", "post_name", "post_handle")},
+                      "card_image_name": Path(cfg.render.card_image).name if cfg.render.card_image else "",
+                      "templates": __import__("clipper.frames", fromlist=["TEMPLATES"]).TEMPLATES,
+                      "backgrounds": __import__("clipper.frames", fromlist=["CARD_BACKGROUNDS"]).CARD_BACKGROUNDS},
+            "moment_mixes": list(__import__("clipper.scoring", fromlist=["MIXES"]).MIXES),
+            "brand": {**{k: getattr(cfg.brand, k) for k in ("logo", "logo_corner", "logo_size", "logo_opacity", "outro_text", "outro_seconds", "music", "music_volume",
+                                                           "music_rise_s", "music_peak")},
                       "logo_name": Path(cfg.brand.logo).name if cfg.brand.logo else "", "music_name": Path(cfg.brand.music).name if cfg.brand.music else ""},
             "caption_presets": {k: {"label": v[0], **v[1]} for k, v in CAPTION_PRESETS.items()},
             "finish_progress": self.finish_progress,
@@ -507,7 +554,10 @@ class Control:
     def save(self, raw: dict) -> dict:
         from .work import write_json
 
-        raw = dict(raw)
+        with _SAVE_LOCK:  # two options changed in quick succession must not overwrite each other's saved value
+            return self._save(dict(raw), write_json)
+
+    def _save(self, raw: dict, write_json) -> dict:
         # Caption profiles: a look saved under your own name, kept beside your clips (not in the settings file).
         keep, drop = raw.pop("caption_profile_save", None), raw.pop("caption_profile_delete", None)
         if keep is not None:

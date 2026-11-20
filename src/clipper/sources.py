@@ -12,7 +12,7 @@ class SourceError(ValueError):
 
 @dataclass(frozen=True)
 class Source:
-    platform: str  # "twitch" or "youtube"
+    platform: str  # "twitch", "youtube", "kick" or "local" (a video file on this computer)
     video_id: str
     url: str
 
@@ -23,6 +23,7 @@ class Source:
 
 
 _TWITCH_VOD = re.compile(r"twitch\.tv/(?:[^/]+/)?v(?:ideos)?/(\d+)", re.IGNORECASE)
+_KICK = re.compile(r"kick\.com/(?:video|[^/?#]+/videos?)/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.IGNORECASE)
 _YOUTUBE = re.compile(r"(?:youtu\.be/|[?&]v=|/shorts/|/live/|/embed/)([A-Za-z0-9_-]{11})")
 
 
@@ -51,10 +52,13 @@ def parse_source(url: str) -> Source:
         return Source("twitch", m.group(1), f"https://www.twitch.tv/videos/{m.group(1)}")
     if re.fullmatch(r"\d{8,12}", u):  # a bare Twitch VOD id
         return Source("twitch", u, f"https://www.twitch.tv/videos/{u}")
+    m = _KICK.search(u)
+    if m:
+        return Source("kick", m.group(1).lower(), f"https://kick.com/video/{m.group(1).lower()}")
     m = _YOUTUBE.search(u)
     if m:
         return Source("youtube", m.group(1), f"https://www.youtube.com/watch?v={m.group(1)}")
     raise SourceError(
-        f"cannot tell what {url!r} is. Give a Twitch video link (twitch.tv/videos/123...), a YouTube video link, "
+        f"cannot tell what {url!r} is. Give a Twitch video link (twitch.tv/videos/123...), a YouTube or Kick video link, "
         "or the full path of a video file on this computer. A channel link is not enough: open the video and copy its link."
     )

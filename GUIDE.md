@@ -127,6 +127,29 @@ The drafts appear at the top of the list, in order. Review, approve and make the
 
 A part can be between 8 seconds and 5 minutes long. A video file can also be searched automatically: in the **Finished stream** tab paste its path and choose sound, picture or AI reading (a file has no chat).
 
+### Kick videos
+
+Paste a finished Kick video link (kick.com/…/videos/… or kick.com/video/…) anywhere a video link goes: **Your own clip**, the **cutting board**, or **Finished stream**. A Kick video has no chat replay, so in Finished stream choose sound, picture or AI reading. Live Kick streams are not watched.
+
+### Templates and the background card
+
+In step 3 open **Template and opening text**.
+
+- **Card:** the video as a rounded card. Behind it: a blurred copy of the video, one colour, two colours blending, or your own image.
+- **Post (light or dark):** a round letter, your name and handle, the opening text as the post, and the video under it. Type the name and handle to show.
+- **Breaking news:** a red banner with the opening text as the headline.
+- **Hook box:** the opening text in a black band on top for the whole clip.
+- **Opening text stays for … seconds:** from 2 to 60, for the layouts where it pops in at the start.
+
+Clips already drafted get a new template when you press Make videos, or at once with **Make this video's drafts again** (in a clip's Fine-tune): it drafts every unfinished clip of that video again with the caption style, template and branding chosen now.
+
+### Safe zones, moment mix, music that rises
+
+- **Show where an app covers the video** (above the clip list): pick TikTok, Reels or Shorts and red bands show where that app's own buttons and text sit. Only on the previews, never in the video.
+- **What kind of moments** (Finished stream tab): Balanced, Action (loud, fast, shouted) or Dialogue (stories, jokes, what is said). It leans the scores and what AI is asked to look for.
+- **Music grows louder over the last … seconds** (Branding): the music stays level, then rises to the end.
+- Two more caption movements: each line pops in, and plain lines with no highlight.
+
 ### Transcript: find a moment by what was said
 
 The fourth button at the top, **Transcript**.

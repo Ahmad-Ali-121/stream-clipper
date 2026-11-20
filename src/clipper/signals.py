@@ -217,6 +217,13 @@ def vod_feed_url(url: str, cfg: Config, video: bool) -> str:
 
     if Path(url).is_file():
         return url  # a video file on this computer is read directly
+    from .sources import parse_source
+
+    kicked = parse_source(url)
+    if kicked.platform == "kick":
+        from . import kick
+
+        return kick.stream_address(kick.details(kicked.video_id)["playlist"], 160)  # the smallest picture there is
 
     proc = run(
         _ytdlp(cfg) + ["-g", "-f", "160p/worst[vcodec!=none]/worst" if video else "Audio_Only/audio_only/worstaudio/worst", url],

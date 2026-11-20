@@ -43,6 +43,8 @@ class MomentSettings:
     hype_spikes: bool = True  # also score spikes in hype-word messages (for saturated chats)
     hype_spike_min_ratio: float = 0.15  # share of a bucket's messages that must be hype for that to count
     skip_start_s: float = 120.0  # ignore the greeting flood at the start of a stream
+    # What kind of moments are wanted: balanced, action (loud, fast, shouted) or dialogue (story, humour, what is said).
+    mix: str = "balanced"
     signals: str = "chat"  # finished streams: chat, audio (chat + sound), video (chat + picture) or all
     hype_words: list[str] = field(default_factory=list)
 
@@ -98,6 +100,8 @@ class BrandSettings:
     outro_seconds: float = 4.0
     music: str = ""  # a music file played quietly under the voice (use only music you have the right to use)
     music_volume: float = 0.12
+    music_rise_s: float = 0.0  # over the last this many seconds the music grows louder (0 = it stays level)
+    music_peak: float = 0.35  # how loud it gets at the very end, when it rises
 
 
 @dataclass
@@ -143,6 +147,14 @@ class RenderSettings:
     # Empty = worked out automatically from crop_x. Set per clip with the boxes on the review page.
     game: list[float] = field(default_factory=list)
     split_top: float = 0.38  # share of the output height the facecam gets
+    # A frame around the finished clip: none, card, xpost, xpost_dark, news or hookbox (see frames.py)
+    template: str = "none"
+    card_bg: str = "blur"  # what is behind the card: blur (a blurred copy of the video), color, gradient or image
+    card_color: str = "151225"
+    card_color2: str = "FF3D8B"  # the second colour of the gradient
+    card_image: str = ""
+    post_name: str = ""  # the name shown on the post templates (empty = the streamer's name)
+    post_handle: str = ""  # and the @handle under it
     face_corner: str = "top-right"  # where the small face sits in the "pip" and "circle" layouts
     face_size: float = 0.36  # how wide that small face is, as a share of the video's width
     encoder: str = "auto"  # auto = NVIDIA, Intel or AMD hardware encoder when one works, else libx264 (CPU)

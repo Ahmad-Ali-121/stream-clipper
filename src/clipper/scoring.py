@@ -27,6 +27,23 @@ RATING_SHARE = 0.60  # how much of the score the AI rating of the finished draft
 MIN_HISTORY = 8  # reviewed clips needed before a signal's weight is adjusted
 
 
+# What kind of moments are wanted leans each signal's weight: action trusts loudness and motion more,
+# dialogue trusts what AI read in the words more. Balanced leaves the weights as they are.
+MIXES = {
+    "balanced": {},
+    "action": {"audio": 1.3, "video": 1.4, "said": 1.2, "ai_pick": 0.8},
+    "dialogue": {"audio": 0.7, "video": 0.5, "said": 0.9, "ai_pick": 1.3},
+}
+
+
+def mixed(weights: dict[str, float] | None, mix: str) -> dict[str, float]:
+    """The weights leaned towards the chosen kind of moment (never above 0.95: no signal is ever a certainty)."""
+    base = dict(weights or BASE_WEIGHTS)
+    for name, factor in MIXES.get(mix, {}).items():
+        base[name] = min(0.95, base.get(name, 0.5) * factor)
+    return base
+
+
 def _unit(x: float) -> float:
     return max(0.0, min(1.0, x))
 
