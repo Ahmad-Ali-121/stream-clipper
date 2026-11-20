@@ -127,6 +127,16 @@ The drafts appear at the top of the list, in order. Review, approve and make the
 
 A part can be between 8 seconds and 5 minutes long. A video file can also be searched automatically: in the **Finished stream** tab paste its path and choose sound, picture or AI reading (a file has no chat).
 
+### Order, filters and the New tag
+
+Above the clip list:
+
+- **Order:** newest first (the default, so a clip just made is at the top), best score first, or oldest first.
+- **Streamer**, **Found by** (chat, loud moment, fast action, excited words, AI, chosen by you) and **Made** (last hour, 24 hours, 7 days) narrow the list. **Search** looks in the words, the opening text and the titles. **Clear filters** shows everything again.
+- Each card says when it was made ("made 12 min ago", "made today 20:57"). A clip made in the last hour that you have not reviewed carries a **NEW** tag.
+
+A clip you approved, rejected or deleted stays that way, through every update and restart. Each decision is also written to a separate record (`decisions.json` in the data folder); every time the program starts it checks the clips against that record and puts back any decision a clip has lost. Only your own **Back to review** button brings a clip back.
+
 ### Kick videos
 
 Paste a finished Kick video link (kick.com/…/videos/… or kick.com/video/…) anywhere a video link goes: **Your own clip**, the **cutting board**, or **Finished stream**. A Kick video has no chat replay, so in Finished stream choose sound, picture or AI reading. Live Kick streams are not watched.

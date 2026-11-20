@@ -294,9 +294,19 @@ def new_moments(w: Watched, cfg: Config) -> list[dict]:
     if getattr(w, "feed", None):
         found = merge_moments(found, signal_peaks(w.work / "signals.jsonl", cfg, since_s=w.watch_from))
     out = []
+    # Every clip of this stream that already exists, whatever was decided about it: as more chat arrives a moment's
+    # peak can shift by a few seconds and get a new name, and the same moment must not come back as a "new" clip.
+    taken = []
+    for other in (w.work / "clips").glob("*/clip.json"):
+        st = read_json(other, {})
+        if st.get("start_s") is not None and st.get("end_s") is not None:
+            taken.append((other.parent.name, float(st["start_s"]), float(st["end_s"]), st.get("status", "candidate")))
     for m in found:
         d = w.work / "clips" / clip_id(m["peak_s"])
         state = read_json(d / "clip.json", {})
+        clash = next((t for t in taken if t[0] != d.name and min(m["end_s"], t[2]) - max(m["start_s"], t[1]) > 0.5 * (m["end_s"] - m["start_s"])), None)
+        if clash and not state:
+            continue  # more than half of it is already a clip (reviewed or not): not a new moment
         # A draft is made once. A clip that was finished, or that a person has decided about, is never made again:
         # its draft video can be missing for good reasons (an edit, a re-render) and remaking it would wipe their work.
         if (done(d / "final.mp4") or state.get("draft_done") or state.get("status") in ("approved", "rejected", "deleted")
@@ -467,7 +477,8 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
         "vod_url": w.source.url, "platform": w.source.platform, "channel": w.meta.get("channel", w.channel),
         "channel_handle": w.meta.get("channel_id", ""),
         "source_url": w.meta.get("channel_url") or f"https://www.twitch.tv/{w.channel}",
-        "stream_title": w.meta.get("title", ""), "found_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "stream_title": w.meta.get("title", ""), "found_at": earlier.get("found_at") or time.strftime("%Y-%m-%d %H:%M:%S"),
+        "made_at": earlier.get("made_at") or time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     state["fetch_start_s"] = max(0.0, state["start_s"] - cfg.fetch.pad_s)
     state["fetch_end_s"] = state["end_s"] + cfg.fetch.pad_s

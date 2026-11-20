@@ -187,6 +187,7 @@ def stage_find(
             }
         )
         state.setdefault("status", "candidate")
+        state.setdefault("made_at", time.strftime("%Y-%m-%d %H:%M:%S"))
         write_json(d / "clip.json", state)
         out.append(state)
     return work, out
@@ -398,6 +399,7 @@ def _own_drafts(source: Source, work: Path, meta: dict, segments: list[tuple[flo
     for n, (a, b) in enumerate(segments, 1):
         d = clip_dir(work, clip_id(a))
         state = read_json(d / "clip.json", {})
+        before_range = state.get("source_range")
         if state.get("source_range") != [a, b]:  # another range under the same name: its old files do not belong to it
             for f in d.iterdir() if d.exists() else []:
                 if f.is_file() and f.name != "clip.json":
@@ -407,10 +409,16 @@ def _own_drafts(source: Source, work: Path, meta: dict, segments: list[tuple[flo
                         raise PipelineError(f"an older clip that starts at the same second ({d.name}) is in use: its file {f.name} is open, "
                                             "probably playing on the review page. Pause it or reload the page, then try again.") from None
             state = {}  # a different clip: it has not been reviewed, whatever the old one was
-        if state.get("status") in ("deleted", "rejected"):
-            # Asked for again by a person: it comes back for review instead of being skipped without a word.
+        reopen = False
+        if state.get("status") == "deleted":
+            # Deleted, then asked for again by a person: it comes back for review instead of being skipped without a word.
             state.pop("status")
             state.pop("exported", None)
+            reopen = True
+        elif state.get("status") == "rejected":
+            # A rejection is a decision about this very stretch: it stays, and the log says why nothing is made.
+            log.warning("clip %s (%s to %s) was rejected before, so it is left rejected. Press \"Back to review\" on it in the Rejected list if you want it again.",
+                        d.name, format_time(a), format_time(b))
         state.update({
             "id": d.name, "rank": n, "score": 0, "activity": 0, "messages": 0, "trigger": "manual", "signals": {},
             "peak_s": a, "start_s": a, "end_s": b, "cut_start_s": a, "cut_end_s": b, "cut_auto": False, "source_range": [a, b],
@@ -421,7 +429,8 @@ def _own_drafts(source: Source, work: Path, meta: dict, segments: list[tuple[flo
             "range_id": None, **(extra or {}),
         })
         state.setdefault("status", "candidate")
-        write_json(d / "clip.json", state)
+        state.setdefault("made_at", time.strftime("%Y-%m-%d %H:%M:%S"))
+        write_json(d / "clip.json", state, reopen=reopen or state.get("source_range") != before_range)
         ids.append(d.name)
     log.info("%d clip(s) to make from %s to %s of %s", len(ids), format_time(segments[0][0]), format_time(segments[-1][1]), meta.get("title") or source.url)
     return ids

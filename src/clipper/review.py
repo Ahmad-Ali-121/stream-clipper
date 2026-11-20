@@ -76,6 +76,21 @@ def videos_made(d: Path, state: dict) -> bool:
     return not state.get("explainer") or (d / "explained.mp4").exists()
 
 
+def _made_at(d: Path, state: dict) -> float:
+    """When this clip was first made, as seconds since 1970. Older clips did not record it: their first file's time is used."""
+    import time as _time
+
+    for key in ("made_at", "found_at"):
+        try:
+            return _time.mktime(_time.strptime(str(state.get(key)), "%Y-%m-%d %H:%M:%S"))
+        except (ValueError, TypeError, OverflowError):
+            continue
+    try:
+        return min(f.stat().st_ctime for f in d.iterdir() if f.is_file())
+    except (OSError, ValueError):
+        return 0.0
+
+
 def _framing(state: dict, cfg) -> dict | None:
     if cfg is None:
         return None
@@ -105,6 +120,7 @@ def clip_view(d: Path, weights: dict | None = None, brief=None, cfg=None) -> dic
         videos=[n for n in ("final.mp4", "final_b.mp4", "explained.mp4", "explained_b.mp4", "source.mp4") if (d / n).exists()],
         fetch_start_s=c.get("fetch_start_s", 0), has_words=(d / "words.json").exists(),
         exported_name=Path(c["exported"]).name if c.get("exported") else "",
+        made_at=_made_at(d, c), decided_at=c.get("decided_at") or "", platform=c.get("platform") or "", live=bool(c.get("live")),
         framing=_framing(c, cfg), said=float((c.get("signals") or {}).get("said") or 0), words_from=c.get("words_from") or "",
         campaign=brief.name if brief else "", campaign_issues=_campaign_issues(c, brief), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
         lo=c.get("fetch_start_s", c["start_s"]), hi=c.get("fetch_end_s", c["end_s"]),
@@ -234,7 +250,14 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
 
     before = shown(state)
     text_before = {k: state.get(k) or ("" if k != "tags" else []) for k in TEXT_FIELDS}
+    status_before = state.get("status", "candidate")
     state.update(edit)
+    if state.get("status", "candidate") != status_before:
+        import time as _time
+
+        now = _time.strftime("%Y-%m-%d %H:%M:%S")
+        state["decided_at"] = now
+        state["status_log"] = (state.get("status_log") or [])[-9:] + [{"at": now, "from": status_before, "to": state["status"], "by": "you"}]
     # Text a person changed here is theirs: the automatic writer must not replace it later.
     typed = {k for k, v in text_before.items() if (state.get(k) or ("" if k != "tags" else [])) != v}
     if typed:
@@ -256,7 +279,7 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
         stale |= {"explained_b.mp4", "intro_card_b.mp4"}
     for name in stale:
         remove(d / name)  # FileInUse (a ValueError) if it is playing: the page shows why and the edit is not saved
-    write_json(path, state)
+    write_json(path, state, reopen="status" in edit)  # only a press on this page may move a decided clip back to review
     return state
 
 
@@ -383,7 +406,11 @@ def delete_clip(d: Path) -> float:
     if busy:
         raise ClipInUse(f"this clip cannot be deleted right now: its file {busy[0]} is in use. A job is still working on it "
                         "(press Stop in step 1, or wait for it to end), or its video is playing. Then delete it again.")
-    state["status"] = "deleted"
+    import time as _time
+
+    now = _time.strftime("%Y-%m-%d %H:%M:%S")
+    state["status_log"] = (state.get("status_log") or [])[-9:] + [{"at": now, "from": state.get("status", "candidate"), "to": "deleted", "by": "you"}]
+    state["status"], state["decided_at"] = "deleted", now
     state.pop("error", None)
     write_json(path, state)
     return freed / 1e6
@@ -882,6 +909,16 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             f"terminal window. Close that one first (Ctrl+C), or start this one on another port:  uv run clipper review --port {port + 1}"
         ) from e
     print(f"Review page: http://127.0.0.1:{port}/   (Ctrl+C to stop)")
+    if cfg is not None:
+        # Every start, so also after every update: a decision a clip file has lost is put back from the record.
+        from .work import restore_decisions
+
+        try:
+            back = restore_decisions(cfg.data_dir)
+            if back:
+                print(f"{back} clip(s) had lost their approved / rejected mark; it was put back from the decisions record.")
+        except Exception as e:
+            log.error("the decisions record could not be checked: %s", e, exc_info=True)
     if control:
         control.shutdown = server.shutdown
         control.autostart()

@@ -90,6 +90,7 @@ def test_watching_starts_by_itself_only_when_asked(tmp_path, monkeypatch):
     c = Control(cfg)
     started = []
     monkeypatch.setattr(c, "start_watch", lambda raw: started.append(raw))
+    cfg.watch.autostart = False  # whatever this computer's own settings say
     c.autostart()
     assert started == []  # off unless switched on
     cfg.watch.autostart, cfg.watch.channels = True, ["lacy"]

@@ -131,8 +131,133 @@ def update_clip(path: Path, changes: dict, drop: tuple = ()) -> dict:
     return state
 
 
-def write_json(path: Path, data: Any) -> None:
+DECIDED = ("approved", "rejected", "deleted")
+LEDGER = "decisions.json"  # in the data folder: every review decision, kept apart from the clips themselves
+
+
+def _ledger_path(clip_json: Path) -> Path | None:
+    """The decisions record for a clip.json at <data>/work/<video>/clips/<clip>/clip.json; None for any other file."""
+    parts = clip_json.parts
+    if clip_json.name != "clip.json" or len(parts) < 6 or parts[-3] != "clips" or parts[-5] != "work":
+        return None
+    return clip_json.parents[4] / LEDGER
+
+
+def _ledger_key(clip_json: Path) -> str:
+    return f"{clip_json.parents[2].name}/{clip_json.parent.name}"
+
+
+def _read_ledger(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+_ledger_lock = __import__("threading").Lock()
+
+
+def _note_decision(clip_json: Path, status: str | None) -> None:
+    """Write a decision into the record (or take it out, when a person moved the clip back to review)."""
+    ledger = _ledger_path(clip_json)
+    if ledger is None:
+        return
+    import time
+
+    key = _ledger_key(clip_json)
+    with _ledger_lock:
+        data = _read_ledger(ledger)
+        if status in DECIDED:
+            if (data.get(key) or {}).get("status") == status:
+                return
+            data[key] = {"status": status, "at": time.strftime("%Y-%m-%d %H:%M:%S")}
+        elif key in data:
+            del data[key]
+        else:
+            return
+        tmp = _tmp(ledger)
+        tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        _replace(tmp, ledger)
+
+
+def decided_status(clip_json: Path) -> str | None:
+    """What a person decided about this clip according to the record, or None."""
+    ledger = _ledger_path(clip_json)
+    return (_read_ledger(ledger).get(_ledger_key(clip_json)) or {}).get("status") if ledger else None
+
+
+def _keep_decision(path: Path, data: Any) -> None:
+    """The last line of defence for a review decision.
+
+    A clip a person approved, rejected or deleted must never slide back to "to review": not because some automatic
+    step wrote an older copy of its state, not because its folder was made again, not because the program was
+    updated. The decision is looked up in two places, the clip's own file and the separate decisions record, and
+    whichever knows of one wins over an automatic "to review". The attempt is logged with where it came from.
+    Only the review page's own buttons (and a person asking for a deleted clip again) may reopen a clip; they pass
+    ``reopen=True`` to ``write_json``.
+    """
+    if path.name != "clip.json" or not isinstance(data, dict) or data.get("status") not in (None, "candidate"):
+        return
+    disk: dict = {}
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            disk = loaded if isinstance(loaded, dict) else {}
+        except (OSError, ValueError):
+            disk = {}
+    kept = disk.get("status") if disk.get("status") in DECIDED else decided_status(path)
+    if kept in DECIDED:
+        import traceback
+
+        where = " <- ".join(f"{f.name}:{f.lineno}" for f in traceback.extract_stack(limit=7)[:-2][::-1])
+        logging.getLogger(__name__).error(
+            "A STEP TRIED TO PUT A DECIDED CLIP BACK TO REVIEW and was stopped: clip %s/%s stays %s. Report this line. It came from: %s",
+            path.parent.parent.parent.name, path.parent.name, kept, where)
+        data["status"] = kept
+        for key in ("decided_at", "status_log"):
+            if key in disk:
+                data[key] = disk[key]
+
+
+def restore_decisions(data_dir: Path) -> int:
+    """Put back every decision that a clip's own file has lost, from the decisions record. Returns how many were restored.
+
+    Run when the review page starts (so also after every update) and cheap enough to run often. It also fills the
+    record from clips decided before the record existed.
+    """
+    ledger = data_dir / LEDGER
+    known = _read_ledger(ledger)
+    restored = 0
+    for clip_json in (data_dir / "work").glob("*/clips/*/clip.json"):
+        try:
+            state = json.loads(clip_json.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(state, dict):
+            continue
+        key = _ledger_key(clip_json)
+        if state.get("status") in DECIDED:
+            _note_decision(clip_json, state["status"])
+        elif (known.get(key) or {}).get("status") in DECIDED:
+            state["status"] = known[key]["status"]
+            state.setdefault("decided_at", known[key].get("at", ""))
+            write_json(clip_json, state)
+            restored += 1
+            logging.getLogger(__name__).warning("clip %s had lost its decision; it is %s again, as you decided on %s", key, state["status"], known[key].get("at", "an earlier day"))
+    return restored
+
+
+def write_json(path: Path, data: Any, reopen: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not reopen:
+        _keep_decision(path, data)
+    if path.name == "clip.json" and isinstance(data, dict):
+        # Every decision also goes into the separate record; a person's "back to review" takes it out again.
+        if data.get("status") in DECIDED:
+            _note_decision(path, data["status"])
+        elif reopen:
+            _note_decision(path, None)
     tmp = _tmp(path)
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     _replace(tmp, path)

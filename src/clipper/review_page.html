@@ -184,6 +184,10 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
 .clips[data-zones]:not([data-zones=""]) .vid::after{content:"";position:absolute;left:0;right:0;top:0;aspect-ratio:9/16;pointer-events:none;
   background:linear-gradient(rgba(255,60,90,.34),rgba(255,60,90,.34)) top/100% var(--zt) no-repeat,linear-gradient(rgba(255,60,90,.34),rgba(255,60,90,.34)) bottom/100% var(--zb) no-repeat,
   linear-gradient(rgba(255,60,90,.34),rgba(255,60,90,.34)) right/var(--zr) 100% no-repeat}
+.sortrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px;font-size:12.5px;color:var(--muted)}
+.sortrow select{width:auto;padding:4px 8px;margin-left:4px}.sortrow input{width:210px;padding:5px 9px}
+.newtag{font-size:11px;font-weight:800;letter-spacing:.6px;padding:2px 8px;border-radius:99px;background:linear-gradient(90deg,var(--accent2),#b6f04a);color:#0b0714}
+.when2{font-size:12px;color:var(--muted)}
 .cbrow{display:grid;grid-template-columns:74px minmax(0,1fr) auto auto auto;gap:12px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
 .cbrow.off{opacity:.55}.cbrow .badt{color:var(--bad);font-weight:600}.cbrow .warnt{color:var(--warn)}
 .cbrow label{display:flex;gap:6px;align-items:center;cursor:pointer}
@@ -522,6 +526,16 @@ kbd{background:rgba(255,255,255,.06)!important}
       <h2><span class="step">2</span>Review the clips</h2>
       <div class="filters" id="filters"></div>
     </div>
+    <div class="sortrow">
+      <label>Order <select id="s-sort" onchange="setArrange()"><option value="new">Newest first</option><option value="score">Best score first</option><option value="old">Oldest first</option></select></label>
+      <label>Streamer <select id="s-who" onchange="setArrange()"><option value="">All</option></select></label>
+      <label>Found by <select id="s-how" onchange="setArrange()"><option value="">Anything</option><option value="chat">Chat</option><option value="audio">Loud moment</option><option value="video">Fast action</option>
+        <option value="said">Excited words</option><option value="ai">AI</option><option value="manual">Chosen by you</option></select></label>
+      <label>Made <select id="s-when" onchange="setArrange()"><option value="">Any time</option><option value="1">Last hour</option><option value="24">Last 24 hours</option><option value="168">Last 7 days</option></select></label>
+      <input type="text" id="s-find" placeholder="Search the words, titles…" oninput="setArrange()" aria-label="Search the clips">
+      <button class="chipbtn" id="s-clear" hidden onclick="clearArrange()">Clear filters</button>
+      <span class="help" id="s-count" style="margin:0"></span>
+    </div>
     <p class="keys" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><label for="z-pick">Show where an app covers the video:</label>
       <select id="z-pick" style="width:auto;padding:3px 8px" onchange="setZones()"><option value="">Off</option><option value="tiktok">TikTok</option><option value="reels">Instagram Reels</option><option value="shorts">YouTube Shorts</option></select>
       <span>(only on these previews, never in the video)</span></p>
@@ -798,7 +812,8 @@ function cardHtml(c){
     +(c.exported?'<span class="chip good">Videos made</span>':'');
   const lay=[['','Automatic'],['split','Face on top, video below'],['crop','Video only, full height'],['split_under','Video on top, face below'],['blur','Whole picture on a blurred background'],['pip','Face in a corner over the video'],['circle','Face in a circle over the video']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
   return '<div class="vid">'+vid+'</div><div class="info">'
-   +'<div class="chead"><h3>'+esc(c.channel||c.stream_title||'Your video')+'</h3><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[place(c)]+'</span></div>'
+   +'<div class="chead"><h3>'+esc(c.channel||c.stream_title||'Your video')+'</h3>'+(isNew(c)?'<span class="newtag" title="Made in the last hour and not reviewed yet">NEW</span>':'')
+   +'<span class="when2" title="When this clip was made'+(c.decided_at?'. Decided '+esc(c.decided_at):'')+'">'+madeText(c.made_at)+'</span><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[place(c)]+'</span></div>'
    +'<div class="chips">'+chips+'</div>'
    +(c.ai_pick?'<div class="ai"><b>Why AI picked it:</b> '+esc(c.ai_pick)+'</div>':'')
    +(c.ai_judged&&c.copy_source==='plain'?'<div class="ai"><b>The opening text and titles below are placeholders,</b> because AI was not used: '+esc(c.copy_problem||'no reason recorded')+'. Type your own, or press "Write text with AI".</div>'
@@ -849,7 +864,7 @@ function cardHtml(c){
 }
 function domId(k){return 'c-'+k.replace('/','--')}
 function busy(el){const v=el.querySelector('video');return el.dataset.dirty==='1'||(v&&!v.paused)||el.contains(document.activeElement)}
-function drawFilters(clips){
+function drawFilters(clips,total){
   const n={candidate:0,approved:0,rejected:0};for(const c of clips)n[c.status]=(n[c.status]||0)+1;
   for(const c of clips)if(c.made){n.approved--;n.done=(n.done||0)+1}
   n.done=n.done||0;
@@ -860,14 +875,38 @@ function drawFilters(clips){
   if(HAS_PANEL)$('b-finish').textContent=n.approved?'Make videos for '+n.approved+' approved clip'+(n.approved>1?'s':''):'Make videos (approve a clip first)';
   const shown=filter==='all'?clips.length:n[filter], em=$('empty');
   em.hidden=shown>0;
-  em.innerHTML=clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',done:'finished yet. Approve a clip and press the green button',rejected:'rejected'}[filter]||'in this list')+'.'
+  em.innerHTML=(total&&!clips.length)?'<b>No clip matches the filters.</b>Press Clear filters above the list.':clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',done:'finished yet. Approve a clip and press the green button',rejected:'rejected'}[filter]||'in this list')+'.'
     :'<b>No clips yet.</b>'+(HAS_PANEL?'Start watching a live stream, or paste a finished stream, in step 1 on the left.':'Run find first.');
 }
 function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
 let known=[];
 /* What a card was drawn from: when any of this changes, the card is drawn again. */
-function sig(c){return [c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
+function sig(c){return [isNew(c),madeText(c.made_at),c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
 let loadTurn=0, clipsWhy='';
+/* ---------- order and filters ---------- */
+function isNew(c){return c.status==='candidate'&&c.made_at&&Date.now()/1000-c.made_at<3600}
+function madeText(t){if(!t)return '';const d=new Date(t*1000), age=(Date.now()-d)/60000, hm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  if(age<1)return 'made just now';if(age<60)return 'made '+Math.round(age)+' min ago';
+  const day=x=>new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime(), diff=Math.round((day(new Date())-day(d))/864e5);
+  if(diff===0)return 'made today '+hm;if(diff===1)return 'made yesterday '+hm;
+  return 'made '+d.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+hm}
+function arrangeNow(){return {sort:val('s-sort'),who:val('s-who'),how:val('s-how'),when:val('s-when'),find:val('s-find').trim().toLowerCase()}}
+function setArrange(){try{localStorage.setItem('arrange',JSON.stringify(arrangeNow()))}catch(e){} loadClips()}
+function clearArrange(){$('s-who').value='';$('s-how').value='';$('s-when').value='';$('s-find').value='';setArrange()}
+function fits(c,a){
+  if(a.who&&(c.channel||c.stream_title||'Your video')!==a.who)return false;
+  if(a.how&&!(String(c.trigger||'chat').split('+').includes(a.how)||(a.how==='ai'&&c.ai_pick)||(a.how==='said'&&c.said>=5)))return false;
+  if(a.when&&!(c.made_at&&Date.now()/1000-c.made_at<a.when*3600))return false;
+  if(a.find&&![c.transcript,c.hook,c.hook_b,c.title,c.channel,c.stream_title,c.notes].some(t=>String(t||'').toLowerCase().includes(a.find)))return false;
+  return true}
+/* Clips in the order chosen. Parts of one video you cut yourself stay together and in their own order. */
+function arrange(clips,a){
+  const out=clips.slice();
+  if(a.sort==='score')out.sort((x,y)=>y.points-x.points||y.made_at-x.made_at);
+  else{const dir=a.sort==='old'?1:-1;out.sort((x,y)=>{
+    if(x.parts&&y.parts&&x.key.split('/')[0]===y.key.split('/')[0]&&Math.abs(x.made_at-y.made_at)<600)return x.part-y.part;
+    return dir*(x.made_at-y.made_at)||y.points-x.points})}
+  return out}
 async function loadClips(){
   /* Answers can arrive out of order: a refresh that started before you approved a clip may come back after
      the newer one. Only the answer to the most recent request is used; older ones are dropped. */
@@ -876,7 +915,13 @@ async function loadClips(){
     if(!r.ok){const why=await r.text();if(why!==clipsWhy){clipsWhy=why;toast('The clip list could not be loaded: '+why,true)}return}
     clips=await r.json();clipsWhy=''}catch(e){return}  /* the program not answering is reported by the status check */
   if(turn!==loadTurn)return;
+  const a=arrangeNow();
+  clips=arrange(clips,a);
   known=clips;
+  /* the streamers there are, for the filter */
+  const names=[...new Set(clips.map(c=>c.channel||c.stream_title||'Your video'))].sort(), who=$('s-who');
+  if(who.dataset.sig!==names.join('|')){who.dataset.sig=names.join('|');const keep=who.value;
+    who.innerHTML='<option value="">All</option>'+names.map(n=>'<option>'+esc(n)+'</option>').join('');who.value=names.includes(keep)?keep:''}
   const box=$('clips'), want=new Set(clips.map(c=>domId(c.key)));
   for(const el of [...box.children])if(!want.has(el.id))el.remove();
   let prev=null;
@@ -887,9 +932,15 @@ async function loadClips(){
         if(e.target.closest&&e.target.closest('.words'))el.dataset.wdirty='1';el.dataset.dirty='1';const s=el.querySelector('.acts .saved');s.textContent='Unsaved changes';s.className='saved warn'});
       if(prev)prev.after(el);else box.prepend(el)}
     else if(sig(c)!==el.dataset.m&&!busy(el)){el.dataset.status=place(c);el.dataset.m=sig(c);el._c=c;el.innerHTML=cardHtml(c)}
+    el.hidden=!fits(c,a);
     prev=el;
   }
-  drawFilters(clips);
+  /* Put the cards in the chosen order. A card that is playing or being typed in is not moved under you: next time. */
+  const order=clips.map(c=>domId(c.key)), have=[...box.children].map(e=>e.id);
+  if(order.join()!==have.join()&&![...box.children].some(busy))for(const id of order)box.appendChild($(id));
+  const shownNow=clips.filter(c=>fits(c,a)), filtering=!!(a.who||a.how||a.when||a.find);
+  $('s-clear').hidden=!filtering;$('s-count').textContent=filtering?shownNow.length+' of '+clips.length+' clips match':'';
+  drawFilters(shownNow,clips.length);
 }
 async function save(key,extra){
   const el=$(domId(key)), g=n=>el.querySelector('[name='+n+']');
@@ -1419,6 +1470,7 @@ if(HAS_PANEL){for(const id of ['m-sh','m-sm','m-ss','m-eh','m-em','m-es'])$(id).
 if(HAS_PANEL)poll();else $('side').remove();
 if(!HAS_PANEL)document.querySelector('.layout').style.gridTemplateColumns='1fr';
 try{$('z-pick').value=localStorage.getItem('zones')||''}catch(e){}
+try{const a=JSON.parse(localStorage.getItem('arrange')||'{}');if(a.sort)$('s-sort').value=a.sort;if(a.how)$('s-how').value=a.how;if(a.when)$('s-when').value=a.when}catch(e){}
 setZones();
 clipLoop();
 </script>
