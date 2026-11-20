@@ -17,7 +17,8 @@ from .work import FileInUse, clip_dirs, read_json, remove, write_json
 
 log = logging.getLogger(__name__)
 
-EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "disclosure", "layout", "facecam", "game", "cut_start_s", "cut_end_s",
+EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "disclosure", "layout", "facecam", "game", "face_corner", "face_size",
+            "cut_start_s", "cut_end_s",
             "title", "title_b", "description", "tags", "notes"}
 TEXT_FIELDS = ("hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags")
 
@@ -141,7 +142,7 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
         raise ValueError("this clip has no downloaded video yet, so there is nothing to frame")
     channel = str(state.get("channel") or "")
     if body.get("auto"):
-        for k in ("layout", "facecam", "game", "crop_x"):
+        for k in ("layout", "facecam", "game", "crop_x", "face_corner", "face_size"):
             state.pop(k, None)
         state["layout_auto"] = True
         layout_mod.save_framing(channel, None, cfg)
@@ -149,13 +150,18 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
         write_json(d / "clip.json", state)
         edit = None
     else:
-        if body.get("layout") not in ("split", "crop"):
-            raise ValueError("choose face and video, or video only")
-        if not body.get("game") or (body["layout"] == "split" and not body.get("facecam")):
+        from .render import LAYOUTS
+
+        if body.get("layout") not in LAYOUTS:
+            raise ValueError("choose what the clip shows")
+        has_face = body["layout"] not in ("crop", "blur")
+        if not body.get("game") or (has_face and not body.get("facecam")):
             raise ValueError("a box is missing")
         edit = {"layout": body["layout"], "game": body["game"]}
-        if body["layout"] == "split":
+        if has_face:
             edit["facecam"] = body["facecam"]
+        if body["layout"] in ("pip", "circle"):
+            edit.update(face_corner=body.get("face_corner") or "top-right", face_size=body.get("face_size") or 0.36)
         state = apply_edit(work, d.name, edit)
         state["layout_auto"], state["layout_reason"] = False, "boxes set by you"
         write_json(d / "clip.json", state)
@@ -194,8 +200,17 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
         raise ValueError(f"fields cannot be edited here: {', '.join(sorted(unknown))}")
     if "status" in edit and edit["status"] not in ("candidate", "approved", "rejected"):
         raise ValueError("status must be candidate, approved or rejected")
-    if edit.get("layout") not in (None, "", "split", "crop"):
-        raise ValueError("layout must be split, crop or empty")
+    from .render import FACE_CORNERS, LAYOUTS
+
+    if edit.get("layout") not in (None, "", *LAYOUTS):
+        raise ValueError(f"the layout must be one of: {', '.join(LAYOUTS)}, or empty for automatic")
+    if edit.get("face_corner") not in (None, "", *FACE_CORNERS):
+        raise ValueError(f"the face corner must be one of: {', '.join(FACE_CORNERS)}")
+    if edit.get("face_size") not in (None, ""):
+        try:
+            edit = {**edit, "face_size": round(min(0.6, max(0.18, float(edit["face_size"]))), 2)}
+        except (TypeError, ValueError):
+            raise ValueError("the face size must be a number between 0.18 and 0.6") from None
     state = read_json(path)
     edit = dict(edit)
     for name, label in (("facecam", "face"), ("game", "video")):
@@ -213,7 +228,8 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
         raise ValueError(f"cut must stay inside the fetched range {lo:g}-{hi:g} seconds and start before it ends")
     def shown(st: dict) -> tuple:
         """What is burned into the video, compared by meaning: an unset cut is the moment's own, None and "" are the same."""
-        return (st.get("hook") or "", (st.get("layout") or "", tuple(st.get("facecam") or ()), tuple(st.get("game") or ())), bool(st.get("disclosure")),
+        return (st.get("hook") or "", (st.get("layout") or "", tuple(st.get("facecam") or ()), tuple(st.get("game") or ()),
+                                       st.get("face_corner") or "", st.get("face_size") or 0), bool(st.get("disclosure")),
                 round(float(st.get("cut_start_s", st["start_s"])), 2), round(float(st.get("cut_end_s", st["end_s"])), 2))
 
     before = shown(state)
@@ -465,6 +481,22 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     return
                 data = {"rows": rows, "totals": tracker.totals(rows), "platforms": tracker.PLATFORMS, "statuses": tracker.STATUSES}
                 return self._send(200, json.dumps(data).encode("utf-8"), "application/json")
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/captions\.(srt|vtt)", self.path.split("?")[0])
+            if m and m.group(1) in by_name and cfg is not None:
+                from . import words as words_mod
+
+                d = by_name[m.group(1)] / "clips" / m.group(2)
+                if not (d / "words.json").exists():
+                    return self._send(404, b"this clip has no captions yet", "text/plain")
+                cues = words_mod.clip_cues(d, cfg)
+                body = (words_mod.to_srt(cues) if m.group(3) == "srt" else words_mod.to_vtt(cues)).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/x-subrip; charset=utf-8" if m.group(3) == "srt" else "text/vtt; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="{m.group(1)}_{m.group(2)}.{m.group(3)}"')
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(wave|words)", self.path.split("?")[0])
             if m and m.group(1) in by_name:
                 d = by_name[m.group(1)] / "clips" / m.group(2)
@@ -552,6 +584,30 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                        "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check", "/api/ai/local-setup": "start_local_ai",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
                        "/api/restart": "restart"}
+            if self.path.startswith("/api/brand/upload") and cfg is not None and control:
+                # Your logo or music file: kept under the data folder, then set as the one to use.
+                from urllib.parse import parse_qs, urlparse
+
+                q = parse_qs(urlparse(self.path).query)
+                kind = (q.get("kind") or [""])[0]
+                ext = Path((q.get("name") or [""])[0]).suffix.lower()
+                allowed = {"logo": (".png", ".jpg", ".jpeg", ".webp", ".gif"), "music": (".mp3", ".m4a", ".wav", ".ogg", ".aac", ".flac")}
+                if kind not in allowed or ext not in allowed[kind]:
+                    return self._send(400, ("a logo must be an image (png, jpg, webp, gif); music must be a sound file (mp3, m4a, wav, ogg)").encode(), "text/plain")
+                left = int(self.headers.get("Content-Length", "0"))
+                if not 0 < left <= 60_000_000:
+                    return self._send(400, b"the file is empty or larger than 60 MB", "text/plain")
+                folder = cfg.data_dir / "brand"
+                folder.mkdir(parents=True, exist_ok=True)
+                target = folder / f"{kind}{ext}"
+                data = self.rfile.read(left)
+                if len(data) != left:
+                    return self._send(400, b"the file did not arrive completely; try again", "text/plain")
+                for old in folder.glob(f"{kind}.*"):
+                    old.unlink(missing_ok=True)
+                target.write_bytes(data)
+                result = control.save({f"brand_{kind}": str(target)})
+                return self._send(200, json.dumps({**result, "stamp": RUNNING_STAMP}).encode(), "application/json")
             if self.path.startswith("/api/upload") and cfg is not None:
                 # A video file chosen on the page is saved under the data folder, piece by piece, and its path is given back.
                 from urllib.parse import parse_qs, urlparse
@@ -628,6 +684,35 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 shutil.rmtree(d, ignore_errors=True)
                 log.info("deleted the downloaded part %s/%s, %.0f MB freed", m.group(1), m.group(2), mb)
                 return self._send(200, json.dumps({"deleted": 1, "mb": round(mb)}).encode(), "application/json")
+            if self.path in ("/api/words", "/api/words/answers") and cfg is not None:
+                from . import words as words_mod
+
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
+                use = control.cfg if control else cfg
+                if self.path == "/api/words/answers":
+                    return self._send(200, json.dumps(words_mod.parse_answers(str(body.get("text") or ""), float(body.get("duration_s") or 0))).encode("utf-8"), "application/json")
+                from .sources import parse_source
+
+                parse_source(str(body.get("url") or ""))  # a plain refusal for anything that is not a video
+                data = words_mod.video_lines(str(body.get("url")), use)
+                data["parts"] = words_mod.chatbot_parts(data["lines"], data["title"])
+                return self._send(200, json.dumps(data).encode("utf-8"), "application/json")
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/captions-import", self.path)
+            if m and m.group(1) in by_name and cfg is not None:
+                from . import words as words_mod
+                from .render import cut_window
+
+                d = by_name[m.group(1)] / "clips" / m.group(2)
+                if not (d / "clip.json").exists():
+                    return self._send(404, b"no such clip", "text/plain")
+                text = self.rfile.read(min(int(self.headers.get("Content-Length", "0")), 5_000_000)).decode("utf-8", errors="replace")
+                cues = words_mod.parse_subtitles(text)
+                offset, duration = cut_window(read_json(d / "clip.json"))
+                cues = [c for c in cues if c[0] < duration]
+                if not cues:
+                    raise ValueError("every subtitle in that file starts after this clip ends. Its times must count from the start of the clip")
+                count = save_words(d, words_mod.words_from_cues(cues, shift_s=offset))  # a clip's words are timed from its download's start
+                return self._send(200, json.dumps({"words": count, "lines": len(cues)}).encode(), "application/json")
             if self.path == "/api/clips/delete-rejected":
                 gone, mb, busy = 0, 0.0, 0
                 for d in list_clips(list(by_name.values())):
@@ -751,7 +836,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             except Exception as e:
                 log.exception("%s %s failed", self.command, self.path)
                 try:
-                    self._send(400 if isinstance(e, ValueError) else 500, f"{type(e).__name__}: {e}".encode("utf-8", "replace"), "text/plain")
+                    # A ValueError is a plain refusal written for a person; anything else is a fault and keeps its name.
+                    self._send(400 if isinstance(e, ValueError) else 500, (str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}").encode("utf-8", "replace"), "text/plain")
                 except Exception:
                     pass  # the answer had already started; the log has the reason
 
@@ -768,6 +854,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
     print(f"Review page: http://127.0.0.1:{port}/   (Ctrl+C to stop)")
     if control:
         control.shutdown = server.shutdown
+        control.autostart()
     if open_browser:
         import threading
         import webbrowser

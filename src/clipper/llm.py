@@ -434,7 +434,7 @@ def romanize(words: list[str], cfg: Config, chunk: int = 150) -> list[str]:
     out: list[str] = []
     for i in range(0, len(words), chunk):
         part = words[i:i + chunk]
-        data = ask(cfg, cfg.llm.model, ROMAN_SYSTEM, json.dumps(part, ensure_ascii=False), ROMAN_SCHEMA, "captions in Latin letters")
+        data = ask(cfg, cfg.llm.roman_model or cfg.llm.model, ROMAN_SYSTEM, json.dumps(part, ensure_ascii=False), ROMAN_SCHEMA, "captions in Latin letters")
         got = [str(x).strip() for x in (data.get("words") or [])]
         if len(got) != len(part) or not all(got):
             raise LlmUnavailable(f"Claude returned {len(got)} words for {len(part)}; that reply cannot be used")

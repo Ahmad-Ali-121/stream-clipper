@@ -175,6 +175,11 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
 .cbruler{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:4px}
 .cbq{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}.cbq input{width:66px}
 #cb-video{width:100%;max-height:46vh;background:#000;border-radius:8px;display:block}
+.twlines{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-top:6px}
+.twl{display:grid;grid-template-columns:74px 1fr;gap:10px;padding:6px 10px;border-top:1px solid var(--line);cursor:pointer;font-size:13.5px}.twl:first-child{border-top:0}
+.twl:hover{background:var(--surface2)}.twl.on{background:color-mix(in srgb,var(--accent) 20%,transparent)}.twl b{color:var(--muted);font-weight:600}.twl mark{background:var(--accent);color:var(--accent-ink);border-radius:3px;padding:0 2px}
+.live1{display:grid;grid-template-columns:auto 90px 1fr;gap:8px;align-items:center;font-size:12.5px;margin-top:8px}.live1 b{max-width:110px;overflow:hidden;text-overflow:ellipsis}
+.hbar{height:8px;border-radius:99px;background:var(--surface2);overflow:hidden}.hbar i{display:block;height:100%;transition:width .6s}
 .cbrow{display:grid;grid-template-columns:74px minmax(0,1fr) auto auto auto;gap:12px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
 .cbrow.off{opacity:.55}.cbrow .badt{color:var(--bad);font-weight:600}.cbrow .warnt{color:var(--warn)}
 .cbrow label{display:flex;gap:6px;align-items:center;cursor:pointer}
@@ -231,12 +236,15 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
           <p class="help">Watches the streams while they are live and makes a draft clip each time something happens.</p>
           <label class="f" for="o-channels">Channels, separated by spaces: Twitch names, YouTube handles starting with @</label>
           <input type="text" id="o-channels" placeholder="lacy xqc @youtubechannel">
+          <label class="check"><input type="checkbox" id="o-auto" onchange="act('/api/options',{watch_autostart:$('o-auto').checked,channels:val('o-channels')})"> Start watching this list by itself when the program opens</label>
+          <p class="help" style="margin-top:4px">Creators who are not live yet are checked every half minute and clipped as soon as they go live. Add only creators you have a campaign or permission for.</p>
           <label class="f">What should find the moments?</label>
           <div class="modes" id="o-modes"></div>
           <div class="btns"><button class="btn primary" id="b-start" onclick="startWatch()">Start watching</button><button class="btn bad" id="b-stop" onclick="act('/api/watch/stop',{})">Stop</button></div>
           <div class="btns" style="align-items:center"><button class="btn" id="b-clipnow" onclick="clipNow()" disabled>Clip the last</button>
             <select id="w-last" style="width:auto" aria-label="How many seconds to clip"><option value="15">15 seconds</option><option value="30" selected>30 seconds</option><option value="45">45 seconds</option><option value="60">60 seconds</option><option value="90">90 seconds</option></select></div>
           <p class="help" style="margin-top:6px">Saw something chat did not react to? Press it right after the moment. The draft appears in a minute or two, at the top of the list.</p>
+          <div id="w-live"></div>
           <div class="note" id="w-note">Not watching.</div>
           <details class="log"><summary>Activity log</summary><pre class="log" id="wlog"></pre></details>
         </div>
@@ -322,8 +330,37 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
         <select id="o-camp" onchange="saveOpts()"></select>
         <p class="help" id="camp-rules" style="margin:6px 0 0"></p>
         <label class="f" for="o-cap">Caption style</label>
-        <select id="o-cap" onchange="saveOpts()"></select>
+        <select id="o-cap" onchange="pickLook()"></select>
         <div class="capprev" id="capprev" aria-hidden="true"></div>
+        <label class="f" for="o-anim">How the captions move</label>
+        <select id="o-anim" onchange="act('/api/options',{caption_animation:val('o-anim')})"></select>
+        <details class="sec" id="lookbox"><summary>Your own caption style <small>font, colours, size; save it as a profile</small></summary>
+          <label class="f" for="k-font">Font (one installed on this computer)</label>
+          <input type="text" id="k-font" list="k-fonts"><datalist id="k-fonts"><option>Arial Black</option><option>Impact</option><option>Segoe UI Black</option><option>Bahnschrift</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Georgia</option><option>Comic Sans MS</option><option>Franklin Gothic Heavy</option><option>Montserrat</option><option>Poppins</option></datalist>
+          <div class="three"><div><label class="f" for="k-size">Size</label><input type="number" id="k-size" min="40" max="160"></div>
+            <div><label class="f" for="k-outline">Outline</label><input type="number" id="k-outline" min="0" max="14"></div>
+            <div><label class="f" for="k-words">Words on screen</label><input type="number" id="k-words" min="1" max="6"></div></div>
+          <div class="two"><div><label class="f" for="k-text">Text colour</label><input type="color" id="k-text" style="height:38px;padding:2px"></div>
+            <div><label class="f" for="k-active">Colour of the spoken word</label><input type="color" id="k-active" style="height:38px;padding:2px"></div></div>
+          <label class="check"><input type="checkbox" id="k-upper"> ALL CAPITALS</label>
+          <div class="btns"><button class="btn" onclick="useLook()">Use this style</button><button class="btn" onclick="useLook(true)">Save as a profile…</button><button class="btn quiet" id="k-del" hidden onclick="delLook()">Delete this profile</button></div>
+          <p class="help" style="margin-top:6px">Clips already drafted get the new style when you press Make videos.</p>
+        </details>
+        <details class="sec" id="brandbox"><summary>Branding <small>your logo, an outro line, music</small></summary>
+          <label class="f">Logo or watermark</label>
+          <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-logofile').click()">Choose an image</button><span class="saved" id="g-logoname"></span><button class="btn quiet" id="g-logooff" hidden onclick="act('/api/options',{brand_logo:''})">Take it off</button></div>
+          <input type="file" id="g-logofile" accept=".png,.jpg,.jpeg,.webp,.gif" hidden onchange="brandFile(this,'logo')">
+          <div class="three"><div><label class="f" for="g-corner">Corner</label><select id="g-corner" onchange="saveBrand()"><option value="top-left">top left</option><option value="top-right">top right</option><option value="bottom-left">bottom left</option><option value="bottom-right">bottom right</option></select></div>
+            <div><label class="f" for="g-size">Size</label><input type="range" id="g-size" min="5" max="50" onchange="saveBrand()"></div>
+            <div><label class="f" for="g-op">See-through</label><input type="range" id="g-op" min="10" max="100" onchange="saveBrand()"></div></div>
+          <label class="f" for="g-outro">Outro line over the last seconds <small>(empty = none)</small></label>
+          <input type="text" id="g-outro" maxlength="60" placeholder="Follow for part 2" onchange="saveBrand()">
+          <label class="f">Music under the voice</label>
+          <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-musicfile').click()">Choose a sound file</button><span class="saved" id="g-musicname"></span><button class="btn quiet" id="g-musicoff" hidden onclick="act('/api/options',{brand_music:''})">Take it off</button></div>
+          <input type="file" id="g-musicfile" accept=".mp3,.m4a,.wav,.ogg,.aac,.flac" hidden onchange="brandFile(this,'music')">
+          <label class="f" for="g-vol">Music loudness</label><input type="range" id="g-vol" min="0" max="50" onchange="saveBrand()">
+          <p class="help" style="margin-top:6px">Use only music you have the right to use: platforms mute or remove clips with other people's songs. Branding is added when a draft or a video is made; press Make videos to add it to clips already drafted.</p>
+        </details>
         <div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button></div>
         <div class="bar" id="f-bar" hidden><i></i></div><div class="pct" id="f-pct" hidden></div>
         <div class="note" id="f-note">Nothing made yet in this session.</div>
@@ -334,7 +371,38 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
   </aside>
 
   <main>
-    <div class="tabs" style="max-width:480px"><button id="v-clips" class="on" onclick="view('clips')">Clips</button><button id="v-track" onclick="view('track')">Tracker</button><button id="v-board" onclick="view('board')">Cutting board</button></div>
+    <div class="tabs" style="max-width:640px"><button id="v-clips" class="on" onclick="view('clips')">Clips</button><button id="v-track" onclick="view('track')">Tracker</button><button id="v-board" onclick="view('board')">Cutting board</button><button id="v-words" onclick="view('words')">Transcript</button></div>
+    <div id="view-words" hidden>
+      <div class="mainhead"><h2>Transcript: find a moment by what was said</h2></div>
+      <p class="keys">Works at once for YouTube videos that have captions. For other videos, run them once in the Finished stream tab with "Let AI read the whole stream"; their words are kept.</p>
+      <div class="card" style="padding:14px">
+        <label class="f" for="tw-url">Video link</label>
+        <div class="btns" style="margin-top:0"><input type="text" id="tw-url" placeholder="https://www.youtube.com/watch?v=..." style="flex:1;min-width:240px"><button class="btn primary" id="tw-get" onclick="twGet()">Get the words</button></div>
+        <div class="note" id="tw-note">Paste a link and press Get the words.</div>
+      </div>
+      <div id="tw-body" hidden>
+        <div class="card" style="padding:14px;margin-top:14px">
+          <label class="f" for="tw-q">Search for a word or phrase</label>
+          <input type="text" id="tw-q" placeholder="police, oh my god, bhai..." oninput="twDraw()">
+          <p class="help" style="margin-top:6px" id="tw-count"></p>
+          <div id="tw-lines" class="twlines"></div>
+        </div>
+        <div class="card" style="padding:14px;margin-top:14px">
+          <h2 style="font-size:15px;margin-bottom:6px">Your picks</h2>
+          <p class="help" id="tw-sel">Click a line to mark where a clip starts, then a later line for where it ends.</p>
+          <div class="btns" style="margin-top:0"><button class="btn" id="tw-add" onclick="twAdd()" disabled>Add this stretch to my picks</button><button class="btn quiet" onclick="TW.a=TW.b=null;twDraw()">Clear the marks</button></div>
+          <div id="tw-picks"></div>
+          <div class="btns"><button class="btn primary" id="tw-make" onclick="twMake()" disabled>Make these clips</button></div>
+          <details class="sec"><summary>No AI set up? Use any free chatbot <small>the transcript in small parts, each with a ready prompt</small></summary>
+            <p class="help" style="margin-top:8px">A chatbot given a whole stream only reads the start. So: copy one part, paste it into any chatbot (ChatGPT, Gemini, Claude…), copy its answer, and paste all the answers into the box below. Nothing is sent anywhere by this program.</p>
+            <div id="tw-parts" class="btns" style="margin-top:0"></div>
+            <label class="f" for="tw-ans">Paste the chatbot's answers here</label>
+            <textarea id="tw-ans" style="min-height:110px" placeholder="1:02:30-1:03:15 | He drives the stolen car into the lake"></textarea>
+            <div class="btns"><button class="btn" onclick="twAnswers()">Read the answers</button></div>
+          </details>
+        </div>
+      </div>
+    </div>
     <div id="view-board" hidden>
       <div class="mainhead"><h2>Cutting board</h2><div class="filters" id="cb-list"></div></div>
       <div class="empty" id="cb-empty" hidden><b>Nothing downloaded yet.</b>In step 1 open "Your own clip", give a video with a start and an end, and press "Download this part and open the cutting board".</div>
@@ -393,7 +461,9 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
       <div><canvas class="bxprev" id="bx-prev" width="270" height="480"></canvas><p class="help" style="margin-top:6px">Result (without captions)</p></div>
     </div>
     <label class="f" for="bx-layout">What the clip shows</label>
-    <select id="bx-layout"><option value="split">Face on top, video below (two boxes)</option><option value="crop">Video only (one box, full height)</option></select>
+    <select id="bx-layout"></select>
+    <div class="two" id="bx-small" hidden><div><label class="f" for="bx-corner">Where the small face sits</label><select id="bx-corner"></select></div>
+      <div><label class="f" for="bx-fsize">How big the small face is</label><input type="range" id="bx-fsize" min="18" max="60" value="36"></div></div>
     <label class="check"><input type="checkbox" id="bx-others"> Use the same boxes for the other clips of this video that are not finished yet</label>
     <label class="check" id="bx-strow"><input type="checkbox" id="bx-streamer"> <span id="bx-stlabel"></span></label>
     <div class="btns"><button class="btn primary" id="bx-save">Save and make the draft again</button><button class="btn" id="bx-auto">Back to automatic</button><button class="btn" id="bx-cancel">Cancel</button><span class="saved" id="bx-note"></span></div>
@@ -479,12 +549,7 @@ function show(s){
   const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!r.checked&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
   for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);
   $('o-ab').checked=s.ab_versions; $('o-opening').checked=s.opening;
-  if(s.caption_presets){if(document.activeElement!==$('o-cap'))$('o-cap').value=s.caption_preset in s.caption_presets?s.caption_preset:'';
-    const p=s.caption_presets[$('o-cap').value]; const cp=$('capprev');
-    if(p){const t=p.uppercase?['NO WAY','HE','DID THAT']:['No way','he','did that'];
-      cp.style.fontFamily='"'+p.font+'",Arial,sans-serif'; cp.style.fontWeight=900; cp.style.webkitTextStroke=Math.max(1,p.outline/4)+'px #000'; cp.style.paintOrder='stroke fill';
-      cp.innerHTML='<span style="color:#'+p.text_color+'">'+t[0]+' </span><span style="color:#'+p.active_color+';font-size:112%">'+t[1]+'</span><span style="color:#'+p.text_color+'"> '+t[2]+'</span>'}
-    else cp.textContent='Custom style from the settings file'}
+  drawLooks(s);
   if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'roman';$('l-text').value=s.text_language||'English';$('l-yt').value=s.youtube_captions||'auto'}
   $('lang-sum').textContent=({en:'English',ur:'Urdu',hi:'Hindi',auto:'detected automatically'})[s.speech_language||'en']+((s.speech_language||'en')!=='en'?', captions in '+(s.caption_script==='roman'?'Latin letters':'its own letters')+', text in '+(s.text_language||'English'):'');
   if(document.activeElement!==$('o-camp'))$('o-camp').value=s.campaign||'';
@@ -496,6 +561,12 @@ function show(s){
   setBar('h',!!(hm&&hm.running),hs?{percent:(hs[0]-.5)/hs[1]*100,stage:hs[2],stage_no:hs[0],stages:hs[1],text:'',at:0,started:0,steps:true}:null);
   const pw=$('p-watch'); pw.className='pill'+(s.watching?' live':''); pw.lastElementChild.textContent=s.watching?'Watching '+(s.channels||'').split(' ').filter(Boolean).join(', '):'Not watching';
   $('b-start').disabled=s.watching; $('b-stop').disabled=!s.watching; $('b-clipnow').disabled=!s.watching;
+  if(document.activeElement!==$('o-auto'))$('o-auto').checked=!!s.watch_autostart;
+  /* Who is live, and a hype meter of each chat against its own usual pace. */
+  const HC={quiet:'var(--muted)',building:'var(--accent)',hot:'var(--warn)','peak hype':'var(--bad)'};
+  $('w-live').innerHTML=Object.entries(s.live||{}).map(([n,c])=>'<div class="live1"><b>'+esc(n)+'</b>'+(c.live
+      ?'<span class="hbar"><i style="width:'+c.percent+'%;background:'+(HC[c.label]||'var(--accent)')+'"></i></span><span>'+c.percent+'% · '+esc(c.label)+' · '+c.per_minute+' msgs/min'+(c.waiting?' · clip being made':'')+'</span>'
+      :'<span style="color:var(--muted)">not live yet; checked every half minute</span>')+'</div>').join('');
   $('w-note').innerHTML=s.watching?'<b>Watching.</b> Drafts appear on the right as moments happen. '+esc(lastLine(s.watch_log)):(s.watch_problem?'<b>Stopped with a problem.</b> Open the activity log.':'Not watching.');
   logTo('wlog',s.watch_log);
   $('b-run').disabled=s.running; $('b-runstop').disabled=!s.running;
@@ -599,7 +670,7 @@ function saveLang(){
 function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_prefer:val('a-prefer'),llm_fallback:$('a-fallback').checked,llm_model:val('a-model'),ai_model:val('a-stream')})}
 async function act2(url){if(await post(url))poll1()}
 async function poll1(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){}}
-function saveOpts(){const o={mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked};if(val('o-cap'))o.caption_preset=val('o-cap');o.campaign=val('o-camp');act('/api/options',o)}
+function saveOpts(){const o={mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked};o.campaign=val('o-camp');act('/api/options',o)}
 async function poll(){
   let s=null;
   try{const r=await fetch('/api/options');if(r.ok)s=await r.json();else setErr('The page could not read the program state: '+r.status+' '+await r.text())}
@@ -640,7 +711,7 @@ function cardHtml(c){
     +(String(c.copy_source||'').startsWith('local')?'<span class="chip" title="Claude could not be reached, so the free AI on this computer wrote the text. It is redone by Claude when Claude is available.">Text by free local AI</span>':'')
     +(c.words_from==="YouTube's captions"?'<span class="chip" title="The captions are YouTube\'s own words for this video, not heard by the speech model. Fix any wrong word under Captions.">Captions from YouTube</span>':'')
     +(c.exported?'<span class="chip good">Videos made</span>':'');
-  const lay=[['','Automatic'],['split','Split: facecam over gameplay'],['crop','Centre crop']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
+  const lay=[['','Automatic'],['split','Face on top, video below'],['crop','Video only, full height'],['split_under','Video on top, face below'],['blur','Whole picture on a blurred background'],['pip','Face in a corner over the video'],['circle','Face in a circle over the video']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
   return '<div class="vid">'+vid+'</div><div class="info">'
    +'<div class="chead"><h3>'+esc(c.channel||c.stream_title||'Your video')+'</h3><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[place(c)]+'</span></div>'
    +'<div class="chips">'+chips+'</div>'
@@ -665,7 +736,10 @@ function cardHtml(c){
    +'<label class="f">Description</label><textarea name="description">'+esc(c.description)+'</textarea>'
    +'<label class="f">Hashtags (separated by spaces)</label><input type="text" name="tags" value="'+esc((c.tags||[]).join(' '))+'"></details>'
    +(c.has_words?'<details class="sec" ontoggle="if(this.open)initWords(\''+k+'\')"><summary>Captions <small>fix a wrong word, or empty a box to remove it</small></summary>'
-     +'<div class="words"></div><div class="btns"><button class="btn" onclick="saveWords(\''+k+'\')">Save captions</button></div></details>':'')
+     +'<div class="words"></div><div class="btns"><button class="btn" onclick="saveWords(\''+k+'\')">Save captions</button>'
+     +'<a class="btn" href="/api/clip/'+k+'/captions.srt" download>Download .srt</a><a class="btn" href="/api/clip/'+k+'/captions.vtt" download>Download .vtt</a>'
+     +'<button class="btn" onclick="this.nextElementSibling.click()">Use a subtitle file…</button><input type="file" accept=".srt,.vtt,.txt" hidden onchange="subFile(this,\''+k+'\')"></div>'
+     +'<p class="help" style="margin-top:6px">A subtitle file replaces these captions. Its times must count from the start of the clip.</p></details>':'')
    +'<details class="sec" ontoggle="if(this.open)initTrim(\''+k+'\')"><summary>Fine-tune <small>where it starts and ends, framing, ad label</small></summary>'
    +'<div class="trim"></div>'
    +'<div class="three"><div><label class="f">Start (seconds into the stream)</label><input type="number" step="0.5" name="cut_start_s" value="'+esc(c.cut_start_s??c.start_s)+'"></div>'
@@ -833,6 +907,14 @@ async function initWords(key){
   box.innerHTML=words.map((w,i)=>(w.start>=a&&w.start<=b)?'<input type="text" data-i="'+i+'" value="'+esc(w.word)+'" size="'+Math.max(2,String(w.word).length)+'" aria-label="caption word">':'').join('')
     ||'<span class="help">No words were heard in this part of the clip.</span>';
 }
+async function subFile(inp,key){
+  const f=inp.files[0];inp.value='';if(!f)return;
+  if(!confirm('Replace this clip\'s captions with the subtitles in '+f.name+'?'))return;
+  let r;try{r=await fetch('/api/clip/'+key+'/captions-import',{method:'POST',body:await f.text()})}catch(e){toast('The program is not answering: '+e,true);return}
+  if(!r.ok){toast('The subtitle file was not used: '+await r.text(),true);return}
+  const d=await r.json(), el=$(domId(key));if(el){el.dataset.dirty='';el.dataset.wdirty='';el.dataset.m=''}
+  toast(d.lines+' subtitle lines are now this clip\'s captions. The draft is made again when you press Make videos.');loadClips();
+}
 async function sendWords(key){
   const el=$(domId(key)); if(!el||!el._words)return true;
   for(const inp of el.querySelectorAll('.words input'))el._words[+inp.dataset.i].word=inp.value;
@@ -847,6 +929,57 @@ async function saveWords(key){
   toast('Captions saved. The draft is made again when you press Make videos, or use "Make B preview".');
 }
 
+/* ---------- caption looks and branding ---------- */
+let lookSeen='';
+function hex(c){return '#'+String(c||'FFFFFF').replace('#','')}
+function drawLooks(s){
+  const pre=s.caption_presets||{}, mine=s.caption_profiles||{}, now=s.caption_now||{}, sel=$('o-cap');
+  const sig=JSON.stringify([Object.keys(pre),Object.keys(mine)]);
+  if(sig!==sel.dataset.sig){sel.dataset.sig=sig;
+    sel.innerHTML=Object.entries(pre).map(([k,p])=>'<option value="'+k+'">'+esc(p.label)+'</option>').join('')
+      +Object.keys(mine).map(k=>'<option value="mine:'+esc(k)+'">Your profile: '+esc(k)+'</option>').join('')+'<option value="">Your own style (set below)</option>';
+    $('o-anim').innerHTML=Object.entries(s.caption_animations||{}).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('')}
+  const cur=s.caption_preset in pre?s.caption_preset:(s.caption_preset in mine?'mine:'+s.caption_preset:'');
+  if(document.activeElement!==sel)sel.value=cur;
+  if(document.activeElement!==$('o-anim'))$('o-anim').value=now.animation||'highlight';
+  $('k-del').hidden=!(s.caption_preset in mine);
+  /* The form follows the style in use, unless you are in the middle of changing it. */
+  const key=JSON.stringify(now);
+  if(key!==lookSeen&&!$('lookbox').contains(document.activeElement)){lookSeen=key;
+    $('k-font').value=now.font||'';$('k-size').value=now.font_size||88;$('k-outline').value=now.outline??6;$('k-words').value=now.max_words||3;
+    $('k-text').value=hex(now.text_color);$('k-active').value=hex(now.active_color);$('k-upper').checked=!!now.uppercase}
+  const cp=$('capprev'), t=now.uppercase?['NO WAY','HE','DID THAT']:['No way','he','did that'];
+  cp.style.fontFamily='"'+(now.font||'Arial Black')+'",Arial,sans-serif';cp.style.fontWeight=900;cp.style.webkitTextStroke=Math.max(1,(now.outline||0)/4)+'px #000';cp.style.paintOrder='stroke fill';
+  cp.innerHTML='<span style="color:'+hex(now.text_color)+'">'+t[0]+' </span><span style="color:'+hex(now.active_color)+';font-size:112%">'+t[1]+'</span><span style="color:'+hex(now.text_color)+'"> '+t[2]+'</span>';
+  const b=s.brand||{};
+  if(!$('brandbox').contains(document.activeElement)){$('g-corner').value=b.logo_corner||'top-left';$('g-size').value=Math.round((b.logo_size||.16)*100);$('g-op').value=Math.round((b.logo_opacity||.9)*100);
+    $('g-outro').value=b.outro_text||'';$('g-vol').value=Math.round((b.music_volume||0)*100)}
+  $('g-logoname').textContent=b.logo_name?'In use: '+b.logo_name:'No logo';$('g-logooff').hidden=!b.logo_name;
+  $('g-musicname').textContent=b.music_name?'In use: '+b.music_name:'No music';$('g-musicoff').hidden=!b.music_name;
+}
+function lookForm(){return {font:val('k-font').trim(),font_size:+val('k-size'),outline:+val('k-outline'),max_words:+val('k-words'),text_color:val('k-text').slice(1),active_color:val('k-active').slice(1),
+  uppercase:$('k-upper').checked,animation:val('o-anim')}}
+function pickLook(){const v=val('o-cap');
+  if(v.startsWith('mine:')){const name=v.slice(5),p=(last.caption_profiles||{})[name];if(p)act('/api/options',{caption_look:Object.assign({},p,{name:name})});return}
+  if(v)act('/api/options',{caption_preset:v});else{$('lookbox').open=true;$('k-font').focus()}}
+function useLook(asProfile){
+  const look=lookForm();
+  if(asProfile){const name=(prompt('A name for this caption profile:',last.caption_preset in (last.caption_profiles||{})?last.caption_preset:'')||'').trim();if(!name)return;
+    look.name=name;if(document.activeElement)document.activeElement.blur();act('/api/options',{caption_profile_save:look});return}
+  if(document.activeElement)document.activeElement.blur();act('/api/options',{caption_look:look});
+}
+function delLook(){const name=last.caption_preset;if(!confirm('Delete the caption profile "'+name+'"? Clips already made keep their look.'))return;
+  act('/api/options',{caption_profile_delete:name,caption_preset:'bold'})}
+function saveBrand(){if(document.activeElement)document.activeElement.blur();
+  act('/api/options',{brand_logo_corner:val('g-corner'),brand_logo_size:val('g-size')/100,brand_logo_opacity:val('g-op')/100,brand_outro_text:val('g-outro'),brand_music_volume:val('g-vol')/100})}
+async function brandFile(inp,kind){
+  const f=inp.files[0];inp.value='';if(!f)return;
+  try{const r=await fetch('/api/brand/upload?kind='+kind+'&name='+encodeURIComponent(f.name),{method:'POST',body:f});
+    if(!r.ok){toast('The file was not taken: '+await r.text(),true);return}
+    show(await r.json());toast(kind==='logo'?'Logo set. It is added to drafts and videos made from now on.':'Music set. It is added to drafts and videos made from now on.')}
+  catch(e){toast('The program is not answering: '+e,true)}
+}
+
 /* ---------- face box and video box ---------- */
 let BX=null;
 function openBoxes(key){
@@ -854,42 +987,59 @@ function openBoxes(key){
   if(document.activeElement)document.activeElement.blur();
   const c=known.find(x=>x.key===key);
   if(!c||!c.framing||!(c.videos||[]).includes('source.mp4')){toast('This clip is not downloaded yet, so its boxes cannot be set.',true);return}
-  const f=c.framing;
-  BX={key:key,layout:f.layout,sw:f.source[0],sh:f.source[1],asp:f.aspects,face:(f.split.face||[0,0,.25,.25]).slice(),vs:f.split.video.slice(),vc:f.crop.video.slice()};
-  /* Each box has the shape it is shown in. A box that came from elsewhere is brought to that shape first. */
-  BX.face=bxFit(BX.face,BX.asp.face);BX.vs=bxFit(BX.vs,BX.asp.video_split);BX.vc=bxFit(BX.vc,BX.asp.video_crop);
-  $('bx-layout').value=BX.layout;$('bx-others').checked=false;$('bx-streamer').checked=false;$('bx-note').textContent='';
+  const f=c.framing, now=f.boxes[f.layout]||{};
+  /* One face box and one video box. Each takes the shape the chosen layout shows it in, so what is inside is what is seen. */
+  BX={key:key,layout:f.layout,sw:f.source[0],sh:f.source[1],shapes:f.shapes,top:f.split_top,corner:f.face_corner,size:f.face_size,
+    face:(now.face||f.boxes.split.face||[0,0,.25,.25]).slice(),video:(now.video||f.boxes.crop.video).slice()};
+  $('bx-layout').innerHTML=Object.entries(f.names).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('');
+  $('bx-corner').innerHTML=f.corners.map(k=>'<option value="'+k+'">'+k.replace('-',' ')+'</option>').join('');
+  $('bx-layout').value=BX.layout;$('bx-corner').value=BX.corner;$('bx-fsize').value=Math.round(BX.size*100);
+  $('bx-others').checked=false;$('bx-streamer').checked=false;$('bx-note').textContent='';
   $('bx-strow').hidden=!c.channel;$('bx-stlabel').textContent='Remember these boxes for new clips of '+(c.channel||'');
   const v=$('bx-video');v.src='/media/'+key+'/source.mp4?v='+c.mtime;
   v.onloadedmetadata=()=>{v.currentTime=Math.max(0,((c.cut_start_s??c.start_s)-(Number(c.fetch_start_s)||0))+1)};
   $('bx-stage').style.aspectRatio=BX.sw+' / '+BX.sh;$('bx-play').textContent='Play';
   for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=false;
-  $('boxes').hidden=false;bxDraw();bxLoop();
+  $('boxes').hidden=false;bxLayout();bxLoop();
 }
-function bxKind(){return BX.layout==='split'?'vs':'vc'}
-function bxAsp(which){return which==='face'?BX.asp.face:(BX.layout==='split'?BX.asp.video_split:BX.asp.video_crop)}
+function bxHasFace(){return !!BX.shapes[BX.layout].face}
+function bxAsp(which){return BX.shapes[BX.layout][which]}
 /* Height of a box (as a share of the picture) that goes with its width, for the shape it is shown in. */
 function bxH(w,asp){return w*BX.sw/(BX.sh*asp)}
-function bxFit(b,asp){let w=b[2],h=bxH(w,asp);if(h>1){h=1;w=asp*BX.sh/BX.sw}
+function bxFit(b,asp){let w=b[2],h=bxH(w,asp);if(h>1){h=1;w=asp*BX.sh/BX.sw}if(w>1){w=1;h=bxH(1,asp)}
   const cx=b[0]+b[2]/2,cy=b[1]+b[3]/2;return [Math.min(Math.max(0,cx-w/2),1-w),Math.min(Math.max(0,cy-h/2),1-h),w,h]}
+/* The layout changed: bring both boxes to the shapes it shows them in. */
+function bxLayout(){
+  BX.video=bxFit(BX.layout==='blur'?[0,0,1,1]:BX.video,bxAsp('video'));
+  if(bxHasFace())BX.face=bxFit(BX.face,bxAsp('face'));
+  $('bx-small').hidden=!(BX.layout==='pip'||BX.layout==='circle');
+  bxDraw();
+}
 function bxDraw(){
   const put=(el,b)=>{el.style.left=(b[0]*100)+'%';el.style.top=(b[1]*100)+'%';el.style.width=(b[2]*100)+'%';el.style.height=(b[3]*100)+'%'};
-  put($('bx-v'),BX[bxKind()]);put($('bx-f'),BX.face);$('bx-f').hidden=BX.layout!=='split';
-  const v=BX[bxKind()];$('bx-size').textContent='Video box: '+Math.round(v[2]*BX.sw)+' × '+Math.round(v[3]*BX.sh)+' of '+BX.sw+' × '+BX.sh
-    +(BX.layout==='split'?' · Face box: '+Math.round(BX.face[2]*BX.sw)+' × '+Math.round(BX.face[3]*BX.sh):'');
+  put($('bx-v'),BX.video);put($('bx-f'),BX.face);$('bx-f').hidden=!bxHasFace();$('bx-f').style.borderRadius=BX.layout==='circle'?'50%':'0';
+  $('bx-size').textContent='Video box: '+Math.round(BX.video[2]*BX.sw)+' × '+Math.round(BX.video[3]*BX.sh)+' of '+BX.sw+' × '+BX.sh
+    +(bxHasFace()?' · Face box: '+Math.round(BX.face[2]*BX.sw)+' × '+Math.round(BX.face[3]*BX.sh):'');
 }
+/* The small picture on the right: the same arrangement the finished clip gets. */
 function bxLoop(){
   if(!BX)return;const v=$('bx-video'),cv=$('bx-prev'),g=cv.getContext('2d'),W=cv.width,H=cv.height;
-  if(v.readyState>=2){const vw=v.videoWidth,vh=v.videoHeight,top=BX.layout==='split'?Math.round(H*BX.asp.video_crop/BX.asp.face):0;
-    try{if(top){const f=BX.face;g.drawImage(v,f[0]*vw,f[1]*vh,f[2]*vw,f[3]*vh,0,0,W,top)}
-      const b=BX[bxKind()];g.drawImage(v,b[0]*vw,b[1]*vh,b[2]*vw,b[3]*vh,0,top,W,H-top)}catch(e){}
+  if(v.readyState>=2){const vw=v.videoWidth,vh=v.videoHeight,L=BX.layout,f=BX.face,b=BX.video;
+    const part=(box,x,y,w,h)=>g.drawImage(v,box[0]*vw,box[1]*vh,box[2]*vw,box[3]*vh,x,y,w,h);
+    try{g.filter='none';g.clearRect(0,0,W,H);
+      if(L==='split'||L==='split_under'){const th=Math.round(H*BX.top);if(L==='split'){part(f,0,0,W,th);part(b,0,th,W,H-th)}else{part(b,0,0,W,H-th);part(f,0,H-th,W,th)}}
+      else if(L==='blur'){const fh=Math.min(H,W*(b[3]*vh)/(b[2]*vw));g.filter='blur(10px) brightness(.8)';g.drawImage(v,vw/2-vh*W/H/2,0,vh*W/H,vh,-12,-12,W+24,H+24);g.filter='none';part(b,0,(H-fh)/2,W,fh)}
+      else{part(b,0,0,W,H);
+        if(L==='pip'||L==='circle'){const sw=W*BX.size,sh=L==='circle'?sw:sw*3/4,m=W*36/1080,x=BX.corner.endsWith('left')?m:W-sw-m,y=BX.corner.startsWith('top')?H*360/1920:H-sh-H*150/1920;
+          g.save();g.beginPath();if(L==='circle')g.arc(x+sw/2,y+sh/2,sw/2,0,7);else{g.fillStyle='#fff';g.fillRect(x-2,y-2,sw+4,sh+4);g.rect(x,y,sw,sh)}g.clip();part(f,x,y,sw,sh);g.restore()}}
+    }catch(e){}
     if(!v.paused&&v.duration)$('bx-seek').value=Math.round(v.currentTime/v.duration*1000)}
   requestAnimationFrame(bxLoop);
 }
 function bxDrag(which,resize){return e=>{
   if(!BX||(!resize&&e.target.tagName==='I'))return;e.preventDefault();e.stopPropagation();
-  const name=which==='face'?'face':bxKind(),asp=bxAsp(which),st=$('bx-stage').getBoundingClientRect(),b0=BX[name].slice(),x0=e.clientX,y0=e.clientY;
-  const move=ev=>{const dx=(ev.clientX-x0)/st.width,dy=(ev.clientY-y0)/st.height,b=BX[name];
+  const asp=bxAsp(which),st=$('bx-stage').getBoundingClientRect(),b0=BX[which].slice(),x0=e.clientX,y0=e.clientY;
+  const move=ev=>{const dx=(ev.clientX-x0)/st.width,dy=(ev.clientY-y0)/st.height,b=BX[which];
     if(resize){let w=Math.max(.06,b0[2]+dx);w=Math.min(w,1-b0[0]);if(b0[1]+bxH(w,asp)>1)w=(1-b0[1])*BX.sh*asp/BX.sw;b[2]=w;b[3]=bxH(w,asp)}
     else{b[0]=Math.min(Math.max(0,b0[0]+dx),1-b0[2]);b[1]=Math.min(Math.max(0,b0[1]+dy),1-b0[3])}
     bxDraw()};
@@ -897,7 +1047,7 @@ function bxDrag(which,resize){return e=>{
   window.addEventListener('pointermove',move);window.addEventListener('pointerup',up)}}
 function closeBoxes(){const v=$('bx-video');v.pause();v.removeAttribute('src');v.load();$('boxes').hidden=true;BX=null}
 async function saveBoxes(auto){
-  const key=BX.key,body=auto?{auto:true}:{layout:BX.layout,game:BX[bxKind()],facecam:BX.face,others:$('bx-others').checked,streamer:$('bx-streamer').checked};
+  const key=BX.key,body=auto?{auto:true}:{layout:BX.layout,game:BX.video,facecam:BX.face,face_corner:BX.corner,face_size:BX.size,others:$('bx-others').checked,streamer:$('bx-streamer').checked};
   for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=true;
   const card=$(domId(key)); if(card&&card.dataset.dirty==='1')await save(key);
   $('bx-note').className='saved';$('bx-note').textContent='Making the draft again… this takes up to a minute.';
@@ -910,7 +1060,9 @@ async function saveBoxes(auto){
 function bxInit(){
   $('bx-v').addEventListener('pointerdown',bxDrag('video',false));$('bx-f').addEventListener('pointerdown',bxDrag('face',false));
   $('bx-v').querySelector('i').addEventListener('pointerdown',bxDrag('video',true));$('bx-f').querySelector('i').addEventListener('pointerdown',bxDrag('face',true));
-  $('bx-layout').addEventListener('change',()=>{BX.layout=val('bx-layout');bxDraw()});
+  $('bx-layout').addEventListener('change',()=>{BX.layout=val('bx-layout');bxLayout()});
+  $('bx-corner').addEventListener('change',()=>{BX.corner=val('bx-corner')});
+  $('bx-fsize').addEventListener('input',()=>{BX.size=val('bx-fsize')/100});
   $('bx-seek').addEventListener('input',()=>{const v=$('bx-video');if(v.duration)v.currentTime=val('bx-seek')/1000*v.duration});
   $('bx-play').addEventListener('click',()=>{const v=$('bx-video');if(v.paused){v.play().catch(()=>{});$('bx-play').textContent='Pause'}else{v.pause();$('bx-play').textContent='Play'}});
   $('bx-save').addEventListener('click',()=>saveBoxes(false));$('bx-auto').addEventListener('click',()=>saveBoxes(true));$('bx-cancel').addEventListener('click',closeBoxes);
@@ -1032,8 +1184,61 @@ function cbInit(){
 }
 cbInit();
 
+/* ---------- transcript: search the words, pick stretches, chatbot parts ---------- */
+let TW=null;
+async function twGet(){
+  const url=val('tw-url').trim(); if(!url){toast('Paste a video link first.',true);return}
+  $('tw-get').disabled=true;$('tw-note').innerHTML='<b>Getting the words…</b> a few seconds for a YouTube video.';
+  const r=await send('/api/words',{url:url}); $('tw-get').disabled=false;
+  if(r.error){$('tw-note').textContent='Not loaded.';toast(r.error,true);return}
+  TW={url:r.url,title:r.title,dur:r.duration_s,lines:r.lines,parts:r.parts,a:null,b:null,picks:[]};
+  $('tw-note').innerHTML='<b>'+esc(r.title||'Video')+'</b> · '+r.lines.length+' lines from '+esc(r.from)+' · '+clock(r.duration_s)+' long';
+  $('tw-body').hidden=false;$('tw-q').value='';
+  $('tw-parts').innerHTML=r.parts.map(p=>'<button class="btn" data-part="'+p.n+'">Copy part '+p.n+' <small style="font-weight:400;color:var(--muted)">'+clock(p.start_s)+' to '+clock(p.end_s)+'</small></button>').join('');
+  twDraw();
+}
+function twDraw(){
+  if(!TW)return;const q=val('tw-q').trim().toLowerCase(), box=$('tw-lines');
+  const hits=[];for(let i=0;i<TW.lines.length&&hits.length<400;i++){const l=TW.lines[i];if(!q||l.text.toLowerCase().includes(q))hits.push(i)}
+  const total=q?TW.lines.filter(l=>l.text.toLowerCase().includes(q)).length:TW.lines.length;
+  $('tw-count').textContent=q?(total+' line'+(total===1?'':'s')+' with "'+val('tw-q').trim()+'"'+(total>hits.length?', the first '+hits.length+' shown':'')):(total>hits.length?'The first '+hits.length+' of '+total+' lines. Search to narrow it down.':total+' lines.');
+  const lo=TW.a, hi=TW.b;
+  box.innerHTML=hits.map(i=>{const l=TW.lines[i], inside=lo!=null&&(hi!=null?l.t>=lo&&l.t<hi:l.t===lo);
+    let text=esc(l.text);if(q){const at=l.text.toLowerCase().indexOf(q);if(at>=0)text=esc(l.text.slice(0,at))+'<mark>'+esc(l.text.slice(at,at+q.length))+'</mark>'+esc(l.text.slice(at+q.length))}
+    return '<div class="twl'+(inside?' on':'')+'" data-i="'+i+'"><b>'+clock(l.t)+'</b><span>'+text+'</span></div>'}).join('')||'<p class="help">Nothing found.</p>';
+  const len=lo!=null&&hi!=null?hi-lo:0, bad=len&&(len<8||len>300);
+  $('tw-sel').innerHTML=lo==null?'Click a line to mark where a clip starts, then a later line for where it ends.'
+    :(hi==null?'Starts at <b>'+clock(lo)+'</b>. Now click the line where it should end.'
+      :'From <b>'+clock(lo)+'</b> to <b>'+clock(hi)+'</b> · '+Math.round(len)+' seconds'+(bad?' · <span style="color:var(--bad)">a clip must be 8 seconds to 5 minutes long</span>':''));
+  $('tw-add').disabled=!(len&&!bad);
+  $('tw-picks').innerHTML=TW.picks.map((p,i)=>'<div class="cbrow"><b>Clip '+(i+1)+'</b><span>'+clock(p[0])+' to '+clock(p[1])+(p[2]?' · '+esc(p[2]):'')+'</span><span>'+Math.round(p[1]-p[0])+' s</span><span></span><button class="btn" data-drop="'+i+'">Remove</button></div>').join('');
+  $('tw-make').disabled=!TW.picks.length||cbRunning;$('tw-make').textContent=TW.picks.length>1?'Make these '+TW.picks.length+' clips':'Make this clip';
+}
+function twAdd(){if(TW.a==null||TW.b==null)return;
+  if(TW.picks.some(p=>TW.a<p[1]&&TW.b>p[0])){toast('That stretch overlaps one you already picked.',true);return}
+  TW.picks.push([TW.a,TW.b,'']);TW.picks.sort((x,y)=>x[0]-y[0]);TW.a=TW.b=null;twDraw()}
+async function twMake(){
+  const r=await send('/api/cut',{source:TW.url,ranges:TW.picks.map(p=>[p[0],p[1]])}); if(r.error){toast(r.error,true);return}
+  cbJob='pieces';cbWasRunning=true;show(r);toast('Making '+TW.picks.length+' clip'+(TW.picks.length>1?'s':'')+'. Progress shows in step 1; they appear under Clips.');TW.picks=[];twDraw();
+}
+async function twAnswers(){
+  const r=await send('/api/words/answers',{text:val('tw-ans'),duration_s:TW.dur}); if(r.error){toast(r.error,true);return}
+  let added=0;for(const m of r.moments){if(!TW.picks.some(p=>m.start_s<p[1]&&m.end_s>p[0])){TW.picks.push([m.start_s,m.end_s,m.title]);added++}}
+  TW.picks.sort((x,y)=>x[0]-y[0]);twDraw();
+  toast(added+' moment'+(added===1?'':'s')+' added to your picks.'+(r.skipped.length?' Left out: '+r.skipped.join('; ')+'.':'')+(!r.moments.length&&!r.skipped.length?' No lines like 1:02:30-1:03:15 | title were found.':''),!added);
+}
+function twInit(){
+  $('tw-lines').addEventListener('click',e=>{const row=e.target.closest('.twl');if(!row||!TW)return;const l=TW.lines[+row.dataset.i];
+    if(TW.a==null||TW.b!=null||l.e<=TW.a){TW.a=l.t;TW.b=null}else TW.b=l.e;twDraw()});
+  $('tw-picks').addEventListener('click',e=>{const b=e.target.closest('[data-drop]');if(b){TW.picks.splice(+b.dataset.drop,1);twDraw()}});
+  $('tw-parts').addEventListener('click',async e=>{const b=e.target.closest('[data-part]');if(!b)return;const p=TW.parts.find(x=>x.n===+b.dataset.part);
+    try{await navigator.clipboard.writeText(p.prompt);toast('Part '+p.n+' copied ('+p.lines+' lines). Paste it into the chatbot.')}
+    catch(err){$('tw-ans').value=p.prompt;toast('Copying is blocked in this browser, so part '+p.n+' was put in the box below: select all of it and copy it from there.',true)}});
+}
+twInit();
+
 /* ---------- tracker ---------- */
-function view(n){for(const x of ['clips','track','board']){$('view-'+x).hidden=n!==x;$('v-'+x).className=n===x?'on':''}
+function view(n){for(const x of ['clips','track','board','words']){$('view-'+x).hidden=n!==x;$('v-'+x).className=n===x?'on':''}
   if(n!=='board')$('cb-video').pause();if(n==='track')loadTracker();if(n==='board')loadBoard()}
 async function send(url,body){
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});

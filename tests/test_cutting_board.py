@@ -33,12 +33,12 @@ def test_the_page_gets_boxes_in_the_shape_they_are_shown_in():
     cfg = load_config()
     f = framing({"source_width": 1920, "source_height": 1080, "layout": "split", "facecam": [0.0, 0.0, 0.25, 0.25], "channel": ""}, cfg)
     assert f["layout"] == "split" and f["source"] == [1920, 1080]
-    for name, shape in (("face", "face"), ("video", "video_split")):
-        x, y, w, h = f["split"][name]
-        assert 0 <= x and 0 <= y and x + w <= 1.001 and y + h <= 1.001
-        assert abs((w * 1920) / (h * 1080) - f["aspects"][shape]) < 0.02  # exactly what the viewer sees
-    x, y, w, h = f["crop"]["video"]
-    assert abs((w * 1920) / (h * 1080) - 9 / 16) < 0.02
+    for layout, boxes in f["boxes"].items():  # every layout the editor can switch to
+        for name, (x, y, w, h) in boxes.items():
+            assert 0 <= x and 0 <= y and x + w <= 1.001 and y + h <= 1.001
+            assert abs((w * 1920) / (h * 1080) - f["shapes"][layout][name]) < 0.02, (layout, name)  # exactly what the viewer sees
+    assert set(f["boxes"]["circle"]) == {"face", "video"} and set(f["boxes"]["blur"]) == {"video"}
+    assert f["boxes"]["blur"]["video"] == [0.0, 0.0, 1.0, 1.0]  # the whole picture
     assert framing({"layout": "split"}, cfg) is None  # not downloaded yet: nothing to frame
 
 
@@ -147,3 +147,20 @@ def test_a_clip_whose_file_is_in_use_says_so_instead_of_crashing(tmp_path, monke
     monkeypatch.setattr(Path, "unlink", real)
     delete_clip(d)
     assert json.loads((d / "clip.json").read_text(encoding="utf-8"))["status"] == "deleted" and not (d / "source.mp4").exists()
+
+
+def test_every_layout_gives_a_full_size_picture():
+    from dataclasses import replace
+
+    from clipper.render import LAYOUTS
+
+    r = replace(load_config().render, facecam=[0.7, 0.05, 0.25, 0.3], game=[])
+    for name in LAYOUTS:
+        graph = layout_filter(1920, 1080, r, name)
+        assert graph.startswith("[0:v]") and graph.endswith("[v0]"), name
+    assert "boxblur" in layout_filter(1920, 1080, r, "blur") and "scale=1080:608" in layout_filter(1920, 1080, r, "blur")
+    assert layout_filter(1920, 1080, r, "split_under").endswith("[bot][top]vstack=inputs=2[v0]")
+    pip = layout_filter(1920, 1080, replace(r, face_corner="bottom-left", face_size=0.4), "pip")
+    assert "pad=432:324:6:6:white" in pip and pip.endswith("overlay=36:1446[v0]")  # 40% wide, 4:3, clear of the credit line
+    circle = layout_filter(1920, 1080, r, "circle")
+    assert "geq=" in circle and "overlay=656:360[v0]" in circle  # top right, below the opening text

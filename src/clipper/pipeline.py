@@ -269,6 +269,34 @@ def stage_cut(url: str, cfg: Config, start_s: float = 0.0, end_s: float | None =
     return _make_own(url, cfg, _own_drafts(source, work, meta, segments, part_label))
 
 
+def stage_cut_list(url: str, cfg: Config, ranges) -> list[Path]:
+    """Make a draft from each of several stretches a person picked in one video (from its transcript, or from a
+    chatbot's suggestions). Each is a clip of its own: no "Part 1, Part 2" labels."""
+    source, work = open_work(url, cfg)
+    meta = fresh_meta(source, work, cfg)
+    length = float(meta.get("duration_s") or 0)
+    picked: list[tuple[float, float]] = []
+    for item in ranges or []:
+        try:
+            a, b = round(float(item[0]), 2), round(float(item[1]), 2)
+        except (TypeError, ValueError, IndexError):
+            raise ValueError("each stretch needs a start and an end in seconds") from None
+        if not MIN_PART_S - 0.05 <= b - a <= MAX_PART_S + 0.05:
+            raise ValueError(f"the stretch {format_time(a)} to {format_time(b)} is {b - a:.0f} seconds long; a clip is {MIN_PART_S:g} to {MAX_PART_S:.0f} seconds")
+        if a < 0 or (length and b > length + 1):
+            raise ValueError(f"the stretch {format_time(a)} to {format_time(b)} is outside the video ({format_time(length)} long)")
+        picked.append((a, min(b, length) if length else b))
+    if not picked:
+        raise ValueError("no stretch was chosen, so there is nothing to make")
+    picked.sort()
+    if any(n[0] < p[1] - 0.01 for p, n in zip(picked, picked[1:])):
+        raise ValueError("two of the chosen stretches overlap")
+    ids: list[str] = []
+    for one in picked:  # one at a time, so none is numbered as a part of the others
+        ids += _own_drafts(source, work, meta, [one], False)
+    return _make_own(url, cfg, ids)
+
+
 def range_id(start_s: float, end_s: float) -> str:
     return f"{clip_id(start_s)}-{clip_id(end_s)}"
 
@@ -600,7 +628,7 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
 def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Path, bool]]) -> None:
     from .compose import explained
     from .post import export_clip
-    from .render import render_clip
+    from .render import look_signature, render_clip
 
     state = read_json(d / "clip.json")
     if not done(d / "source.mp4"):
@@ -615,7 +643,8 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
     ab = cfg.render.ab_versions
     # A render made before the opening effects were switched on (or off) no longer matches the settings.
     fresh = (not done(d / "final.mp4") or bool(state.get("opening_used")) != bool(cfg.render.opening)
-             or state.get("style_used", "bold") != cfg.captions.preset)  # a render in another caption style is stale too
+             # a render with another caption look or other branding is stale too (older drafts only recorded the style's name)
+             or (state["look_used"] != look_signature(cfg) if state.get("look_used") else state.get("style_used", "bold") != cfg.captions.preset))
     if fresh:
         render_clip(d, cfg, force=True)
         for name in ("explained.mp4", "explained_b.mp4", "final_b.mp4"):  # made with the old settings too

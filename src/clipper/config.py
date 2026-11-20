@@ -81,6 +81,23 @@ class CaptionSettings:
     max_chars: int = 18
     max_gap_s: float = 0.6
     min_word_s: float = 0.12
+    # How the words move: highlight = the spoken word changes colour; pop = it also pops in; word = one big word at a
+    # time; build = the line fills in word by word as it is spoken.
+    animation: str = "highlight"
+
+
+@dataclass
+class BrandSettings:
+    """Your own mark on every clip. All optional; empty means off."""
+
+    logo: str = ""  # an image file (PNG with a clear background is best), shown for the whole clip
+    logo_corner: str = "top-left"
+    logo_size: float = 0.16  # its width as a share of the video's width
+    logo_opacity: float = 0.9
+    outro_text: str = ""  # a ribbon over the last seconds, e.g. "Follow for part 2"
+    outro_seconds: float = 4.0
+    music: str = ""  # a music file played quietly under the voice (use only music you have the right to use)
+    music_volume: float = 0.12
 
 
 @dataclass
@@ -116,7 +133,9 @@ class RenderSettings:
     width: int = 1080
     height: int = 1920
     fps: int = 30
-    layout: str = "crop"  # "crop" = centre 9:16 crop; "split" = facecam on top, gameplay below
+    # crop = video only; split = face on top, video below; split_under = face below; blur = whole picture on a blurred
+    # background; pip = full-height video with the face in a corner; circle = the same with a round face
+    layout: str = "crop"
     crop_x: float = 0.5  # horizontal centre of the crop, 0 (left) to 1 (right)
     # Facecam rectangle in the source, as fractions of width/height: x, y, w, h. Used by the split layout.
     facecam: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.25, 0.25])
@@ -124,6 +143,8 @@ class RenderSettings:
     # Empty = worked out automatically from crop_x. Set per clip with the boxes on the review page.
     game: list[float] = field(default_factory=list)
     split_top: float = 0.38  # share of the output height the facecam gets
+    face_corner: str = "top-right"  # where the small face sits in the "pip" and "circle" layouts
+    face_size: float = 0.36  # how wide that small face is, as a share of the video's width
     encoder: str = "auto"  # auto = NVIDIA, Intel or AMD hardware encoder when one works, else libx264 (CPU)
     preset: str = "veryfast"
     crf: int = 20
@@ -161,6 +182,9 @@ class LlmSettings:
     # auto = use it if it is installed; off = never. It is only ever set up on a computer that can run it.
     local: str = "auto"
     local_model: str = "llama3.2:3b"
+    # Turning Urdu or Hindi captions into Latin letters is a simple job done for every clip: the small model does it
+    # in a fraction of the time and of your plan's usage. Set it to the same model as above to go back.
+    roman_model: str = "claude-haiku-5-5"
     look_at_frames: bool = True  # also show AI three small frames of each clip, so it can rate what is on screen, not only the words
 
 
@@ -190,6 +214,7 @@ class WatchSettings:
     live_check_s: float = 300.0  # how often to confirm the stream is still live
     mode: str = "chat"  # chat, audio (chat + audio), video (chat + video) or all
     channels: list[str] = field(default_factory=list)  # channels the options panel starts watching
+    autostart: bool = False  # start watching this list by itself when the program opens, and clip each one whenever it goes live
     audio_level: float = 5.0  # how unusual a loud moment must be to make a clip without chat (higher = fewer clips)
     video_level: float = 6.0  # the same for fast action on screen
     signal_gap_s: float = 300.0  # at most one audio-only or video-only clip in this many seconds
@@ -212,6 +237,7 @@ class Config:
     trends: TrendSettings = field(default_factory=TrendSettings)
     llm: LlmSettings = field(default_factory=LlmSettings)
     voice: VoiceSettings = field(default_factory=VoiceSettings)
+    brand: BrandSettings = field(default_factory=BrandSettings)
     # Per-streamer layout, keyed by lower-case channel name:
     #   channels: {lacy: {layout: split, facecam: [0.0, 0.0, 0.28, 0.28]}}
     channels: dict = field(default_factory=dict)

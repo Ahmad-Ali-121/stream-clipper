@@ -77,8 +77,12 @@ def group_words(words: Sequence[Word], max_words: int = 3, max_chars: int = 18, 
     return lines
 
 
+ANIMATIONS = {"highlight": "The spoken word changes colour", "pop": "The spoken word pops in", "word": "One big word at a time",
+              "build": "The line fills in word by word"}
+
+
 def build_events(words: Sequence[Word], settings: CaptionSettings) -> list[CaptionEvent]:
-    lines = group_words(words, settings.max_words, settings.max_chars, settings.max_gap_s)
+    lines = group_words(words, 1 if settings.animation == "word" else settings.max_words, settings.max_chars, settings.max_gap_s)
     events: list[CaptionEvent] = []
     for li, line in enumerate(lines):
         next_line_start = lines[li + 1][0].start if li + 1 < len(lines) else None
@@ -115,10 +119,18 @@ def _bgr(rrggbb: str) -> str:
 
 
 def _event_text(ev: CaptionEvent, s: CaptionSettings) -> str:
+    big = s.active_scale
+    if s.animation in ("pop", "word", "build"):
+        # The spoken word starts small, overshoots a little and settles, in about a sixth of a second.
+        size = f"\\fscx70\\fscy70\\t(0,70,\\fscx{big + 10}\\fscy{big + 10})\\t(70,160,\\fscx{big}\\fscy{big})"
+    else:
+        size = f"\\fscx{big}\\fscy{big}"
     parts = []
     for i, word in enumerate(ev.words):
         if i == ev.active:
-            parts.append(f"{{\\c&H{_bgr(s.active_color)}&\\fscx{s.active_scale}\\fscy{s.active_scale}}}{word}{{\\r}}")
+            parts.append(f"{{\\c&H{_bgr(s.active_color)}&{size}}}{word}{{\\r}}")
+        elif i > ev.active and s.animation == "build":
+            parts.append(f"{{\\alpha&HFF&}}{word}{{\\r}}")  # not said yet: there, but invisible, so the line does not jump
         else:
             parts.append(word)
     return " ".join(parts)
@@ -192,6 +204,10 @@ def build_ass(
             # "PART 2" in the top right corner for the whole clip, and "PART 3 NEXT" near the bottom at the end.
             f"Style: Part,{s.font},{credit_size + 14},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,10,0,9,40,40,64,1",
             f"Style: PartNext,{s.font},{hook_size},&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,14,0,2,90,90,250,1",
+            # The outro ribbon: your own line over the last seconds, on a box in the accent colour, between captions and credit.
+            f"Style: Outro,{s.font},{credit_size + 18},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,12,0,2,70,70,380,1",
+            # The same ribbon near the top, for layouts that keep a small face in a bottom corner.
+            f"Style: OutroTop,{s.font},{credit_size + 18},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,12,0,8,70,70,330,1",
             "",
             "[Events]",
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -202,7 +218,7 @@ def build_ass(
         for ev in build_events(words, s)
     ]
     for ov in overlays:
-        if ov.style not in ("Hook", "HookB", "Credit", "Disclosure", "Part", "PartNext"):
+        if ov.style not in ("Hook", "HookB", "Credit", "Disclosure", "Part", "PartNext", "Outro", "OutroTop"):
             raise ValueError(f"unknown overlay style {ov.style!r}")
         text = clean_text(ov.text)
         if not text or _cs(ov.end) <= _cs(ov.start):

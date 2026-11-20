@@ -26,6 +26,18 @@ def _even(x: float) -> int:
     return max(2, int(round(x / 2)) * 2)
 
 
+LAYOUTS = {
+    "crop": "Video only, full height",
+    "split": "Face on top, video below",
+    "split_under": "Video on top, face below",
+    "blur": "Whole picture on a blurred background",
+    "pip": "Video full height, face in a corner",
+    "circle": "Video full height, face in a circle",
+}
+FACE_CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
+PIP_SHAPE = 4 / 3  # width / height of the face box in the corner layout
+
+
 def _box_px(box, src_w: int, src_h: int, name: str) -> tuple[int, int, int, int]:
     """A box given as fractions (x, y, width, height) in pixels of the source, kept inside the picture."""
     if len(box) != 4 or not all(0 <= float(v) <= 1 for v in box):
@@ -34,48 +46,98 @@ def _box_px(box, src_w: int, src_h: int, name: str) -> tuple[int, int, int, int]
     return x, y, max(2, min(_even(box[2] * src_w), src_w - x)), max(2, min(_even(box[3] * src_h), src_h - y))
 
 
+def layout_shapes(r: RenderSettings, src_w: int = 16, src_h: int = 9) -> dict[str, dict[str, float]]:
+    """The shape (width / height) each box is shown in, per layout. A box of that shape is shown whole, nothing cut off."""
+    W, H = r.width, r.height
+    top_h = _even(H * r.split_top)
+    split = {"face": W / top_h, "video": W / (H - top_h)}
+    return {"crop": {"video": W / H}, "split": split, "split_under": split, "blur": {"video": src_w / src_h},
+            "pip": {"face": PIP_SHAPE, "video": W / H}, "circle": {"face": 1.0, "video": W / H}}
+
+
 def layout_rects(src_w: int, src_h: int, r: RenderSettings, layout: str) -> tuple[tuple | None, tuple]:
     """(face box or None, video box) cut out of the source, in pixels: x, y, width, height.
 
-    The video box is the one set by hand (``r.game``) when there is one, else a full-height slice placed by ``crop_x``.
+    The video box is the one set by hand (``r.game``) when there is one, else a full-height slice placed by ``crop_x``
+    (the whole picture for the blurred layout).
     """
     W, H = r.width, r.height
-    if layout == "crop":
-        if r.game:
-            return None, _box_px(r.game, src_w, src_h, "game")
-        cw = min(src_w, _even(src_h * W / H))
-        return None, (int(min(max(r.crop_x * src_w - cw / 2, 0), src_w - cw)), 0, cw, src_h)
-    if layout == "split":
-        fx, fy, fw, fh = _box_px(r.facecam, src_w, src_h, "facecam")
-        if r.game:
-            return (fx, fy, fw, fh), _box_px(r.game, src_w, src_h, "game")
-        bot_h = H - _even(H * r.split_top)
-        cw = min(src_w, _even(src_h * W / bot_h))
-        cx = int(min(max(r.crop_x * src_w - cw / 2, 0), src_w - cw))
+    if layout not in LAYOUTS:
+        raise ValueError(f"layout must be one of {', '.join(LAYOUTS)}, got {layout!r}")
+    if layout == "blur":
+        return None, (_box_px(r.game, src_w, src_h, "game") if r.game else (0, 0, src_w, src_h))
+    face = None if layout == "crop" else _box_px(r.facecam, src_w, src_h, "facecam")
+    if r.game:
+        return face, _box_px(r.game, src_w, src_h, "game")
+    part_h = H - _even(H * r.split_top) if layout in ("split", "split_under") else H
+    cw = min(src_w, _even(src_h * W / part_h))
+    cx = int(min(max(r.crop_x * src_w - cw / 2, 0), src_w - cw))
+    if layout in ("split", "split_under"):
+        fx, _fy, fw, _fh = face
         # Keep the facecam out of the gameplay half when there is room to slide past it,
         # so the face is not shown twice.
         if fx + fw <= src_w - cw:  # facecam on the left
             cx = max(cx, fx + fw)
         elif fx >= cw:  # facecam on the right
             cx = min(cx, fx - cw)
-        return (fx, fy, fw, fh), (cx, 0, cw, src_h)
-    raise ValueError(f"layout must be 'crop' or 'split', got {layout!r}")
+    return face, (cx, 0, cw, src_h)
+
+
+def _cover(w: int, h: int) -> str:
+    return f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+
+
+def face_place(r: RenderSettings, fw: int, fh: int) -> tuple[int, int]:
+    """Where the small face goes in the corner and circle layouts: clear of the opening text at the top and of the
+    captions and the credit line at the bottom."""
+    W, H = r.width, r.height
+    corner = r.face_corner if r.face_corner in FACE_CORNERS else "top-right"
+    x = 36 if corner.endswith("left") else W - fw - 36
+    y = 360 if corner.startswith("top") else H - fh - 150
+    return x, y
 
 
 def layout_filter(src_w: int, src_h: int, r: RenderSettings, layout: str) -> str:
     """FFmpeg filter chain from input label [0:v] to output label [v0]."""
     W, H = r.width, r.height
     face, (gx, gy, gw, gh) = layout_rects(src_w, src_h, r, layout)
-    if face is None:
-        return f"[0:v]crop={gw}:{gh}:{gx}:{gy},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}[v0]"
-    top_h = _even(H * r.split_top)
-    bot_h = H - top_h
+    if layout == "crop":
+        return f"[0:v]crop={gw}:{gh}:{gx}:{gy},{_cover(W, H)}[v0]"
+    if layout == "blur":
+        fit_h = min(H, _even(W * gh / gw))
+        return (
+            "[0:v]split=2[bg0][fg0];"
+            f"[bg0]{_cover(W, H)},boxblur=24:3,eq=brightness=-0.10[bg];"
+            f"[fg0]crop={gw}:{gh}:{gx}:{gy},scale={W}:{fit_h}[fg];"
+            f"[bg][fg]overlay=0:{(H - fit_h) // 2}[v0]"
+        )
     fx, fy, fw, fh = face
+    if layout in ("split", "split_under"):
+        top_h = _even(H * r.split_top)
+        bot_h = H - top_h
+        order = "[top][bot]" if layout == "split" else "[bot][top]"
+        return (
+            "[0:v]split=2[fa][ga];"
+            f"[fa]crop={fw}:{fh}:{fx}:{fy},{_cover(W, top_h)}[top];"
+            f"[ga]crop={gw}:{gh}:{gx}:{gy},{_cover(W, bot_h)}[bot];"
+            f"{order}vstack=inputs=2[v0]"
+        )
+    # A small face over the full-height video: a framed box in a corner, or a circle.
+    size = min(0.6, max(0.18, float(r.face_size)))
+    out_w = _even(W * size)
+    if layout == "pip":
+        out_h = _even(out_w / PIP_SHAPE)
+        small = f"crop={fw}:{fh}:{fx}:{fy},{_cover(out_w - 12, out_h - 12)},pad={out_w}:{out_h}:6:6:white"
+    else:
+        out_h = out_w
+        small = (f"crop={fw}:{fh}:{fx}:{fy},{_cover(out_w, out_h)},format=yuva420p,"
+                 "geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lte(hypot(X-W/2,Y-H/2),W/2-2),255,0)'")
+    px, py = face_place(r, out_w, out_h)
     return (
         "[0:v]split=2[fa][ga];"
-        f"[fa]crop={fw}:{fh}:{fx}:{fy},scale={W}:{top_h}:force_original_aspect_ratio=increase,crop={W}:{top_h}[top];"
-        f"[ga]crop={gw}:{gh}:{gx}:{gy},scale={W}:{bot_h}:force_original_aspect_ratio=increase,crop={W}:{bot_h}[bot];"
-        "[top][bot]vstack=inputs=2[v0]"
+        f"[ga]crop={gw}:{gh}:{gx}:{gy},{_cover(W, H)}[bg];"
+        f"[fa]{small}[fc];"
+        f"[bg][fc]overlay={px}:{py}[v0]"
     )
 
 
@@ -95,31 +157,34 @@ def framing(state: dict, cfg: Config) -> dict | None:
     """Where the face box and the video box sit on this clip's source right now, for the box editor on the review page.
 
     Boxes are fractions of the source picture and already have the shape they are shown in, so what is inside a box
-    is exactly what the viewer sees. None when the clip is not downloaded yet.
+    is exactly what the viewer sees. Every layout is listed, so the editor can switch between them.
+    None when the clip is not downloaded yet.
     """
     sw, sh = int(state.get("source_width") or 0), int(state.get("source_height") or 0)
     if not sw or not sh:
         return None
     r, layout = _layout_for(state, cfg)
-    if layout not in ("crop", "split"):
+    if layout not in LAYOUTS:
         layout = "crop"
-    W, H = r.width, r.height
-    top_h = _even(H * r.split_top)
-    aspects = {"face": W / top_h, "video_split": W / (H - top_h), "video_crop": W / H}
+    shapes = layout_shapes(r, sw, sh)
 
     def frac(box, aspect):
         x, y, w, h = _shown_part(box, aspect)
         return [round(x / sw, 4), round(y / sh, 4), round(w / sw, 4), round(h / sh, 4)]
 
-    out = {"layout": layout, "source": [sw, sh], "aspects": aspects, "custom": bool(state.get("game")) or not state.get("layout_auto", True)}
-    for name in ("crop", "split"):
+    out = {"layout": layout, "source": [sw, sh], "shapes": shapes, "names": LAYOUTS, "corners": list(FACE_CORNERS),
+           "face_corner": r.face_corner if r.face_corner in FACE_CORNERS else "top-right", "face_size": round(float(r.face_size), 2),
+           "out": [r.width, r.height], "split_top": r.split_top,
+           "custom": bool(state.get("game")) or not state.get("layout_auto", True), "boxes": {}}
+    for name in LAYOUTS:
+        own = r if name == layout else replace(r, game=[])  # a video box drawn for one layout has that layout's shape only
         try:
-            face, video = layout_rects(sw, sh, r if name == layout else replace(r, game=[]), name)
+            face, video = layout_rects(sw, sh, own, name)
         except ValueError:
-            face, video = layout_rects(sw, sh, replace(r, game=[], facecam=[0.0, 0.0, 0.25, 0.25]), name)
-        out[name] = {"video": frac(video, aspects[f"video_{name}"])}
+            face, video = layout_rects(sw, sh, replace(own, game=[], facecam=[0.0, 0.0, 0.25, 0.25]), name)
+        out["boxes"][name] = {"video": frac(video, shapes[name]["video"])}
         if face:
-            out[name]["face"] = frac(face, aspects["face"])
+            out["boxes"][name]["face"] = frac(face, shapes[name]["face"])
     return out
 
 
@@ -191,6 +256,9 @@ def _layout_for(state: dict, cfg: Config):
     game = state.get("game") or profile.get("game")  # the video box, when one was set by hand
     if game:
         r = replace(r, game=list(game))
+    for key in ("face_corner", "face_size"):  # where and how big the small face is, in the corner and circle layouts
+        if state.get(key) or profile.get(key):
+            r = replace(r, **{key: state.get(key) or profile.get(key)})
     if state.get("crop_x") is not None:  # per-clip horizontal position of the crop
         r = replace(r, crop_x=float(state["crop_x"]))
     return r, layout
@@ -264,6 +332,24 @@ def render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str 
         return _render_clip(clip_dir, cfg, force, out_name, hook, variant)
 
 
+def look_signature(cfg: Config) -> str:
+    """Changes when anything that is burned into every clip changes: the caption look and the branding.
+    "Make videos" renders a clip again when its draft was made with another look."""
+    import hashlib
+    from dataclasses import asdict
+
+    c = asdict(cfg.captions)
+    c.pop("script", None)  # which letters captions use is decided when a clip is transcribed, not when it is rendered
+    return hashlib.sha256(repr((sorted(c.items()), sorted(asdict(cfg.brand).items()))).encode()).hexdigest()[:12]
+
+
+def _corner_xy(corner: str, top: int, bottom: int, side: int = 40) -> tuple[str, str]:
+    """FFmpeg overlay position for something placed in a corner of the picture."""
+    x = str(side) if corner.endswith("left") else f"main_w-overlay_w-{side}"
+    y = str(top) if corner.startswith("top") else f"main_h-overlay_h-{bottom}"
+    return x, y
+
+
 def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str = "final.mp4", hook: bool = True, variant: str = "a") -> Path:
     """Render one clip. ``out_name``/``hook`` let other formats (top-moments videos)
     render a variant, e.g. the clip body without the hook text, beside the normal final.mp4.
@@ -299,12 +385,23 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
         overlays.append(Overlay(f"Part {part}", 0.0, duration, "Part"))
         if part < parts and duration > 8:
             overlays.append(Overlay(f"Part {part + 1} next", max(0.0, duration - 3.0), duration, "PartNext", pop=r.opening))
+    brand = cfg.brand
+    is_final = out_name in ("final.mp4", "final_b.mp4")  # the clip itself, not a piece used inside another video
+    captions = cfg.captions
+    # A small face in a bottom corner sits where captions and the outro line would be: captions go just above it, the outro to the top.
+    face_low = layout in ("pip", "circle") and str(r.face_corner).startswith("bottom")
+    if face_low:
+        small_w = _even(r.width * min(0.6, max(0.18, float(r.face_size))))
+        small_h = small_w if layout == "circle" else _even(small_w / PIP_SHAPE)
+        captions = replace(captions, margin_v=max(captions.margin_v, 150 + small_h + 40))
+    if is_final and brand.outro_text.strip() and duration > float(brand.outro_seconds) + 4:
+        overlays.append(Overlay(brand.outro_text.strip(), duration - float(brand.outro_seconds), duration, "OutroTop" if face_low else "Outro", pop=True))
     top_h = _even(r.height * r.split_top)
     # In the split layout the hook sits on the seam between facecam and gameplay, not over the face.
     hook_margin = top_h - 60 if layout == "split" else 170
     write_text(
         clip_dir / f"{stem}.ass",
-        build_ass(words, cfg.captions, overlays, hook_size=r.hook_font_size, credit_size=r.credit_font_size, hook_margin_v=hook_margin,
+        build_ass(words, captions, overlays, hook_size=r.hook_font_size, credit_size=r.credit_font_size, hook_margin_v=hook_margin,
                   progress_s=duration if r.opening else 0.0),
     )
     zoom, whoosh = opening_filters(r)
@@ -322,6 +419,20 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
         inputs += (["-ignore_loop", "0"] if logo_path.suffix.lower() == ".gif" else ["-loop", "1"]) + ["-i", str(logo_path)]
         graph += f";[1:v]scale={r.width}:{r.height}[lg];[v1][lg]overlay=0:0:shortest=1[v2]"
         last = "[v2]"
+    extra = 2 if logo else 1  # the number the next input file gets
+    if brand.logo:
+        mark = Path(brand.logo)
+        if not mark.exists():
+            raise ToolError(f"the logo file is missing: {brand.logo}. Choose it again under Branding, or take it off there")
+        inputs += (["-ignore_loop", "0"] if mark.suffix.lower() == ".gif" else ["-loop", "1"]) + ["-i", str(mark)]
+        width = _even(r.width * min(0.5, max(0.05, float(brand.logo_size))))
+        corner = brand.logo_corner if brand.logo_corner in FACE_CORNERS else "top-left"
+        # Top right is where the "Part 2" badge sits: the logo goes under it.
+        x, y = _corner_xy(corner, 150 if corner == "top-right" and part and parts > 1 else 50, 190)
+        graph += (f";[{extra}:v]scale={width}:-1,format=rgba,colorchannelmixer=aa={min(1.0, max(0.1, float(brand.logo_opacity))):.2f}[mark];"
+                  f"{last}[mark]overlay={x}:{y}:shortest=1[v3]")
+        last = "[v3]"
+        extra += 1
 
     measured = _measure_loudness(ffmpeg, "source.mp4", offset, duration, r.loudness_lufs, clip_dir)
     loud = f"loudnorm=I={r.loudness_lufs}:TP=-1.0:LRA=11"
@@ -331,6 +442,17 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
             f":measured_thresh={measured['input_thresh']}:offset={measured['target_offset']}:linear=true"
         )
     graph += f";[0:a:0]{loud},aresample=48000[a0];" + (whoosh if r.opening else "[a0]anull[a]")
+    sound = "[a]"
+    if is_final and brand.music:
+        music = Path(brand.music)
+        if not music.exists():
+            raise ToolError(f"the music file is missing: {brand.music}. Choose it again under Branding, or take it off there")
+        inputs += ["-stream_loop", "-1", "-i", str(music)]  # repeated if it is shorter than the clip
+        volume = min(0.5, max(0.0, float(brand.music_volume)))
+        graph += (f";[{extra}:a:0]volume={volume:.3f},afade=t=in:d=1.5,afade=t=out:st={max(0.0, duration - 2.0):.2f}:d=2,aresample=48000[music];"
+                  "[a][music]amix=inputs=2:duration=first:normalize=0[amix]")
+        sound = "[amix]"
+        extra += 1
     from . import hw
 
     enc = hw.encoder(cfg)
@@ -338,7 +460,7 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
     part = f"{stem}.part.mp4"
     cmd = (
         [ffmpeg, "-y", "-hide_banner", "-v", "error", "-stats"] + inputs
-        + ["-filter_complex", graph, "-map", last, "-map", "[a]"]
+        + ["-filter_complex", graph, "-map", last, "-map", sound]
         + video
         + ["-profile:v", "high", "-pix_fmt", "yuv420p", "-r", str(r.fps), "-g", str(r.fps * 2),
            "-c:a", "aac", "-b:a", r.audio_bitrate, "-ar", "48000", "-t", f"{duration:.3f}", "-movflags", "+faststart", part]
@@ -351,7 +473,7 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
         raise ToolError(f"render of clip {clip_dir.name} produced no file")
     os.replace(clip_dir / part, out)
     made = {"render_seconds": round(time.monotonic() - t0, 1), "duration_s": round(duration, 2), "width": r.width, "height": r.height,
-            "layout_used": layout, "encoder_used": enc, "opening_used": bool(r.opening), "style_used": cfg.captions.preset, "caption_words": len(words), "has_disclosure_overlay": bool(state.get("disclosure"))}
+            "layout_used": layout, "encoder_used": enc, "opening_used": bool(r.opening), "style_used": cfg.captions.preset, "look_used": look_signature(cfg), "caption_words": len(words), "has_disclosure_overlay": bool(state.get("disclosure"))}
     state.update(made)
     if out_name == "final.mp4":  # variants must not overwrite the main render's record
         # Only what this render produced is written: a render takes a while, and a person may have edited the clip meanwhile.

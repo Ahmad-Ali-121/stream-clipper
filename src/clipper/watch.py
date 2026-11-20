@@ -163,6 +163,7 @@ class Watched:
         self.buffer = buffer  # LiveBuffer when Twitch is not recording this broadcast, else None
         self.last_live_check = time.time()
         self.asked: list[dict] = []  # "clip the last N seconds" requests, waiting for the recording to reach them
+        self.samples: list[tuple[float, int]] = []  # (time, chat messages read so far), for the hype meter
 
     def stop(self) -> None:
         self.reader.stop()
@@ -348,6 +349,53 @@ def note_error(d: Path, message: str | None) -> None:
     write_json(path, state)
 
 
+LIVE_FILE = "live.json"  # what the watcher is doing right now, for the page: who is live, and how hot each chat is
+HYPE_LABELS = ((85, "peak hype"), (60, "hot"), (35, "building"), (0, "quiet"))
+
+
+def hype(samples: list[tuple[float, int]], now: float) -> dict:
+    """How busy chat is right now against this stream's own usual pace, 0 to 100.
+
+    ``samples`` are (time, messages read so far). The last 30 seconds are compared with the average 30 seconds of the
+    last ten minutes; four times the usual pace is 100. In the first minutes there is no "usual" yet, so a fixed
+    scale is used (two messages a second is 100).
+    """
+    recent = [(t, n) for t, n in samples if now - t <= 600]
+    if len(recent) < 2:
+        return {"percent": 0, "label": "quiet", "per_minute": 0}
+    last = [(t, n) for t, n in recent if now - t <= 30] or recent[-1:]
+    span = max(5.0, now - last[0][0])
+    rate = (recent[-1][1] - last[0][1]) / span  # messages a second, lately
+    whole = max(1.0, recent[-1][0] - recent[0][0])
+    usual = (recent[-1][1] - recent[0][1]) / whole
+    if whole < 120 or usual <= 0:
+        percent = 100 * rate / 2.0
+    else:
+        percent = 100 * rate / (4 * usual)
+    percent = int(max(0, min(100, percent)))
+    return {"percent": percent, "label": next(text for floor, text in HYPE_LABELS if percent >= floor), "per_minute": round(rate * 60)}
+
+
+def write_live(data_dir: Path, names: list[str], watched: dict) -> None:
+    """Tell the page who is live and how hot each chat is. Never allowed to disturb the watching itself."""
+    now = time.time()
+    out = {"at": now, "channels": {}}
+    for name in names:
+        w = watched.get(name)
+        if w is None:
+            out["channels"][name] = {"live": False}
+            continue
+        w.samples.append((now, int(getattr(w.reader, "messages", 0))))
+        w.samples = [s for s in w.samples if now - s[0] <= 660]
+        out["channels"][name] = {"live": True, "title": str(w.meta.get("title") or "")[:80], "waiting": len(w.asked), **hype(w.samples, now)}
+    try:
+        from .work import write_json as _write
+
+        _write(data_dir / LIVE_FILE, out)
+    except OSError as e:
+        log.debug("the live status could not be written this time: %s", e)
+
+
 ASKED_FILE = "clip_now.jsonl"  # the review page writes a line here for each "clip the last N seconds" press
 
 
@@ -512,6 +560,8 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
             # Wait for the next look, but answer a "clip now" press within a couple of seconds.
             wake = time.time() + cfg.watch.poll_s
             while time.time() < wake:
+                if int(time.time()) % 6 < 2:  # every six seconds or so
+                    write_live(cfg.data_dir, names, watched)
                 waiting = any(w.asked for w in watched.values())
                 if (cfg.data_dir / ASKED_FILE).exists() or (waiting and time.time() > wake - cfg.watch.poll_s + 5):
                     break
@@ -519,6 +569,7 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
     except KeyboardInterrupt:
         pass
     finally:
+        (cfg.data_dir / LIVE_FILE).unlink(missing_ok=True)
         pool.shutdown(wait=False, cancel_futures=True)
         for w in watched.values():
             w.stop()

@@ -326,7 +326,7 @@ def save_framing(channel: str, framing: dict | None, cfg: Config) -> None:
     if framing is None:
         data.pop(channel.lower(), None)
     else:
-        data[channel.lower()] = {k: framing.get(k) for k in ("layout", "facecam", "game", "source")}
+        data[channel.lower()] = {k: framing.get(k) for k in ("layout", "facecam", "game", "source", "face_corner", "face_size")}
     write_json(_framing_path(cfg), data)
 
 
@@ -342,7 +342,7 @@ def auto_layout(clip_dir: Path, state: dict, cfg: Config) -> dict:
     channel = str(state.get("channel", ""))
     saved = saved_framing(channel, cfg)
     # Boxes are fractions of the picture, so they only fit a stream of the same shape as the one they were drawn on.
-    if saved and saved.get("layout") in ("crop", "split"):
+    if saved and saved.get("layout") in ("crop", "split", "split_under", "blur", "pip", "circle"):
         size = saved.get("source") or []
         sw, sh = size[:2] if len(size) >= 2 and size[0] and size[1] else (16, 9)
         if abs(sw / sh - float(state.get("source_width") or 16) / float(state.get("source_height") or 9)) < 0.02:
@@ -353,6 +353,9 @@ def auto_layout(clip_dir: Path, state: dict, cfg: Config) -> dict:
                     state[k] = list(saved[k])
                 else:
                     state.pop(k, None)
+            for k in ("face_corner", "face_size"):
+                if saved.get(k):
+                    state[k] = saved[k]
             return state
     try:
         frames = detect_faces(clip_dir / "source.mp4", cfg)

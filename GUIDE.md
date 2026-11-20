@@ -127,6 +127,61 @@ The drafts appear at the top of the list, in order. Review, approve and make the
 
 A part can be between 8 seconds and 5 minutes long. A video file can also be searched automatically: in the **Finished stream** tab paste its path and choose sound, picture or AI reading (a file has no chat).
 
+### Transcript: find a moment by what was said
+
+The fourth button at the top, **Transcript**.
+
+1. Paste a video link and press **Get the words**. A YouTube video with captions is ready in seconds. Other videos need one run in the Finished stream tab with *Let AI read the whole stream*; their words are kept and can be searched here.
+2. Type a word or phrase in the search box. Hindi and Urdu speech is shown in its own letters here, so search in those letters.
+3. Click the line where the clip should start, then a later line where it should end. Press **Add this stretch to my picks**. Do this for as many clips as you like.
+4. Press **Make these clips**. Each pick becomes a draft, 8 seconds to 5 minutes long.
+
+**No AI set up? Use any free chatbot.** Open that section under your picks. The transcript is cut into parts of about 25 minutes, because a chatbot given a whole stream only reads the start. Press **Copy part 1**, paste it into ChatGPT, Gemini or any other, and copy its answer. When all parts are done, paste the answers into the box and press **Read the answers**: the moments are added to your picks. The program itself sends nothing anywhere.
+
+### Subtitle files
+
+On a clip's card, open **Captions**. **Download .srt** and **Download .vtt** give the clip's captions as a subtitle file, timed from the start of the clip. **Use a subtitle file** replaces the captions with your own file (its times must also count from the start of the clip).
+
+### Live: who is live, and how hot the chat is
+
+While watching, the Live streams tab lists every channel on your list: *not live yet* (checked every half minute and clipped as soon as they start), or a **hype meter** from 0 to 100 that compares the last half minute of chat with that stream's own usual pace. *quiet*, *building*, *hot*, *peak hype*. Peak is a good moment to press **Clip the last**.
+
+Tick **Start watching this list by itself when the program opens** and the program watches your saved list every time it starts, without a press. Add only creators you have a campaign or permission for.
+
+### Layouts: what the clip shows
+
+On a clip's card open **Fine-tune**. **Framing** has six choices, and **Set the face box and the video box** shows each one live:
+
+| Layout | What you get |
+|---|---|
+| Video only, full height | The game fills the screen |
+| Face on top, video below | The usual split |
+| Video on top, face below | The same, the other way round |
+| Whole picture on a blurred background | Nothing is cut off; the wide picture sits in the middle |
+| Video full height, face in a corner | A small framed face over the game |
+| Video full height, face in a circle | The same with a round face |
+
+For the last two, choose the corner and how big the small face is. A face in a bottom corner pushes the captions just above it.
+
+### Caption movement and your own caption style
+
+In step 3, under **Caption style**:
+
+- **How the captions move:** the spoken word changes colour (as before), pops in, shows one big word at a time, or the line fills in word by word.
+- **Your own caption style:** type a font installed on the PC, pick the size, outline, words on screen and the two colours. **Use this style** applies it; **Save as a profile** keeps it under a name you choose, and it then appears in the Caption style list.
+
+Clips already drafted get the new look when you press **Make videos**.
+
+### Branding: logo, outro line, music
+
+In step 3 open **Branding**.
+
+- **Logo or watermark:** choose an image (a PNG with a clear background looks best), then its corner, size and how see-through it is.
+- **Outro line:** a short line such as "Follow for part 2" shown over the last four seconds.
+- **Music under the voice:** choose a sound file and its loudness. It fades in and out and repeats if it is shorter than the clip. Use only music you have the right to use; platforms mute or remove clips with other people's songs.
+
+Branding is added whenever a draft or a video is made. Press **Make videos** to add it to clips drafted earlier.
+
 ### Faster on YouTube: its own captions
 
 For a YouTube video the program now asks YouTube for the words it has already written down, instead of listening to the video itself.
@@ -154,6 +209,7 @@ For a computer with no Claude plan or key. A small AI runs on the PC itself and 
 - The program checks by itself whether the PC can run it (about 8 GB of memory, 4 processor threads). A PC that cannot never downloads anything for it; the Claude box says so.
 - A PC that can shows **Set up free local AI** in the Claude box. One press installs Ollama and a model, about 3 GB in all; progress shows under Setup check.
 - Claude is always used first when it works. The local AI is the fallback, and its text is redone by Claude when Claude is back.
+- Claude Code is called once per job and leaves no chats behind in your Claude app. Turning captions into Latin letters now uses the small, fast model (about four times quicker, a fraction of your plan's usage), with almost the same result.
 - It is plainer than Claude, cannot look at the picture, and is not used to read whole streams or to turn captions into Latin letters.
 
 ### How far is it? The percentage bars

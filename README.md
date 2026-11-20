@@ -15,6 +15,12 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **AI can read a finished stream.** `--ai` turns all of its speech into text and has Claude pick moments from what was said (needs a Claude key; a few cents a stream).
 - **Works live or on finished streams, on Twitch and YouTube.** `watch` follows several live channels at once (Twitch names, YouTube handles like `@channel`); `run` processes a finished Twitch VOD or a YouTube recording with chat replay.
 - **Your own clips.** Give a YouTube or Twitch video link, or a video file such as a screen recording, with a start and an end; get one clip, or the range split into parts labelled "Part 1", "Part 2" on screen.
+- **Transcript search.** Search a video's words, click where a clip starts and ends, and make it. For people with no AI: the transcript in small parts with a ready prompt for any free chatbot, whose answers are read back as moments.
+- **Subtitle files.** Download a clip's captions as .srt or .vtt, or use your own subtitle file as its captions.
+- **Hype meter and go-live list.** While watching, each chat's heat against its own usual pace; the saved channel list can start by itself and clips each creator as soon as they go live.
+- **Six layouts.** Video only, face on top, face below, the whole picture on a blurred background, the face in a corner or in a circle over the video. Chosen per clip with a live preview.
+- **Caption movement and your own caption profiles.** The spoken word pops in, one big word at a time, or the line fills in; font, colours and size saved under your own names.
+- **Branding.** Your logo in a corner, an outro line over the last seconds, music under the voice.
 - **YouTube's own captions as the words.** For YouTube videos the words come from YouTube's captions when it has them: a clip's captions in seconds instead of minutes, and a whole stream's speech read at once. The speech model stays the fallback.
 - **Excited words as a signal.** "Oh my god", "no way", "arre yaar", "bhaago" (English, Hindi, Urdu, Roman or their own letters) raise a clip's score, and find moments in a YouTube video even when it has no chat.
 - **Clip the last 30 seconds.** While watching live, one button makes a draft of what just happened.
@@ -77,6 +83,7 @@ The code is plain Python and FFmpeg, so it should run on macOS and Linux, but th
 | `watch CHANNEL... [--mode A\|B\|C\|D] [--minutes N]` | Watch live Twitch channels and make a draft clip for each moment |
 | `cut SOURCE [--start T] [--end T] [--parts N \| --part-seconds S]` | Make clips from a range you choose in a video link or a video file, whole or in numbered parts |
 | `range SOURCE [--start T] [--end T]` | Download one part of a video once, for the cutting board on the review page |
+| `cut SOURCE --ranges 750-790,3725-3770` | Make a clip from each of several separate stretches of one video |
 | `cut SOURCE --range NAME --pieces 0-45,45-110` | Make clips from pieces of a part downloaded with `range` (what the cutting board runs) |
 | `run URL [--top 8] [--signals A\|B\|C\|D]` | Process a finished stream: find moments (chat, or chat plus sound and picture), fetch, transcribe, draft |
 | `review [URL]` | Local page: options panel, and approve, reject or edit each clip |
@@ -121,7 +128,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           201 unit tests (uv run pytest -q)
+tests/           215 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

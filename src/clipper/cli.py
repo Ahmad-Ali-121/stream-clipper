@@ -267,6 +267,18 @@ def _cmd_cut(args: argparse.Namespace) -> int:
             print(f"DRAFT  {video}")
         print(f"{len(made)} draft(s) ready. Review them on the page.")
         return 0
+    if args.ranges:
+        from .pipeline import stage_cut_list
+
+        ranges = [r.split("-", 1) for r in args.ranges.split(",") if r.strip()]
+        progress.begin([("download", "Downloading the clips", 45), ("captions", "Writing the captions", 25),
+                        ("text", "Writing the text", 10), ("draft", "Making the draft videos", 20)])
+        made = stage_cut_list(args.source, load_config(args.config), ranges)
+        progress.finish()
+        for video in made:
+            print(f"DRAFT  {video}")
+        print(f"{len(made)} draft(s) ready. Review them on the page.")
+        return 0
     start = parse_clock(args.start)
     end = parse_clock(args.end) if args.end else (start + parse_clock(args.length) if args.length else None)
     progress.begin([("download", "Downloading the clips", 45), ("captions", "Writing the captions", 25),
@@ -414,6 +426,7 @@ def build_parser() -> argparse.ArgumentParser:
     cu.add_argument("--part-seconds", help="or: split it into parts of this length")
     cu.add_argument("--no-part-label", action="store_true", help="do not show Part 1, Part 2 ... on the videos")
     cu.add_argument("--range", help="cut pieces out of a part already downloaded with the range command (its name, like 0h05m10s-0h07m40s)")
+    cu.add_argument("--ranges", help="several separate stretches of the video, each its own clip, in seconds: 750-790,3725-3770")
     cu.add_argument("--pieces", help="with --range: the pieces to make, in seconds from the start of that part, e.g. 0-45,45-110")
     cu.set_defaults(func=_cmd_cut)
 

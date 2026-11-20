@@ -35,8 +35,47 @@ CAPTION_PRESETS = {
 }
 
 
-def save_local(values: dict[str, dict[str, Any]], folder: Path = PROJECT_ROOT) -> None:
-    """Merge ``{section: {key: value}}`` into config.local.yaml, keeping whatever else is in it."""
+LOOK_KEYS = ("font", "font_size", "text_color", "active_color", "outline", "uppercase", "max_words", "animation")  # what a caption profile holds
+
+
+def clean_look(raw: dict) -> dict:
+    """A caption look typed on the page, checked. Every problem is said in words a person can act on."""
+    import re
+
+    from .captions import ANIMATIONS
+
+    if not isinstance(raw, dict):
+        raise ValueError("the caption style must be a set of values")
+    out: dict[str, Any] = {}
+    font = str(raw.get("font") or "").strip()
+    if not font or len(font) > 60 or not re.fullmatch(r"[\w .\-]+", font):
+        raise ValueError("give the name of a font installed on this computer, for example Arial Black")
+    out["font"] = font
+    for key, lo, hi, what in (("font_size", 40, 160, "the letter size"), ("outline", 0, 14, "the outline"), ("max_words", 1, 6, "the words on screen")):
+        try:
+            value = int(raw.get(key))
+        except (TypeError, ValueError):
+            raise ValueError(f"{what} must be a number from {lo} to {hi}") from None
+        if not lo <= value <= hi:
+            raise ValueError(f"{what} must be from {lo} to {hi}")
+        out[key] = value
+    for key, what in (("text_color", "the text colour"), ("active_color", "the highlight colour")):
+        value = str(raw.get(key) or "").lstrip("#").upper()
+        if not re.fullmatch(r"[0-9A-F]{6}", value):
+            raise ValueError(f"{what} must be a colour like FFE600")
+        out[key] = value
+    out["uppercase"] = bool(raw.get("uppercase"))
+    out["animation"] = raw.get("animation") if raw.get("animation") in ANIMATIONS else "highlight"
+    return out
+
+
+def save_local(values: dict[str, dict[str, Any]], folder: Path | None = None) -> None:
+    """Merge ``{section: {key: value}}`` into config.local.yaml, keeping whatever else is in it.
+
+    The file sits beside the settings file in use, which is where ``load_config`` reads it back from
+    (the project folder, unless ``CLIPPER_CONFIG`` points somewhere else)."""
+    if folder is None:
+        folder = Path(os.environ["CLIPPER_CONFIG"]).parent if os.environ.get("CLIPPER_CONFIG") else PROJECT_ROOT
     path = folder / LOCAL_FILE
     data = (yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None) or {}
     for section, items in values.items():
@@ -83,6 +122,38 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if value not in CAPTION_PRESETS:
                 raise ValueError(f"unknown caption style {value!r}")
             out.setdefault("captions", {}).update(preset=value, **CAPTION_PRESETS[value][1])
+        elif key == "caption_animation":
+            from .captions import ANIMATIONS
+
+            if value not in ANIMATIONS:
+                raise ValueError(f"the caption movement must be one of: {', '.join(ANIMATIONS)}")
+            out.setdefault("captions", {})["animation"] = value
+        elif key == "caption_look":
+            name = str((value or {}).get("name") or "custom").strip()[:40] or "custom"
+            out.setdefault("captions", {}).update(preset=name, **clean_look(value))
+        elif key.startswith("brand_"):
+            field = key[len("brand_"):]
+            b = out.setdefault("brand", {})
+            if field in ("logo", "music"):
+                path = str(value or "").strip()
+                if path and not Path(path).is_file():
+                    raise ValueError(f"that {field} file is not there: {path}")
+                b[field] = path
+            elif field == "logo_corner":
+                if value not in ("top-left", "top-right", "bottom-left", "bottom-right"):
+                    raise ValueError("the logo corner must be top-left, top-right, bottom-left or bottom-right")
+                b[field] = value
+            elif field in ("logo_size", "logo_opacity", "music_volume", "outro_seconds"):
+                lo, hi = {"logo_size": (0.05, 0.5), "logo_opacity": (0.1, 1.0), "music_volume": (0.0, 0.5), "outro_seconds": (2.0, 10.0)}[field]
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    raise ValueError(f"{field.replace('_', ' ')} must be a number") from None
+                b[field] = round(min(hi, max(lo, number)), 3)
+            elif field == "outro_text":
+                b[field] = " ".join(str(value or "").split())[:60]
+            else:
+                raise ValueError(f"unknown branding option: {key}")
         elif key == "llm_backend":
             from .llm import CHOICES
 
@@ -105,6 +176,10 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if value not in PRICES:
                 raise ValueError(f"unknown model {value!r}; choose one of: {', '.join(PRICES)}")
             out.setdefault("llm" if key == "llm_model" else "ai", {})["model"] = value
+        elif key == "watch_autostart":
+            if not isinstance(value, bool):
+                raise ValueError("watch_autostart must be on or off")
+            out.setdefault("watch", {})["autostart"] = value
         elif key == "channels":
             from .watch import channel_name
 
@@ -176,11 +251,16 @@ class Control:
             tail = self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-200:]
         return {
             "mode": parse_mode(cfg.watch.mode), "modes": MODE_TEXT, "channels": " ".join(cfg.watch.channels),
+            "watch_autostart": cfg.watch.autostart, "live": self._live(),
             "ab_versions": cfg.render.ab_versions, "opening": cfg.render.opening,
             "campaign": cfg.render.campaign, "campaigns": campaigns(),
             "youtube_captions": cfg.transcribe.youtube_captions,
             "speech_language": cfg.transcribe.language, "caption_script": cfg.captions.script, "text_language": cfg.llm.text_language,
             "caption_preset": cfg.captions.preset,
+            "caption_now": {k: getattr(cfg.captions, k) for k in LOOK_KEYS}, "caption_profiles": self.caption_profiles(),
+            "caption_animations": __import__("clipper.captions", fromlist=["ANIMATIONS"]).ANIMATIONS,
+            "brand": {**{k: getattr(cfg.brand, k) for k in ("logo", "logo_corner", "logo_size", "logo_opacity", "outro_text", "outro_seconds", "music", "music_volume")},
+                      "logo_name": Path(cfg.brand.logo).name if cfg.brand.logo else "", "music_name": Path(cfg.brand.music).name if cfg.brand.music else ""},
             "caption_presets": {k: {"label": v[0], **v[1]} for k, v in CAPTION_PRESETS.items()},
             "finish_progress": self.finish_progress,
             "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
@@ -206,6 +286,27 @@ class Control:
                 "problem": llm.why_unavailable(cfg), "ways": ways, "using": order[0] if order else "", "note": checks["note"],
                 "local": self._local_ai(),
                 "checking": self.ai_checking}
+
+    def _live(self) -> dict:
+        """Who is live and how hot each chat is, as the watcher last wrote it; empty when nothing is being watched."""
+        from .watch import LIVE_FILE
+        from .work import read_json
+
+        if not self.watching():
+            return {}
+        data = read_json(self.cfg.data_dir / LIVE_FILE, {})
+        return data.get("channels", {}) if time.time() - float(data.get("at") or 0) < 90 else {}
+
+    def autostart(self) -> None:
+        """When the program opens: start watching the saved list by itself, if that was asked for."""
+        cfg = self.cfg
+        if cfg.watch.autostart and cfg.watch.channels and not self.watching():
+            try:
+                self.start_watch({})
+                log.info("watching started by itself (%s): each creator is clipped whenever they go live", ", ".join(cfg.watch.channels))
+            except Exception as e:  # shown on the page; the page itself must still open
+                self.watch_problem = f"WATCHING COULD NOT START BY ITSELF: {e}"
+                log.error("%s", self.watch_problem)
 
     def _local_ai(self) -> dict:
         from . import localai
@@ -395,8 +496,34 @@ class Control:
         threading.Timer(0.8, self.shutdown).start()
         return {"restarting": True}
 
+    def _profiles_path(self) -> Path:
+        return self.cfg.data_dir / "caption_profiles.json"
+
+    def caption_profiles(self) -> dict:
+        from .work import read_json
+
+        return read_json(self._profiles_path(), {})
+
     def save(self, raw: dict) -> dict:
-        save_local(clean_options(raw))
+        from .work import write_json
+
+        raw = dict(raw)
+        # Caption profiles: a look saved under your own name, kept beside your clips (not in the settings file).
+        keep, drop = raw.pop("caption_profile_save", None), raw.pop("caption_profile_delete", None)
+        if keep is not None:
+            name = " ".join(str(keep.get("name") or "").split())[:40]
+            if not name:
+                raise ValueError("give the profile a name")
+            profiles = self.caption_profiles()
+            profiles[name] = clean_look(keep)
+            write_json(self._profiles_path(), profiles)
+            raw["caption_look"] = {**profiles[name], "name": name}
+        if drop is not None:
+            profiles = self.caption_profiles()
+            profiles.pop(str(drop), None)
+            write_json(self._profiles_path(), profiles)
+        if raw:
+            save_local(clean_options(raw))
         self.reload()
         return self.status()
 
@@ -582,6 +709,22 @@ class Control:
         from .sources import parse_source
 
         source = parse_source(str(raw.get("source") or ""))
+        if raw.get("ranges"):
+            # Several separate stretches picked from the transcript or from a chatbot's answers: each its own clip.
+            from .pipeline import MAX_PART_S, MIN_PART_S
+
+            pairs = []
+            for item in raw["ranges"]:
+                try:
+                    a, b = float(item[0]), float(item[1])
+                except (TypeError, ValueError, IndexError):
+                    raise ValueError("each stretch needs a start and an end") from None
+                if not MIN_PART_S - 0.05 <= b - a <= MAX_PART_S + 0.05:
+                    raise ValueError(f"a stretch is {b - a:.0f} seconds long; a clip is {MIN_PART_S:g} to {MAX_PART_S:.0f} seconds")
+                pairs.append(f"{a:g}-{b:g}")
+            if len(pairs) > 30:
+                raise ValueError("at most 30 clips at a time")
+            return self._start_job(["cut", source.url, "--ranges", ",".join(pairs)], f"making {len(pairs)} clip(s) you picked from {source.url}")
         start = parse_clock(raw.get("start") or 0)
         end = None if raw.get("to_end") else parse_clock(raw.get("end") or 0)
         if end is not None and end <= start:

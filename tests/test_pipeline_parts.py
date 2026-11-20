@@ -67,7 +67,7 @@ def test_bad_layout_and_facecam_are_clear_errors():
     from dataclasses import replace
 
     with pytest.raises(ValueError, match="layout"):
-        layout_filter(1920, 1080, R, "pip")
+        layout_filter(1920, 1080, R, "sideways")
     with pytest.raises(ValueError, match="facecam"):
         layout_filter(1920, 1080, replace(R, facecam=[0, 0, 2, 2]), "split")
 
