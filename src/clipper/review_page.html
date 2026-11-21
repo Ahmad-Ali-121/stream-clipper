@@ -283,7 +283,7 @@ kbd{background:rgba(255,255,255,.06)!important}
     <span class="pill" id="p-count">0 to review</span>
   </div>
 </div>
-<div id="errbox"><span id="errtext"></span> <button class="btn" id="b-restart" hidden onclick="restartNow()" style="margin-left:8px">Restart now</button><button class="x" title="Close this message" aria-label="Close this message" onclick="closeErr()">×</button></div>
+<div id="errbox"><span id="errtext"></span> <button class="btn" id="b-restart" data-yours hidden onclick="restartNow()" style="margin-left:8px">Restart now</button><button class="x" title="Close this message" aria-label="Close this message" onclick="closeErr()">×</button></div>
 
 <div class="layout">
   <aside class="side" id="side">
@@ -297,7 +297,7 @@ kbd{background:rgba(255,255,255,.06)!important}
           <div id="h-items"></div>
           <div class="btns">
             <button class="btn" id="b-hcheck" onclick="hAct('/api/health/check')">Run the full check</button>
-            <button class="btn" id="b-hrepair" onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. Continue?')">Repair</button>
+            <button class="btn" id="b-hrepair" data-yours onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. Continue?')">Repair</button>
             <button class="btn primary" id="b-hupdate" hidden onclick="hAct('/api/health/update','Update takes the newest version from GitHub. Your clips, settings and keys are not touched. Continue?')">Update</button>
           </div>
           <div class="bar indet" id="h-bar" hidden><i></i></div><div class="pct" id="h-pct" hidden></div>
@@ -393,11 +393,11 @@ kbd{background:rgba(255,255,255,.06)!important}
       <div class="body">
         <p class="help">Claude writes the opening text and titles, judges each clip, and can read a whole stream. Without it everything still works, with placeholder text.</p>
         <label class="f" for="a-backend">How to reach Claude</label>
-        <select id="a-backend" onchange="saveAi()"></select>
+        <select id="a-backend" data-yours onchange="saveAi()"></select>
         <div id="a-auto">
           <label class="f" for="a-prefer">When both work, use first</label>
           <select id="a-prefer" onchange="saveAi()"></select>
-          <label class="switch"><input type="checkbox" id="a-fallback" onchange="saveAi()"><span><b>Use the other if the first fails</b>For example when your plan's limit is reached. This can move work onto your paid API key; the page says so when it happens.</span></label>
+          <label class="switch"><input type="checkbox" id="a-fallback" data-yours onchange="saveAi()"><span><b>Use the other if the first fails</b>For example when your plan's limit is reached. This can move work onto your paid API key; the page says so when it happens.</span></label>
         </div>
         <div id="a-ways" style="margin-top:10px"></div>
         <div class="two">
@@ -407,7 +407,7 @@ kbd{background:rgba(255,255,255,.06)!important}
         <div class="note" id="a-note"></div>
         <div class="note" id="a-local"></div>
         <div class="btns"><button class="btn" id="b-aicheck" onclick="act2('/api/ai/check')">Check again</button>
-          <button class="btn" id="b-localai" hidden onclick="localAi()">Set up free local AI</button></div>
+          <button class="btn" id="b-localai" data-yours hidden onclick="localAi()">Set up free local AI</button></div>
       </div>
     </section>
 
@@ -525,8 +525,8 @@ kbd{background:rgba(255,255,255,.06)!important}
           <div class="tl big" id="cb-tl"><canvas></canvas><div id="cb-marks"></div><div class="ph" id="cb-ph"></div></div>
           <div class="cbruler" id="cb-ruler"></div>
           <div class="btns"><button class="btn primary" id="cb-cut">Cut here</button><button class="btn" id="cb-del">Remove the selected cut</button><button class="btn" id="cb-clear">Remove all cuts</button>
-            <span class="cbq">Split into <input type="number" id="cb-n" value="3" min="2" max="60" aria-label="number of equal parts"> equal parts <button class="btn" id="cb-eq">Do it</button></span>
-            <span class="cbq">or cut every <input type="number" id="cb-s" value="50" min="8" max="300" aria-label="seconds per piece"> seconds <button class="btn" id="cb-ev">Do it</button></span></div>
+            <span class="cbq">Split into <input type="number" id="cb-n" value="3" min="2" max="60" aria-label="number of equal parts"> equal parts <button class="btn" id="cb-eq" data-yours>Do it</button></span>
+            <span class="cbq">or cut every <input type="number" id="cb-s" value="50" min="8" max="300" aria-label="seconds per piece"> seconds <button class="btn" id="cb-ev" data-yours>Do it</button></span></div>
           <p class="keys" style="margin:10px 0 0">Play the video or click the sound wave to move. Press <b>Cut here</b> where a clip should end and the next begin; drag an orange marker to move a cut. Keys: <kbd>Space</kbd> play or pause · <kbd>←</kbd> <kbd>→</kbd> one second (with <kbd>Shift</kbd> five) · <kbd>,</kbd> <kbd>.</kbd> a tenth of a second · <kbd>C</kbd> cut · <kbd>Delete</kbd> remove the selected cut</p>
         </div>
         <div class="card" style="padding:14px;margin-top:14px">
@@ -627,7 +627,7 @@ function setErr(lines){if(typeof lines==='string')lines=lines?[lines]:[];errShow
 function closeErr(){for(const l of errShown)errClosed.add(l);$('errbox').style.display='none'}
 async function restartNow(){const r=await send('/api/restart');if(r.error){toast(r.error,true);return}
   toast('Restarting… this page reconnects by itself.');setTimeout(()=>location.reload(),6000)}
-function toast(msg,err){const t=$('toast');$('toasttext').textContent=msg;t.className=err?'err':'';t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',err?9000:2500)}
+function toast(msg,err){if(err&&typeof HELP!=='undefined')HELP.said=String(msg);const t=$('toast');$('toasttext').textContent=msg;t.className=err?'err':'';t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',err?9000:2500)}
 let curTab='live', tabRunning=false;
 function tab(name){curTab=name;for(const n of ['live','vod','own']){$('tab-'+n).hidden=n!==name;$('t-'+n).className=n===name?'on':''}}
 function mode(){return (document.querySelector('[name=o-mode]:checked')||{}).value}
@@ -1378,7 +1378,7 @@ function cbInit(){
   $('cb-rows').addEventListener('click',e=>{const b=e.target.closest('[data-play]');if(!b)return;const s=cbSegs()[+b.dataset.play];v.currentTime=s.a;cbStopAt=s.b;v.play().catch(()=>{})});
   window.addEventListener('resize',cbDraw);
   document.addEventListener('keydown',e=>{
-    if($('view-board').hidden||!CB||e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary')))return;
+    if($('view-board').hidden||!CB||!$('helpbox').hidden||!$('spot').hidden||HELP.doing||e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary')))return;
     const k=e.key.toLowerCase(),step=d=>{v.currentTime=Math.max(0,Math.min(CB.total,v.currentTime+d))};
     if(k===' '){v.paused?v.play().catch(()=>{}):v.pause()}else if(k==='arrowleft')step(e.shiftKey?-5:-1);else if(k==='arrowright')step(e.shiftKey?5:1)
     else if(k===',')step(-.1);else if(k==='.')step(.1);else if(k==='c')cbCut(v.currentTime);else if(k==='delete'||k==='backspace')cbRemove(CB.sel);else return;
@@ -1440,10 +1440,10 @@ function twInit(){
 twInit();
 
 /* ---------- the help assistant: ask, and be shown where ---------- */
-let HELP={turns:[],map:new Map(),busy:false,tour:null,at:0,el:null};
+let HELP={turns:[],map:new Map(),busy:false,tour:null,at:0,el:null,chat:0,said:''};
 const HELP_STARTERS=['What does this program do?','How do I make my first clip?','How do I clip a live stream?','What do the scores and chips on a clip mean?','How do I change how the captions look?','Why is it not working?','What can you do for me?'];
 function helpToggle(){const b=$('helpbox');b.hidden=!b.hidden;if(!b.hidden){if(!$('helpmsgs').children.length)helpClear();$('helpq').focus()}}
-function helpClear(){HELP.turns=[];$('helpmsgs').innerHTML='<div class="ha">Ask me anything about this program, in English or Roman Urdu. I answer in simple words and can show you where things are. You can also tell me to do something, like "start watching lacy" or "make the captions yellow", and I do it on the page while you watch. Approving, rejecting and deleting clips stay yours.</div>'
+function helpClear(){HELP.turns=[];HELP.chat++;HELP.busy=false;$('helpsend').disabled=false;$('helpmsgs').innerHTML='<div class="ha">Ask me anything about this program, in English or Roman Urdu. I answer in simple words and can show you where things are. You can also tell me to do something, like "start watching lacy" or "make the captions yellow", and I do it on the page while you watch. Approving, rejecting and deleting clips stay yours.</div>'
   +'<div class="hsug">'+HELP_STARTERS.map(q=>'<button type="button" data-q="'+esc(q)+'">'+esc(q)+'</button>').join('')+'</div>'}
 /* Where a thing sits, in words: the view, the step-1 tab, the box and any fold-out it is inside. */
 function helpWhere(el){
@@ -1485,11 +1485,12 @@ function helpTargets(){
     let now='',choices='';
     if(el.tagName==='SELECT'){now=(el.selectedOptions[0]||{}).textContent||'';choices=[...el.options].filter(o=>!o.disabled).map(o=>o.textContent.trim()).join('; ')}
     else if(el.tagName==='INPUT'&&(el.type==='checkbox'||el.type==='radio'))now=el.checked?'ticked':'not ticked';
-    else if(el.tagName==='INPUT'&&el.type==='range'){now=el.value;choices='a number from '+el.min+' to '+el.max}
-    else if((el.tagName==='INPUT'&&el.type!=='password')||el.tagName==='TEXTAREA')now=el.value||'(empty)';
+    else if(el.tagName==='INPUT'&&(el.type==='range'||el.type==='number')){now=el.value;if(el.min!==''||el.max!=='')choices='a number from '+(el.min||'any')+' to '+(el.max||'any')}
+    else if(el.tagName==='INPUT'&&el.type==='color'){now=el.value;choices='a colour written as #rrggbb'}
+    else if((el.tagName==='INPUT'&&el.type!=='password')||el.tagName==='TEXTAREA')now=(el.value||'(empty)').slice(0,80);
     else if(el.tagName==='LABEL'&&el.querySelector('input[type=radio]'))now=el.querySelector('input').checked?'chosen':'';
     if(el.disabled)now=(now?now+', ':'')+'switched off right now';
-    out.push({key:key,kind:el.tagName==='INPUT'?(el.type==='checkbox'||el.type==='radio'?'tick box':(el.type==='range'?'slider':'box')):(kinds[el.tagName]||'item'),label:label,where:helpWhere(el),now:now,choices:choices});
+    out.push({key:key,kind:el.tagName==='INPUT'?(el.type==='checkbox'||el.type==='radio'?'tick box':(el.type==='range'?'slider':'box')):(kinds[el.tagName]||'item'),label:label,where:helpWhere(el),now:now,choices:choices,yours:helpYours(el)});
     if(out.length>=400)break}
   return out}
 function helpState(){const s=last||{},h=s.health||{};
@@ -1508,8 +1509,10 @@ async function helpAsk(text){
   const q=(text||val('helpq')).trim();if(!q||HELP.busy)return;
   $('helpq').value='';for(const s of document.querySelectorAll('.hsug'))s.remove();
   helpAdd('hq',esc(q));const wait=helpAdd('ha','Thinking…');HELP.busy=true;$('helpsend').disabled=true;
-  const r=await send('/api/help',{question:q,history:HELP.turns.slice(-6),targets:helpTargets(),state:helpState()});
-  HELP.busy=false;$('helpsend').disabled=false;wait.remove();
+  const chat=HELP.chat, listed=helpTargets(), map=HELP.map, meta=HELP.meta;
+  const r=await send('/api/help',{question:q,history:HELP.turns.slice(-6),targets:listed,state:helpState()});
+  if(chat!==HELP.chat)return;   /* "New chat" was pressed while this was on its way: it is not shown and nothing is done */
+  HELP.busy=false;$('helpsend').disabled=false;wait.remove();HELP.map=map;HELP.meta=meta;
   if(r.error){helpAdd('ha','<b style="color:var(--bad)">I could not answer:</b> '+esc(r.error));return}
   HELP.turns.push({q:q,a:r.answer+' '+r.steps.map(s=>s.text).join(' ')});
   const id=HELP.turns.length-1, pts=r.steps.filter(s=>s.target&&HELP.map.has(s.target)).length, acts=r.steps.filter(s=>s.act&&HELP.map.has(s.target)).length;
@@ -1518,21 +1521,35 @@ async function helpAsk(text){
   box._steps=r.steps;box._map=HELP.map;box._meta=HELP.meta;box._turn=id;
   if((r.follow_ups||[]).length)helpAdd('hsug',r.follow_ups.map(f=>'<button type="button" data-q="'+esc(f)+'">'+esc(f)+'</button>').join(''));
   $('helpmsgs').scrollTop=1e9;$('helpq').focus();
-  if(r.run&&acts)helpDo(box);
+  /* done by itself only while the user is still looking at this chat; otherwise the button is there for them */
+  if(r.run&&acts&&!$('helpbox').hidden&&!HELP.el)helpDo(box);
 }
 /* ---- doing the steps for the user: one at a time, in front of them, with a way to stop ---- */
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 /* Presses that are never done for the user, whatever an answer says (the server takes them out as well). */
-const HELP_YOURS=/\b(approve|approved|reject|rejected|delete|deleted|deleting|remove|back to review|update|updates|install|reinstall|reset|forget)\b/i;
+const HELP_YOURS=/\b(approve|approves|approving|reject|rejects|rejecting|delet\w*|remov\w*|eras\w*|discard\w*|clear\w*|wipe\w*|forget\w*|reset\w*|updat\w*|upgrad\w*|install|installs|installing|reinstall\w*|restart\w*|repair\w*|back to review|back to automatic|take it off)\b/i;
+function helpYours(el){const l=helpLabel(el);return !!(el.closest('.clip,#boxes,[data-yours]')||HELP_YOURS.test(l)||/^(×|x|close)$/i.test(l.trim()))}
+function helpColour(v){   /* a colour name or code as #rrggbb, or '' when it is not a colour */
+  v=String(v).trim();if(/^#[0-9a-f]{6}$/i.test(v))return v.toLowerCase();
+  const c=document.createElement('canvas').getContext('2d');c.fillStyle='#000001';c.fillStyle=v;const a=c.fillStyle;c.fillStyle='#000002';c.fillStyle=v;
+  return (a===c.fillStyle&&/^#[0-9a-f]{6}$/i.test(a))?a:''}
 function helpSet(el,value){   /* put a value into a box, a list or a slider the way a person would: the page's own handlers run */
   if(el.tagName==='SELECT'){
-    const want=String(value).trim().toLowerCase(), opts=[...el.options].filter(o=>!o.disabled);
-    const o=opts.find(o=>o.textContent.trim().toLowerCase()===want||o.value.toLowerCase()===want)||opts.find(o=>o.textContent.trim().toLowerCase().startsWith(want))||opts.find(o=>want&&o.textContent.toLowerCase().includes(want));
-    if(!o)return 'that list has no choice called "'+value+'"';
-    el.value=o.value}
+    const want=String(value).trim().toLowerCase(), opts=[...el.options].filter(o=>!o.disabled), text=o=>o.textContent.trim().toLowerCase();
+    if(!want)return 'no choice was named';
+    /* the exact choice; failing that a start or a part of one, but only when a single choice fits ("5" must not become "15 seconds") */
+    let fit=opts.filter(o=>text(o)===want||o.value.toLowerCase()===want);
+    if(!fit.length)fit=opts.filter(o=>text(o).startsWith(want));
+    if(!fit.length)fit=opts.filter(o=>text(o).includes(want));
+    if(!fit.length)return 'that list has no choice called "'+value+'"';
+    if(fit.length>1)return '"'+value+'" fits more than one choice of that list ('+fit.slice(0,3).map(o=>o.textContent.trim()).join(', ')+')';
+    el.value=fit[0].value}
   else if(el.type==='range'||el.type==='number'){
-    const n=parseFloat(value);if(isNaN(n))return '"'+value+'" is not a number';
-    el.value=Math.max(el.min===''?-Infinity:+el.min,Math.min(el.max===''?Infinity:+el.max,n))}
+    const t=String(value).trim();if(!/^-?\d+(\.\d+)?$/.test(t))return '"'+value+'" is not a plain number';
+    const n=parseFloat(t);
+    if((el.min!==''&&n<+el.min)||(el.max!==''&&n>+el.max))return n+' is outside what that box takes ('+(el.min||'any')+' to '+(el.max||'any')+')';
+    el.value=n}
+  else if(el.type==='color'){const c=helpColour(value);if(!c)return '"'+value+'" is not a colour I can set';el.value=c}
   else el.value=String(value);
   el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return ''}
 function helpAct(step,el){   /* returns '' when done, or why it could not be done */
@@ -1542,41 +1559,57 @@ function helpAct(step,el){   /* returns '' when done, or why it could not be don
     const box=el.tagName==='INPUT'?el:el.querySelector('input[type=checkbox],input[type=radio]');
     if(!box)return 'it is not a tick box';
     if(box.checked!==(step.act==='tick'))box.click();return ''}
-  if(step.act==='press'){el.click();return ''}
+  if(step.act==='press'){
+    if(el.tagName==='SUMMARY'&&el.parentElement&&el.parentElement.open)return '';   /* a fold-out that is already open stays open */
+    el.click();return ''}
   return 'I do not know how to do that'}
 async function helpDo(box){
   if(HELP.doing)return;
-  helpUse(box);const steps=box._steps, done=[];HELP.doing=true;HELP.stop=false;HELP.tour=null;
-  for(const b of box.querySelectorAll('[data-do]'))b.remove();
+  HELP.doing=true;HELP.stop=false;HELP.tour=null;
+  const steps=box._steps, done=[];let why='', stoppedAt=-1, yours=-1, waitAt=-1;
   const mark=(i,cls)=>{const li=box.querySelector('[data-li="'+i+'"]');if(li)li.className=cls};
-  const todo=steps.map((s,i)=>i).filter(i=>steps[i].act&&HELP.map.has(steps[i].target));
-  let why='', stoppedAt=-1, yours=-1;
   const before=errShown.join(' || ');
-  for(let n=0;n<steps.length;n++){
-    const s=steps[n];
-    if(s.yours&&s.target&&HELP.map.has(s.target)){yours=n;break}   /* a decision: from here on it is the user's turn */
-    if(!todo.includes(n))continue;
-    if(HELP.stop){stoppedAt=n;break}
-    const real=HELP.map.get(s.target), shown=helpReveal(real);
-    if(!shown||shown!==real){why='it is not on the page right now';stoppedAt=n;break}
-    /* the same rule as the server, checked again here on the real thing: decisions and deleting are never done for the user */
-    if(real.closest('.clip')||HELP_YOURS.test(helpLabel(real))||real.classList.contains('danger')){yours=n;break}
-    HELP.el=real;$('spot').hidden=false;$('helpbox').hidden=true;$('spotnext').hidden=true;$('spotdone').textContent='Stop';
-    $('spottext').textContent='Doing it for you ('+(todo.indexOf(n)+1)+' of '+todo.length+'): '+s.text;
-    real.scrollIntoView({block:'center',behavior:'smooth'});spotPlace();await pause(400);spotPlace();await pause(650);
-    if(HELP.stop){stoppedAt=n;break}
-    why=helpAct(s,real);
-    if(why){stoppedAt=n;break}
-    mark(n,'did');done.push(s.text);await pause(700);
-  }
-  $('spot').hidden=true;HELP.el=null;$('spotdone').textContent='Done';$('helpbox').hidden=false;HELP.doing=false;
-  await pause(900);   /* let the page show what the last press led to */
-  const after=errShown.join(' || ');
-  let msg=done.length?('Done: '+done.length+' step'+(done.length>1?'s':'')+'.'):'';
-  if(stoppedAt>=0){mark(stoppedAt,'fail');msg+=(msg?' ':'')+(HELP.stop&&!why?'Stopped, as you asked. Nothing after that was done.':'I stopped at "'+steps[stoppedAt].text+'" because '+why+'. Nothing after that was done.')}
-  if(after&&after!==before)msg+=' The page now shows a problem: '+errShown[0];
-  if(HELP.turns[box._turn])HELP.turns[box._turn].a+=' ['+(msg||'nothing was done')+']';
-  if(msg)helpAdd('ha',(stoppedAt>=0||(after&&after!==before)?'<b style="color:var(--bad)">':'<b>')+esc(msg)+'</b>');
+  try{
+    helpUse(box);
+    for(const b of box.querySelectorAll('[data-do]'))b.remove();
+    const can=i=>steps[i].act&&HELP.map.has(steps[i].target), todo=steps.map((s,i)=>i).filter(can);
+    for(let n=0;n<steps.length;n++){
+      const s=steps[n];
+      if(s.yours&&s.target&&HELP.map.has(s.target)){yours=n;break}   /* a decision: from here on it is the user's turn */
+      if(!can(n)){
+        /* a step that is not an action, in the middle of the actions: something has to happen first (a job to finish, a choice of
+           the user's). Carrying on past it would use the page before it is ready, so the run ends here and says so. */
+        if(done.length&&todo.some(i=>i>n)){waitAt=n;break}
+        continue}
+      if(HELP.stop){stoppedAt=n;break}
+      const real=HELP.map.get(s.target), shown=helpReveal(real);
+      if(!shown||shown!==real){why='it is not on the page right now';stoppedAt=n;break}
+      /* the same rule as the server, checked again here on the real thing: decisions and deleting are never done for the user */
+      if(helpYours(real)){yours=n;break}
+      HELP.el=real;$('spot').hidden=false;$('helpbox').hidden=true;$('spotnext').hidden=true;$('spotdone').textContent='Stop';
+      $('spottext').textContent='Doing it for you ('+(todo.indexOf(n)+1)+' of '+todo.length+'): '+s.text;
+      real.scrollIntoView({block:'center',behavior:'smooth'});spotPlace();await pause(400);spotPlace();await pause(650);
+      if(HELP.stop){stoppedAt=n;break}
+      if(!document.body.contains(real)){why='the page redrew that part just now; ask again';stoppedAt=n;break}
+      HELP.said='';
+      why=helpAct(s,real);
+      if(why){stoppedAt=n;break}
+      await pause(900);   /* long enough for the page to answer the press */
+      if(HELP.said){why='the page answered: '+HELP.said;stoppedAt=n;break}   /* a press the page refused is not a step done */
+      mark(n,'did');done.push(s.text);
+    }
+  }catch(e){why='the page hit a fault of its own ('+e+')';if(stoppedAt<0)stoppedAt=Math.max(0,done.length)}
+  finally{$('spot').hidden=true;HELP.el=null;$('spotdone').textContent='Done';$('helpbox').hidden=false}
+  try{
+    await pause(600);   /* let the page show what the last press led to */
+    const after=errShown.join(' || '), bad=stoppedAt>=0||(after&&after!==before);
+    let msg=done.length?('Done: '+done.length+' step'+(done.length>1?'s':'')+'.'):'';
+    if(stoppedAt>=0){mark(stoppedAt,'fail');msg+=(msg?' ':'')+(HELP.stop&&!why?'Stopped, as you asked. Nothing after that was done.':'I stopped at "'+steps[stoppedAt].text+'" because '+why+'. Nothing after that was done.')}
+    if(waitAt>=0)msg+=(msg?' ':'')+'I stopped before "'+steps[waitAt].text+'": that has to happen first, so the steps after it are left for you (or ask me again when it is done).';
+    if(after&&after!==before)msg+=' The page now shows a problem: '+errShown[0];
+    if(HELP.turns[box._turn])HELP.turns[box._turn].a+=' ['+(msg||'nothing was done')+']';
+    if(msg)helpAdd('ha',(bad?'<b style="color:var(--bad)">':'<b>')+esc(msg)+'</b>');
+  }finally{HELP.doing=false;$('helpq').focus()}
   if(yours>=0){helpAdd('ha','The next step is yours to press, so I only show it: '+esc(steps[yours].text));HELP.tour=steps;HELP.at=yours;
     spotShow(steps[yours],steps.slice(yours+1).some(s=>s.target&&HELP.map.has(s.target)))}
 }
@@ -1591,7 +1624,7 @@ function helpReveal(el){
   return (show===document.body||show===document.documentElement||show.id==='boxes')?null:show}
 function view_(n){view(n)}
 function spotPlace(){
-  const el=HELP.el;if(!el||!document.body.contains(el)){spotEnd();return}
+  const el=HELP.el;if(!el||!document.body.contains(el)){if(!HELP.doing)spotEnd();return}   /* during a run the runner itself notices and says why */
   const r=el.getBoundingClientRect(),p=6,W=innerWidth,H=innerHeight,x=Math.max(0,r.left-p),y=Math.max(0,r.top-p),x2=Math.min(W,r.right+p),y2=Math.min(H,r.bottom+p);
   const set=(id,l,t,w,h)=>{const s=$(id).style;s.left=l+'px';s.top=t+'px';s.width=Math.max(0,w)+'px';s.height=Math.max(0,h)+'px'};
   set('sp-t',0,0,W,y);set('sp-b',0,y2,W,H-y2);set('sp-l',0,y,x,y2-y);set('sp-r',x2,y,W-x2,y2-y);set('spotring',x,y,x2-x,y2-y);
@@ -1608,11 +1641,11 @@ function spotNext(){const t=HELP.tour;if(!t){spotEnd();return}
   HELP.at++;while(HELP.at<t.length&&!(t[HELP.at].target&&HELP.map.has(t[HELP.at].target)))HELP.at++;
   if(HELP.at>=t.length){spotEnd();return}
   spotShow(t[HELP.at],t.slice(HELP.at+1).some(s=>s.target&&HELP.map.has(s.target)))}
-function spotEnd(){if(HELP.doing){HELP.stop=true;return}$('spot').hidden=true;HELP.el=null;HELP.tour=null;$('helpbox').hidden=false}
+function spotEnd(){if(HELP.doing){HELP.stop=true;return}$('spot').hidden=true;HELP.el=null;HELP.tour=null;$('helpbox').hidden=false;$('helpq').focus()}
 function helpInit(){
   $('helpmsgs').addEventListener('click',e=>{
     const q=e.target.closest('[data-q]');if(q){helpAsk(q.dataset.q);return}
-    const box=e.target.closest('.ha');if(!box||!box._steps||HELP.doing)return;
+    const box=e.target.closest('.ha');if(!box||!box._steps||HELP.doing||HELP.busy)return;
     if(e.target.closest('[data-do]')){helpDo(box);return}
     helpUse(box);
     const one=e.target.closest('[data-step]');if(one){HELP.tour=null;spotShow(box._steps[+one.dataset.step],false);return}
@@ -1677,7 +1710,7 @@ let cur=null;
 function shownCards(){return [...$('clips').children].filter(e=>e.offsetParent!==null)}
 function setCur(el){if(cur)cur.classList.remove('cur');cur=el||null;if(cur){cur.classList.add('cur');cur.scrollIntoView({block:'center',behavior:'smooth'})}}
 document.addEventListener('keydown',e=>{
-  if($('view-clips').hidden||!$('boxes').hidden||!$('spot').hidden)return;
+  if($('view-clips').hidden||!$('boxes').hidden||!$('spot').hidden||!$('helpbox').hidden||HELP.doing)return;   /* words meant for the chat must never approve or reject */
   if(e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary,[contenteditable]')))return;
   const cards=shownCards(); if(cur&&!cards.includes(cur)){cur.classList.remove('cur');cur=null}
   const i=cards.indexOf(cur), k=e.key.toLowerCase();

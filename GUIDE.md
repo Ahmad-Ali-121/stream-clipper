@@ -136,12 +136,13 @@ The **? Ask** button at the bottom right opens a chat. Type a question about the
 - It knows what the program is doing right now, so it can explain an error that is on screen.
 - It only answers questions about this program.
 
-**Telling it to do something.** You can also give it an order instead of a question, in English or Roman Urdu: "start watching lacy and kick.com/name with chat only", "stop watching", "set the template to No template", "make a clip from this link from 3:53:30 to 3:54:00", "watching band kar do". It then does the steps on the page while you watch: each thing is highlighted, the text is typed, the choice is made, the button is pressed, and the step gets a tick in the chat. **Stop** (or Esc) ends it at once; steps already done stay done. When it is finished it says how many steps it did, and if something could not be done it says which step and why, and does nothing after it.
+**Telling it to do something.** You can also give it an order instead of a question, in English or Roman Urdu: "start watching lacy and kick.com/name with chat only", "stop watching", "set the template to No template", "make a clip from this link from 3:53:30 to 3:54:00", "watching band kar do". It then does the steps on the page while you watch: each thing is highlighted, the text is typed, the choice is made, the button is pressed, and the step gets a tick in the chat. **Stop** (or Esc) ends it at once; steps already done stay done. When it is finished it says how many steps it did. If something could not be done (the page refused a press, a value did not fit, the thing is not there) it says which step and why, and does nothing after it. If a step has to wait for something first, such as a download, it stops before that step and leaves the rest to you.
 
-- If you only asked how to do something, it does nothing by itself; the answer has a **Do it for me** button.
+- If you only asked how to do something, it does nothing by itself; the answer has a **Do it for me** button. The same if you closed the chat before the answer came. **New chat** drops an answer that is still on its way.
+- While the chat is open, the keyboard shortcuts for clips (J, K, A, R) are switched off, so words you type can never approve or reject a clip.
 - It can use anything that is on the page: boxes, lists, tick boxes, sliders, tabs and buttons. A new feature can be used the day it is added.
 - If you left out something it needs (which channel, which link, what time), it asks instead of guessing.
-- **Some presses always stay yours.** Approve, Reject, Delete, Back to review and everything else on a clip's card, deleting anything, and updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
+- **Some presses always stay yours.** Approve, Reject, Delete, Back to review and everything else on a clip's card, the box editor window, deleting, removing or clearing anything, taking a logo or music off, cutting the cutting board into equal parts (it replaces your cuts), which Claude connection is used, setting up the free local AI, and repairing, restarting or updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
 - It cannot post or upload anything; the program has no way to do that.
 
 It needs Claude (your Claude Code plan or an API key). Without Claude it still answers, by showing the parts of this guide that match your question, but it cannot do things for you. Each question counts towards your Claude plan like any other use.
@@ -283,7 +284,7 @@ Every job on the page has a bar with a line under it, for example **41% · Step 
 
 ### Face box and video box: choose what the clip shows
 
-Works on every clip: live Twitch and YouTube drafts, finished streams and your own clips.
+Works on every clip: live Twitch, Kick and YouTube drafts, finished streams and your own clips.
 
 1. On the clip's card open **Fine-tune** and press **Set the face box and the video box**.
 2. You see the stream as it was, with two boxes: orange **Face** and blue **Video**. Drag a box to move it; drag its round corner to make it bigger or smaller. The boxes keep the shape they are shown in, so what is inside a box is exactly what the viewer sees. The small picture on the right is the result. Use the slider or **Play** to check other moments of the clip.
@@ -295,7 +296,7 @@ Works on every clip: live Twitch and YouTube drafts, finished streams and your o
 
 ### YouTube streams, and Urdu or Hindi streamers
 
-**YouTube.** In the channels box type the channel's handle with its @, for example `@channelname`, or paste the address of the live stream. Twitch names and YouTube handles can be mixed: `lacy @channelname`. For a live YouTube stream the clips are cut from the stream itself; nothing is recorded in the background. Moments come from chat only on YouTube.
+**YouTube.** In the channels box type the channel's handle with its @, for example `@channelname`, or paste the address of the live stream. Twitch names, Kick channels and YouTube handles can be mixed: `lacy @channelname`. For a live YouTube stream the clips are cut from the stream itself; nothing is recorded in the background. Moments come from chat only on YouTube.
 
 **Urdu or Hindi.** Open **Language** at the top of step 1 and choose:
 - what the streamer speaks: English, Urdu or Hindi;

@@ -201,3 +201,119 @@ def test_a_finished_kick_stream_gets_its_chat_and_an_old_one_says_why_not(tmp_pa
     monkeypatch.setattr(kick, "save_chat", lambda *a, **k: 0)
     with pytest.raises(fetch.NoChatError, match="no chat for this video"):
         fetch.fetch_chat(source, work, cfg)
+
+
+def test_entries_that_are_not_chat_do_not_end_the_reading(tmp_path, monkeypatch):
+    """Kick's pages can hold gifts and deleted lines; a page of nothing else must not be taken for the end of the chat."""
+    start = 3_000_000.0
+    real = sorted([start + 100.5 + i for i in range(30)] + [start + 400.5 + i for i in range(30)], reverse=True)
+    gap = (start + 200, start + 380)  # a stretch whose entries are all filtered out
+
+    def page(channel_id, before=None, tries=3):
+        limit = before / 1e6 if before else float("inf")
+        if gap[0] < limit <= gap[1] + 1:  # inside the stretch: an empty page, but a cursor that leads on
+            return [], int((limit - 60) * 1e6)
+        rows = [t for t in real if t < limit and not (limit > gap[1] and t < gap[1])][: kick.PAGE]
+        if not rows:
+            return ([], int(gap[1] * 1e6)) if limit > gap[1] else ([], None)
+        return [{"id": f"m{t}", "at": float(int(t)), "author": "a", "text": "x"} for t in rows], int(rows[-1] * 1e6)
+
+    monkeypatch.setattr(kick, "chat_page", page)
+    assert len(kick.chat_between(1, start, start + 600)) == 60  # the thirty before the stretch were reached
+
+
+def test_when_one_part_of_the_chat_fails_the_others_stop_asking_and_what_was_read_is_kept(tmp_path, monkeypatch):
+    import threading
+    import time
+
+    start = 4_000_000.0
+    calls = []
+    lock = threading.Lock()
+
+    def page(channel_id, before=None, tries=3):
+        t = before / 1e6
+        with lock:
+            calls.append(t)
+        if t > start + 1800:
+            raise kick.ToolError("Kick did not answer for the chat (HTTP Error 429: Too Many Requests)")
+        time.sleep(0.02)
+        if t <= start + 600.5 and t > start + 590:  # the first slice: one short page and done
+            return [{"id": "a1", "at": start + 5, "author": "a", "text": "x"}], None
+        return [{"id": f"m{t}", "at": t - 2, "author": "a", "text": "x"}], int((t - 1) * 1e6)  # the others would go on for 600 pages
+
+    monkeypatch.setattr(kick, "chat_page", page)
+    keep = tmp_path / "chat.reading.jsonl"
+    with pytest.raises(kick.ToolError, match="429"):
+        kick.chat_between(1, start, start + 2400, keep=keep)
+    asked = len(calls)
+    assert asked < 200  # the long slices stopped soon after the failure instead of reading on
+    time.sleep(0.3)
+    assert len(calls) <= asked + 4  # ... and nothing keeps asking Kick in the background
+
+
+def test_a_recording_that_is_still_growing_keeps_its_full_parts_on_the_next_try(tmp_path, monkeypatch):
+    start = 5_000_000.0
+    _fake_chat(monkeypatch, [start + i * 10 + 2.5 for i in range(200)])
+    keep = tmp_path / "chat.reading.jsonl"
+    keep.write_text(json.dumps({"for": [9, 1.0, 600.0], "slice": 0, "span": [1.0, 601.0], "messages": []}) + "\nhalf a li", encoding="utf-8")
+    inner = kick.chat_page
+    assert len(kick.chat_between(1, start, start + 900, keep=keep)) == 90
+    rows = [json.loads(x) for x in keep.read_text(encoding="utf-8").splitlines()]
+    assert sorted(r["slice"] for r in rows) == [0, 1] and all(r["for"][0] == 1 for r in rows)  # the other video's row and the torn line are gone
+    asked = []
+    monkeypatch.setattr(kick, "chat_page", lambda cid, before=None, tries=3: asked.append(before / 1e6) or inner(cid, before, tries))
+    assert len(kick.chat_between(1, start, start + 1500, keep=keep)) == 150  # ten minutes more were broadcast since
+    assert min(asked) > start + 600  # the first ten minutes were not read again; the part that grew was
+
+
+def test_a_kick_recording_that_is_not_listed_yet_is_waited_for(tmp_path, monkeypatch):
+    import time
+
+    from clipper import watch
+
+    cfg = _cfg(tmp_path)
+    cfg.watch.mode = "chat"
+    began = {"at": time.time() - 30}
+    monkeypatch.setattr(kick, "channel", lambda slug: {"id": 9, "slug": slug, "name": "N", "records": True, "feed": "f", "live": {"id": "1", "title": "", "started_at": began["at"]}})
+    monkeypatch.setattr(kick, "live_recording", lambda slug: None)
+    assert watch.start_channel("kick.com/name", cfg) is None  # half a minute in: Kick may list the recording any moment
+    assert not list((tmp_path / "work").glob("kick_live*")) if (tmp_path / "work").exists() else True
+    began["at"] = time.time() - 1000
+    monkeypatch.setattr(kick.KickChatReader, "start", lambda self: None)
+    monkeypatch.setattr("clipper.buffer.LiveBuffer.start", lambda self: None)
+    w = watch.start_channel("kick.com/name", cfg)
+    assert w is not None and w.buffer is not None and w.source.video_id == "live1"  # long after the start: the live copy it is
+
+
+def test_the_live_reader_reads_past_a_page_with_entries_that_are_not_chat_and_says_when_it_cannot_catch_up(tmp_path, monkeypatch, caplog):
+    import time
+
+    now = time.time()
+    held = [now - 100 + i * 0.01 for i in range(10)]
+    r = kick.KickChatReader("name", 1, tmp_path / "chat.json", now - 1000)
+
+    def page(cid, before=None, tries=3):
+        limit = before / 1e6 if before else float("inf")
+        rows = sorted((t for t in held if t < limit), reverse=True)[: kick.PAGE]
+        out = [{"id": f"m{t}", "at": float(int(t)), "author": "a", "text": "x"} for t in rows[:-1 or None]]  # one entry of each page is not chat
+        return out, (int(rows[-1] * 1e6) if rows else None)
+
+    monkeypatch.setattr(kick, "chat_page", page)
+    r.fresh()
+    r.connected_at = now
+    held.extend(now + i * 0.001 for i in range(70))
+    assert len(r.fresh()) >= 66  # three pages back, though every page came one short
+    held.extend(now + 1 + i * 0.0001 for i in range(kick.PAGE * (r.MAX_PAGES + 4)))
+    with caplog.at_level("WARNING"):
+        r.fresh()
+    assert "faster than it can be read" in caplog.text
+
+
+def test_a_finished_kick_stream_credits_the_channels_address(tmp_path):
+    from pathlib import Path
+
+    import clipper
+
+    code = (Path(clipper.__file__).parent / "pipeline.py").read_text(encoding="utf-8")
+    find = code[code.index("def stage_find"): code.index("def stage_find") + 9000]
+    assert '"channel_handle": meta.get("channel_id", "") if source.platform in ("youtube", "kick") else ""' in find

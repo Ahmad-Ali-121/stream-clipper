@@ -14,7 +14,7 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **Listens to finished streams too.** `--signals B` (or the choice on the page) measures a finished stream's sound or picture and adds moments chat missed.
 - **AI can read a finished stream.** `--ai` turns all of its speech into text and has Claude pick moments from what was said (needs a Claude key; a few cents a stream).
 - **Works live or on finished streams, on Twitch, Kick and YouTube.** `watch` follows several live channels at once (Twitch names, Kick channels like `kick.com/name`, YouTube handles like `@channel`); `run` processes a finished Twitch or Kick stream or a YouTube recording with chat replay.
-- **Your own clips.** Give a YouTube or Twitch video link, or a video file such as a screen recording, with a start and an end; get one clip, or the range split into parts labelled "Part 1", "Part 2" on screen.
+- **Your own clips.** Give a YouTube, Twitch or Kick video link, or a video file such as a screen recording, with a start and an end; get one clip, or the range split into parts labelled "Part 1", "Part 2" on screen.
 - **Built-in help that can do it for you.** An **Ask** button answers questions about the program in plain words, in English or Roman Urdu, and can walk you through the steps. Tell it what to do ("start watching lacy", "make a clip from this link from 1:00 to 1:30") and it does the steps on the page while you watch. Approving, rejecting and deleting clips always stay yours.
 - **Kick, like Twitch.** Live Kick channels are watched (chat, hype meter, drafts, clip-the-last); finished Kick streams are searched from their chat replay, and work for your own clips and the cutting board.
 - **Templates and a background card.** The clip as a rounded card on a blur, a colour, a gradient or your image; inside a social post; under a breaking-news banner; or with the opening text in a box on top.
@@ -132,7 +132,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           261 unit tests (uv run pytest -q)
+tests/           270 unit tests (uv run python -m pytest -q)
 ```
 
 ## Limits you should know about

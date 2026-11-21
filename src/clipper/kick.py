@@ -187,7 +187,10 @@ def playlist_times(playlist: str) -> tuple[float | None, float]:
     """(when second 0 of a Kick video was broadcast, as epoch seconds; how many seconds it holds so far)."""
     from datetime import datetime
 
-    text = _get(stream_address(playlist, 0)).decode("utf-8", errors="replace")
+    try:
+        text = _get(stream_address(playlist, 0)).decode("utf-8", errors="replace")
+    except OSError as e:
+        raise ToolError(f"this Kick video's list of pieces could not be read ({e}). Try again in a minute") from e
     first = re.search(r"#EXT-X-PROGRAM-DATE-TIME:(\S+)", text)
     start = None
     if first:
@@ -231,6 +234,10 @@ def chat_page(channel_id: int, before: int | None = None, tries: int = 3) -> tup
     return out, older
 
 
+class _Halted(Exception):
+    """A slice of the chat stopped reading because another slice failed."""
+
+
 def chat_between(channel_id: int, start: float, end: float, on_progress=None, workers: int = 4, slice_s: float = 600.0,
                  keep: Path | None = None) -> list[dict]:
     """Every chat message sent between two moments (epoch seconds), oldest first.
@@ -247,12 +254,18 @@ def chat_between(channel_id: int, start: float, end: float, on_progress=None, wo
         edges.append((t, min(end, t + slice_s)))
         t += slice_s
 
+    halt = threading.Event()  # set when one slice fails: the others stop asking Kick instead of running on for nothing
+
     def read(a: float, b: float) -> list[dict]:
         got, before = [], int((b + 1) * 1_000_000)
         for _ in range(4000):  # a ten-minute slice of the busiest chat there is stays far below this
+            if halt.is_set():
+                raise _Halted()
             page, older = chat_page(channel_id, before, tries=7)
             got += [m for m in page if a <= m["at"] <= b]
-            if not page or older is None or older >= before or min(m["at"] for m in page) < a:
+            # Where to stop is read from Kick's own cursor (the time of the oldest entry it returned), not from the
+            # messages kept: a page can hold entries that are not chat (gifts, deleted lines), even nothing but those.
+            if older is None or older >= before or older / 1_000_000 < a:
                 break
             before = older
         return got
@@ -260,15 +273,23 @@ def chat_between(channel_id: int, start: float, end: float, on_progress=None, wo
     seen: dict[str, dict] = {}
     had: set[int] = set()  # slices read on an earlier try
     if keep is not None and keep.exists():
-        for line in keep.read_text(encoding="utf-8", errors="replace").splitlines():
+        good: list[str] = []
+        lines = keep.read_text(encoding="utf-8", errors="replace").splitlines()
+        for line in lines:
             try:
                 row = json.loads(line)
-                if row["for"] == [channel_id, start, end, slice_s]:
-                    had.add(int(row["slice"]))
+                n = int(row["slice"])
+                # A slice is the same slice only if it covers the same stretch: a recording that is still growing
+                # has a longer last slice on the next try, and that one is read again.
+                if row["for"] == [channel_id, start, slice_s] and 0 <= n < len(edges) and row["span"] == list(edges[n]) and n not in had:
+                    had.add(n)
+                    good.append(line)
                     for m in row["messages"]:
                         seen[m["id"] or f"{m['at']}{m['author']}{m['text']}"] = m
             except (ValueError, KeyError, TypeError):
                 continue  # a line cut short when the earlier try stopped
+        if len(good) != len(lines):  # rows of another video or another length are of no use: the file must not only grow
+            keep.write_text("".join(x + "\n" for x in good), encoding="utf-8")
     if had:
         log.info("Kick chat: continuing an earlier download (%d of %d parts were already read)", len(had), len(edges))
     done_n = len(had)
@@ -276,18 +297,32 @@ def chat_between(channel_id: int, start: float, end: float, on_progress=None, wo
     pool = ThreadPoolExecutor(max_workers=max(1, workers), thread_name_prefix="kickchat")
     try:
         jobs = {pool.submit(read, a, b): n for n, a, b in todo}
+        failed: Exception | None = None
         for job in as_completed(jobs):
-            got = job.result()
+            try:
+                got = job.result()
+            except _Halted:
+                continue
+            except Exception as e:  # keep what the other slices finished (it is written below), then report this
+                if failed is None:
+                    failed = e
+                    halt.set()
+                    for other in jobs:
+                        other.cancel()
+                continue
             for m in got:
                 seen[m["id"] or f"{m['at']}{m['author']}{m['text']}"] = m
             if keep is not None:
                 with keep.open("a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({"for": [channel_id, start, end, slice_s], "slice": jobs[job], "messages": got}, ensure_ascii=False) + "\n")
+                    fh.write(json.dumps({"for": [channel_id, start, slice_s], "slice": jobs[job], "span": list(edges[jobs[job]]), "messages": got}, ensure_ascii=False) + "\n")
             done_n += 1
-            if on_progress:
+            if on_progress and failed is None:
                 on_progress(done_n / len(edges))
+        if failed is not None:
+            raise failed
     finally:
-        pool.shutdown(wait=False, cancel_futures=True)  # after a failure the other slices are not asked for any more
+        halt.set()
+        pool.shutdown(wait=False, cancel_futures=True)
     return sorted(seen.values(), key=lambda m: m["at"])
 
 
@@ -311,7 +346,7 @@ class KickChatReader(threading.Thread):
     """
 
     POLL_S = 2.5
-    MAX_PAGES = 8
+    MAX_PAGES = 40  # how far back one look goes: a thousand messages, enough to catch up after a minute without an answer
 
     def __init__(self, slug: str, channel_id: int, out: Path, stream_start: float) -> None:
         super().__init__(daemon=True, name=f"kickchat-{slug}")
@@ -325,13 +360,21 @@ class KickChatReader(threading.Thread):
         """Messages not seen before, oldest first."""
         new: list[dict] = []
         before = None
+        caught_up = False
         for _ in range(self.MAX_PAGES):
             page, older = chat_page(self.channel_id, before)
             unseen = [m for m in page if m["id"] not in self._seen]
             new += unseen
-            if len(unseen) < len(page) or len(page) < PAGE or older is None or self.connected_at is None:
-                break  # reached messages already read (or this is the first look: what was said before is not ours)
+            # Reached messages already read, or the start of the chat, or this is the first look (what was said before
+            # is not ours). A short or empty page is not a reason to stop: Kick's pages can hold entries that are not chat.
+            if len(unseen) < len(page) or older is None or (before is not None and older >= before) or self.connected_at is None or not self._seen:
+                caught_up = True
+                break
             before = older
+        if not caught_up:
+            log.warning("%s: chat is arriving faster than it can be read, or nothing was read for a while; about %d messages were "
+                        "taken and older ones in between are missing, so a moment in that stretch may be scored too low",
+                        self.channel, len(new))
         for m in new:
             self._seen[m["id"]] = None
         for old in list(self._seen)[:-4000]:

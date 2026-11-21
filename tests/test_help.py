@@ -96,7 +96,7 @@ def test_steps_the_ai_may_do_keep_their_act_and_value():
                                         ("Choose one word", "c-anim", "type", "One word"), ("Start", "b-watch", "press", ""),
                                         ("Clear", "b-clear", "press", "")), help_mod.clean_targets(DOABLE))
     assert [(s["act"], s["value"], s["yours"]) for s in got] == [("type", "lacy kick.com/name", False), ("tick", "", False), ("type", "One word", False),
-                                                                 ("press", "", False), ("press", "", False)]
+                                                                 ("press", "", False), ("", "", True)]  # "Clear ..." is the user's own
 
 
 def test_decisions_deleting_and_updating_are_never_done_for_the_user():
@@ -137,3 +137,36 @@ def test_without_claude_nothing_is_done_for_the_user(monkeypatch):
     monkeypatch.setattr(llm, "ask", down)
     r = help_mod.answer(load_config(), "start watching lacy", [], DOABLE, {})
     assert r["run"] is False and all(s["act"] == "" for s in r["steps"])
+
+
+def test_the_users_own_presses_are_whole_word_families_and_what_the_page_marks():
+    things = [{"key": f"k{i}", "kind": "button", "label": label, "where": where, "yours": yours} for i, (label, where, yours) in enumerate([
+        ("Removes the logo", "Make the videos", False), ("Discard changes", "x", False), ("Erase all", "x", False), ("Take it off", "Branding", False),
+        ("Restart now", "top bar", False), ("Repair", "Setup check", False), ("Set up free local AI", "Claude", True), ("×", "top bar", False),
+        ("Back to automatic", "in the box editor window", False), ("Save and make the draft again", "in the box editor window", False),
+        ("Do it", "Cutting board view", True),
+        ("Start watching", "Find moments", False), ("Stop", "Find moments", False), ("Make videos for 2 approved clips", "Make the videos", False),
+        ("Rejected 0", "Clips view", False), ("Font (one installed on this PC)", "Captions", False)])]
+    listed = help_mod.clean_targets(things)
+    got = [help_mod.checked_steps(_steps(("press it", t["key"], "press", "")), listed)[0] for t in things]  # one at a time: an answer holds twelve steps at most
+    assert [s["yours"] for s in got] == [True] * 11 + [False] * 5 and [s["act"] for s in got] == [""] * 11 + ["press"] * 5
+    assert "k10 | button | Do it | Cutting board view | YOURS" in help_mod.build_prompt("q", [], listed, {})
+    assert "k11 | button | Start watching | Find moments" in help_mod.build_prompt("q", [], listed, {}) and "Start watching | Find moments | YOURS" not in help_mod.build_prompt("q", [], listed, {})
+
+
+def test_a_choice_with_no_value_is_not_chosen_and_a_box_may_be_emptied():
+    got = help_mod.checked_steps(_steps(("Choose", "c-anim", "type", "  "), ("Empty the box", "o-channels", "type", "")), help_mod.clean_targets(DOABLE))
+    assert [s["act"] for s in got] == ["", "type"]
+
+
+def test_the_page_never_lets_typed_words_decide_about_clips():
+    from pathlib import Path
+
+    import clipper
+
+    page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+    keys = page[page.index("const cards=shownCards()") - 400: page.index("const cards=shownCards()")]
+    assert "!$('helpbox').hidden" in keys and "HELP.doing" in keys  # the A and R shortcuts are off while the chat is open
+    run = page[page.index("async function helpDo(box){"): page.index("/* Bring a thing into view")]
+    assert "finally{HELP.doing=false" in run and "helpYours(real)" in run and "HELP.said" in run
+    assert page.count("data-yours") >= 8  # the buttons the page itself keeps for the user

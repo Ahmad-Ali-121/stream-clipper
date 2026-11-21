@@ -226,6 +226,9 @@ def start_youtube(channel: str, cfg: Config) -> Watched | None:
     return Watched(channel, source, meta, work, reader, watch_from, None, YouTubeWindow(source.url, start, cfg, meta["channel"]))
 
 
+KICK_RECORDING_WAIT_S = 180  # how long after a Kick broadcast begins its recording may still be missing from Kick's list
+
+
 def start_kick(channel: str, cfg: Config) -> Watched | None:
     """Start watching a Kick channel's live stream: its chat, and the recording (or the live feed) to cut clips from."""
     from . import kick
@@ -238,10 +241,16 @@ def start_kick(channel: str, cfg: Config) -> Watched | None:
         return None
     live = found["live"]
     if not live:
+        log.info("%s: not live; will check again", channel)
         return None
     address = f"https://kick.com/{slug}"
     recording = kick.live_recording(slug) if found["records"] else None
     start = None
+    if found["records"] and not recording and live["started_at"] and time.time() - live["started_at"] < KICK_RECORDING_WAIT_S:
+        # Kick lists the recording a little after the broadcast begins. Starting now would lock the whole stream into
+        # the costly live-feed copy, so the first minutes are waited out.
+        log.info("%s: live on Kick for under %d minutes and its recording is not listed yet; checking again shortly", channel, KICK_RECORDING_WAIT_S // 60)
+        return None
     if recording:
         source = Source("kick", recording["uuid"], f"https://kick.com/video/{recording['uuid']}")
         start, _length = kick.playlist_times(recording["playlist"])  # when second 0 of the recording was broadcast
@@ -286,7 +295,7 @@ def start_kick(channel: str, cfg: Config) -> Watched | None:
 
         buffer = LiveBuffer(channel, work / "buffer", float(start), cfg)
         buffer.start()
-        log.warning("%s: live on Kick, %s in, but Kick is not recording this broadcast. Keeping the last %g minutes of the live feed "
+        log.warning("%s: live on Kick, %s in, but Kick lists no recording of this broadcast. Keeping the last %g minutes of the live feed "
                     "to cut clips from (uses about 3 GB of internet an hour). Watching %s from now", channel, format_time(watch_from),
                     cfg.watch.buffer_minutes, using)
     return Watched(channel, source, meta, work, reader, watch_from, feed, buffer)
@@ -630,7 +639,9 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                     if w is None:
                         w = start_channel(name, cfg)
                         if w is None:
-                            if not name.startswith(("@", "http", "kick.com/")) and channel_is_live(name, cfg):
+                            if name.startswith("kick.com/"):
+                                pass  # start_kick has already said why (not live, no such channel, nothing to cut from)
+                            elif not name.startswith(("@", "http")) and channel_is_live(name, cfg):
                                 log.warning(NO_RECORDING, name)
                             else:
                                 log.info("%s: not live; will check again", name)

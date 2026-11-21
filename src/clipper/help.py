@@ -37,8 +37,19 @@ ACTS = ("press", "type", "tick", "untick")
 FITS = {"press": ("button", "fold-out", "link", "option", "item"), "type": ("box", "choice", "slider"),
         "tick": ("tick box", "option"), "untick": ("tick box",)}
 # Presses that stay the user's own, whatever the AI says: deciding about clips, deleting, updating, installing.
-YOURS = re.compile(r"\b(approve|approved|reject|rejected|delete|deleted|deleting|remove|back to review|update|updates|install|reinstall|reset|forget)\b", re.IGNORECASE)
+# Whole word families, so a button added later ("Removes...", "Discard", "Erase all") is covered too. "Approved", "Rejected"
+# and "installed" are left out on purpose: they name lists and things that already are, not something being decided.
+YOURS = re.compile(r"\b(approve|approves|approving|reject|rejects|rejecting|delet\w*|remov\w*|eras\w*|discard\w*|clear\w*|wipe\w*|forget\w*|reset\w*|"
+                   r"updat\w*|upgrad\w*|install|installs|installing|reinstall\w*|restart\w*|repair\w*|back to review|back to automatic|take it off)\b", re.IGNORECASE)
 ON_A_CLIP = "on each clip's card"
+IN_THE_BOX_EDITOR = "in the box editor window"  # it changes one clip's framing, and can throw away boxes set by hand
+CLOSERS = ("×", "x", "close")  # a bare close button: closing an error message is the user's to do
+
+
+def is_yours(thing: dict) -> bool:
+    """True when using this thing is a decision that must stay with the user (the page can also say so itself)."""
+    return bool(thing.get("yours") or YOURS.search(thing["label"]) or ON_A_CLIP in thing["where"] or IN_THE_BOX_EDITOR in thing["where"]
+                or thing["label"].strip().lower() in CLOSERS)
 
 SYSTEM = """You are the help assistant built into "Stream Clipper", a program that runs on the user's own computer and turns \
 long livestreams and videos into short vertical clips. The user is looking at the program's page right now and may be \
@@ -69,10 +80,12 @@ Doing things for the user:
   "press" (a button, a tab, a fold-out, an option), "type" (put "value" into a box; for a choice list, "value" is one of its choices exactly as listed; for a slider, a number), "tick" or "untick" (a tick box). Use "" when the step is only an explanation, or when its thing is not in the list.
 - The list shows what each box holds now and the choices of each list. Do not add a step for something that is already as wanted.
 - Set "run" to true when the user TOLD you to do something ("start watching lacy", "set captions to yellow", "make a clip from this link 1:00 to 1:30", "ye kar do"). Set it to false when they asked how, what or why; then the steps still carry their acts and the user can press "Do it for me".
-- Only give acts that can be done right now, one after another. Something that has to wait for a job to finish is a plain step.
+- Only give acts that can be done right now, one after another. Something that has to wait for a job to finish is a plain step (act ""), and the page stops there: everything after it is left for the user, so say that in the step.
+- A colour box takes a colour as #rrggbb (yellow is #FFD400, white #FFFFFF, red #FF3B30, green #34C759, blue #2F80ED). A number box or slider takes a plain number inside the range the list shows. A choice list takes one of its choices, written exactly.
 - Put the steps in the order a person would do them: open the tab first only if the list says the thing is inside another tab (the page opens tabs and fold-outs by itself when it uses a thing, so you rarely need a step for that).
 - If the user did not give something a step needs (which channel, which link, what time), do not invent it: ask for it in "answer" and give no acts.
-- Some presses always stay the user's own and the page will only point at them: Approve, Reject, Delete, Back to review and everything else on a clip's card, deleting anything, and updating the program. Say so in the step ("this one is yours to press").
+- Some presses always stay the user's own and the page will only point at them: Approve, Reject, Delete, Back to review and everything else on a clip's card, the box editor window, deleting, removing or clearing anything, restarting, repairing, installing or updating the program, and anything the list marks "YOURS". Say so in the step ("this one is yours to press").
+- When you are not sure whether the user is asking or telling, set "run" to false: they can press "Do it for me".
 - When "run" is true, write "answer" as what you are doing ("I am setting ... and starting ..."), not as instructions.
 
 You also get what the program is doing right now (watching, a job running, any error shown). Use it when the question is \
@@ -150,7 +163,7 @@ def clean_targets(raw) -> list[dict]:
         seen.add(key)
         flat = lambda v, n: " ".join(str(v or "").split())[:n]  # noqa: E731  one line each, so a label cannot fake another row
         out.append({"key": key, "kind": flat(item.get("kind"), 12), "label": flat(item.get("label"), 90).replace("|", "/"), "where": flat(item.get("where"), 110).replace("|", "/"),
-                    "now": flat(item.get("now"), 70).replace("|", "/"), "choices": flat(item.get("choices"), 240).replace("|", "/")})
+                    "now": flat(item.get("now"), 70).replace("|", "/"), "choices": flat(item.get("choices"), 240).replace("|", "/"), "yours": item.get("yours") is True})
         if len(out) >= MAX_TARGETS:
             break
     return out
@@ -176,7 +189,8 @@ def build_prompt(question: str, history, targets: list[dict], state) -> str:
         if isinstance(turn, dict) and turn.get("q"):
             past.append(f"User: {' '.join(str(turn['q']).split())[:300]}\nYou: {' '.join(str(turn.get('a') or '').split())[:500]}")
     page = "\n".join(f"{t['key']} | {t['kind']} | {t['label']} | {t['where']}" + (f" | now: {t['now']}" if t.get("now") else "")
-                     + (f" | choices: {t['choices']}" if t.get("choices") else "") for t in targets) or "(the page sent no list)"
+                     + (f" | choices: {t['choices']}" if t.get("choices") else "") + (" | YOURS: only the user presses this" if is_yours(t) else "")
+                     for t in targets) or "(the page sent no list)"
     return (
         "THE GUIDE (everything the program does, written for its users):\n" + guide
         + "\n\nWHAT IS ON THE PAGE RIGHT NOW (key | kind | label | where | what it holds now | its choices):\n" + page
@@ -229,10 +243,12 @@ def checked_steps(raw, listed: list[dict]) -> list[dict]:
         act = str(step.get("act") or "")
         value = str(step.get("value") or "")[:MAX_VALUE]
         yours = False
-        if thing is None or act not in ACTS or thing["kind"] not in FITS[act]:
-            act = ""
-        elif YOURS.search(thing["label"]) or ON_A_CLIP in thing["where"]:
+        if thing is not None and is_yours(thing) and (act in ACTS or thing["kind"] in FITS["press"]):
             act, yours = "", True
+        elif thing is None or act not in ACTS or thing["kind"] not in FITS[act]:
+            act = ""
+        elif act == "type" and not value.strip() and thing["kind"] in ("choice", "slider"):
+            act = ""  # nothing to choose: an empty value must not pick a list's first choice
         steps.append({"text": text[:500], "target": thing["key"] if thing else "", "act": act, "value": value if act == "type" else "", "yours": yours})
     return steps
 

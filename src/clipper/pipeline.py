@@ -192,6 +192,7 @@ def stage_find(
                 "vod_url": source.url,
                 "platform": source.platform,
                 "channel": meta.get("channel", ""),
+                "channel_handle": meta.get("channel_id", "") if source.platform in ("youtube", "kick") else "",
                 # Campaign briefs name the channel, and a Twitch VOD URL does not contain it.
                 "source_url": meta.get("channel_url") or source.url,
                 "stream_title": meta.get("title", ""),
