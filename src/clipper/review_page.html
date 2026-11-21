@@ -322,7 +322,7 @@ kbd{background:rgba(255,255,255,.06)!important}
         </details>
         <div id="tab-live">
           <p class="help">Watches the streams while they are live and makes a draft clip each time something happens.</p>
-          <label class="f" for="o-channels">Channels, separated by spaces: Twitch names, YouTube handles starting with @</label>
+          <label class="f" for="o-channels">Channels, separated by spaces: Twitch names, Kick channels as kick.com/name, YouTube handles starting with @</label>
           <input type="text" id="o-channels" placeholder="lacy xqc @youtubechannel">
           <label class="check"><input type="checkbox" id="o-auto" onchange="act('/api/options',{watch_autostart:$('o-auto').checked})"> Start watching this list by itself when the program opens</label>
           <p class="help" style="margin-top:4px">Creators who are not live yet are checked every half minute and clipped as soon as they go live. Add only creators you have a campaign or permission for.</p>
@@ -337,7 +337,7 @@ kbd{background:rgba(255,255,255,.06)!important}
           <details class="log"><summary>Activity log</summary><pre class="log" id="wlog"></pre></details>
         </div>
         <div id="tab-own" hidden>
-          <p class="help">Pick the part of a video yourself. Works with a YouTube or Twitch video link, or a video file on this PC such as a screen recording. No chat is needed.</p>
+          <p class="help">Pick the part of a video yourself. Works with a YouTube, Twitch or Kick video link, or a video file on this PC such as a screen recording. No chat is needed.</p>
           <label class="f" for="m-src">Video link, or the path of a video file</label>
           <input type="text" id="m-src" placeholder="YouTube, Twitch or Kick video link, or D:\Videos\recording.mp4">
           <div class="btns" style="margin-top:6px"><button class="btn" onclick="$('m-file').click()">Choose a file from this PC</button><span class="saved" id="m-up"></span></div>
@@ -365,8 +365,8 @@ kbd{background:rgba(255,255,255,.06)!important}
         </div>
         <div id="tab-vod" hidden>
           <p class="help">Paste the link of a stream that has ended. Its chat replay is scored, its sound and picture can be measured too, and only the best moments are downloaded and turned into drafts.</p>
-          <label class="f" for="r-url">Link to the finished stream (Twitch or YouTube)</label>
-          <input type="text" id="r-url" placeholder="https://www.twitch.tv/videos/1234567890  or  https://www.youtube.com/watch?v=...">
+          <label class="f" for="r-url">Link to the finished stream (Twitch, YouTube or Kick)</label>
+          <input type="text" id="r-url" placeholder="https://www.twitch.tv/videos/1234567890  or a YouTube or Kick video link">
           <label class="f" for="r-sig">What should find the moments?</label>
           <select id="r-sig">
             <option value="chat">Chat only (fastest, almost no internet)</option>

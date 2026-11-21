@@ -76,7 +76,7 @@ watch:
   autostart: false        # true = start watching the saved channel list by itself when the program opens
   poll_s: 30              # how often live chat is re-scored
   min_score: 2.5          # live clips are made automatically, so the bar is a little higher than for VODs
-  vod_delay_s: 60         # wait this long after a moment so Twitch's recording has it
+  vod_delay_s: 60         # wait this long after a moment so Twitch's (or Kick's) recording has it
   live_check_s: 300       # how often to confirm the stream is still live
   channels: []            # channels the options panel on the review page starts watching
   mode: chat              # what finds moments: chat, audio (chat + audio), video (chat + video), all. The terminal asks unless --mode is given

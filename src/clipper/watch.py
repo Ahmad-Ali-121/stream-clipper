@@ -1,4 +1,4 @@
-"""Watch live Twitch streams and make draft clips while they are still running.
+"""Watch live streams (Twitch, Kick, YouTube) and make draft clips while they are still running.
 
 For each channel:
   1. Find the VOD Twitch is recording for the current broadcast.
@@ -40,8 +40,16 @@ def channel_name(value: str) -> str:
 
     Twitch: 'https://www.twitch.tv/Lacy' or 'lacy' -> 'lacy'.
     YouTube: '@handle' or a channel address -> '@handle'; the address of a live stream -> that address.
+    Kick: 'kick.com/Name' or its full address -> 'kick.com/name'.
     """
+    from . import kick
     from .youtube import channel_spec, is_youtube
+
+    if "kick.com" in value.lower():
+        slug = kick.slug_of(value)
+        if not slug:
+            raise ValueError(f"{value!r} is not a Kick channel. Type it like kick.com/name")
+        return kick.NAME + slug
 
     if is_youtube(value):
         name, url = channel_spec(value)
@@ -49,7 +57,7 @@ def channel_name(value: str) -> str:
     m = re.search(r"twitch\.tv/([A-Za-z0-9_]+)", value)
     name = (m.group(1) if m else value).strip().lower()
     if not re.fullmatch(r"[a-z0-9_]{2,25}", name) or name == "videos":
-        raise ValueError(f"{value!r} is not a channel. Type a Twitch name (like lacy), or a YouTube handle (like @channelname).")
+        raise ValueError(f"{value!r} is not a channel. Type a Twitch name (like lacy), a Kick channel (like kick.com/name), or a YouTube handle (like @channelname).")
     return name
 
 
@@ -218,8 +226,79 @@ def start_youtube(channel: str, cfg: Config) -> Watched | None:
     return Watched(channel, source, meta, work, reader, watch_from, None, YouTubeWindow(source.url, start, cfg, meta["channel"]))
 
 
+def start_kick(channel: str, cfg: Config) -> Watched | None:
+    """Start watching a Kick channel's live stream: its chat, and the recording (or the live feed) to cut clips from."""
+    from . import kick
+    from .signals import MODES, SignalReader
+
+    slug = channel[len(kick.NAME):]
+    found = kick.channel(slug)
+    if found is None:
+        log.warning("%s: Kick has no channel with that name; check the spelling in Settings", channel)
+        return None
+    live = found["live"]
+    if not live:
+        return None
+    address = f"https://kick.com/{slug}"
+    recording = kick.live_recording(slug) if found["records"] else None
+    start = None
+    if recording:
+        source = Source("kick", recording["uuid"], f"https://kick.com/video/{recording['uuid']}")
+        start, _length = kick.playlist_times(recording["playlist"])  # when second 0 of the recording was broadcast
+    elif cfg.watch.buffer_when_no_vod:
+        source = Source("kick", f"live{live['id']}", address)
+    else:
+        log.warning("%s: LIVE, but Kick is not recording this broadcast and watch.buffer_when_no_vod is off in the settings, "
+                    "so there is nothing to cut clips from; will check again", channel)
+        return None
+    start = start or live["started_at"]
+    if not start:
+        log.warning("%s: Kick did not say when this broadcast began; cannot line chat up with the video", channel)
+        return None
+    meta = {
+        "url": source.url, "platform": "kick", "video_id": source.video_id, "title": live["title"], "channel": found["name"],
+        "channel_id": slug, "channel_url": address, "duration_s": None, "is_live": True, "started_at": float(start),
+        "chat_id": found["id"], "live_id": live["id"], "width": None, "height": None,
+    }
+    if recording:
+        meta["playlist"] = recording["playlist"]
+    else:
+        meta["no_vod"] = True
+    work = work_dir(cfg.data_dir, source)
+    write_json(work / "meta.json", meta)
+    chat = work / "chat.json"
+    if chat.exists() and not chat.read_text(encoding="utf-8", errors="replace").lstrip().startswith('{"t"'):
+        chat.replace(work / "chat.downloaded.json")
+    reader = kick.KickChatReader(slug, found["id"], chat, float(start))
+    reader.start()
+    watch_from = time.time() - float(start)
+    audio, video = MODES[cfg.watch.mode]
+    feed = None
+    if audio or video:
+        feed = SignalReader(channel, work / "signals.jsonl", float(start), cfg, audio, video)
+        feed.start()
+    using = " + ".join(["chat"] + ["audio"] * audio + ["video"] * video)
+    buffer = None
+    if recording:
+        log.info("%s: live on Kick, %s in; watching %s from now (recording %s)", channel, format_time(watch_from), using, source.video_id)
+    else:
+        from .buffer import LiveBuffer
+
+        buffer = LiveBuffer(channel, work / "buffer", float(start), cfg)
+        buffer.start()
+        log.warning("%s: live on Kick, %s in, but Kick is not recording this broadcast. Keeping the last %g minutes of the live feed "
+                    "to cut clips from (uses about 3 GB of internet an hour). Watching %s from now", channel, format_time(watch_from),
+                    cfg.watch.buffer_minutes, using)
+    return Watched(channel, source, meta, work, reader, watch_from, feed, buffer)
+
+
 def still_live(w: Watched, cfg: Config) -> bool:
     """Is the broadcast this channel is being watched on still running?"""
+    if w.source.platform == "kick":
+        from . import kick
+
+        found = kick.channel(w.channel[len(kick.NAME):])
+        return bool(found and found["live"] and found["live"]["id"] == w.meta.get("live_id"))
     if w.source.platform == "youtube":
         from .youtube import find_live
 
@@ -231,6 +310,8 @@ def still_live(w: Watched, cfg: Config) -> bool:
 def start_channel(channel: str, cfg: Config) -> Watched | None:
     from .youtube import is_youtube
 
+    if channel.startswith("kick.com/"):
+        return start_kick(channel, cfg)
     if is_youtube(channel):
         return start_youtube(channel, cfg)
     found = find_live_vod(channel, cfg)
@@ -549,7 +630,7 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                     if w is None:
                         w = start_channel(name, cfg)
                         if w is None:
-                            if not name.startswith(("@", "http")) and channel_is_live(name, cfg):
+                            if not name.startswith(("@", "http", "kick.com/")) and channel_is_live(name, cfg):
                                 log.warning(NO_RECORDING, name)
                             else:
                                 log.info("%s: not live; will check again", name)

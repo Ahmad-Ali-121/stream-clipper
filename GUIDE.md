@@ -148,9 +148,16 @@ Above the clip list:
 
 A clip you approved, rejected or deleted stays that way, through every update and restart. Each decision is also written to a separate record (`decisions.json` in the data folder); every time the program starts it checks the clips against that record and puts back any decision a clip has lost. Only your own **Back to review** button brings a clip back.
 
-### Kick videos
+### Kick
 
-Paste a finished Kick video link (kick.com/…/videos/… or kick.com/video/…) anywhere a video link goes: **Your own clip**, the **cutting board**, or **Finished stream**. A Kick video has no chat replay, so in Finished stream choose sound, picture or AI reading. Live Kick streams are not watched.
+Kick works like Twitch, live and finished.
+
+- **Live.** In the channels box type the channel as `kick.com/name` (or paste its address). It can be mixed with the others: `lacy kick.com/name @channelname`. When the streamer goes live the program reads the chat, shows the hype meter, finds moments from chat (and from sound and picture if you chose those) and makes draft clips, and **Clip the last** works too. Clips are cut from the recording Kick makes while the stream runs. If the streamer has recordings switched off, the last few minutes of the live feed are kept instead, exactly as for Twitch. "Start watching by itself" covers Kick channels as well.
+- **Finished.** Paste a Kick video link (kick.com/…/videos/… or kick.com/video/…) anywhere a video link goes: **Your own clip**, the **cutting board**, or **Finished stream**. Finished stream downloads the video's chat replay and finds the moments from it, just as for Twitch; sound, picture and AI reading can be added. Kick hands chat out in small pages, so a short or quiet stream takes seconds, but the chat of a very long, very busy one can take a quarter of an hour or more (a 13-hour stream with 85,000 messages took 17 minutes). The bar shows how far it is, and if it is stopped, the next try carries on from where it was. If Kick no longer keeps an old video's chat, the page says so; choose sound, picture or AI reading for that one.
+
+Kick has no sound-only feed, so "chat + audio" on a live Kick channel reads its smallest picture instead (about 150 MB an hour rather than 70).
+
+Kick's chat is read from Kick's own public pages, without an account. Nothing is posted there.
 
 ### Templates and the background card
 

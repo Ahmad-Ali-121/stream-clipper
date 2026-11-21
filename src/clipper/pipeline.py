@@ -75,12 +75,11 @@ def stage_find(
         # The stream has ended: put it aside and download the whole chat replay.
         chat_file.replace(work / "chat.watched.json")
         log.info("the stream has ended; downloading its whole chat instead of the part collected while watching")
-    if source.platform in ("local", "kick"):
+    if source.platform == "local":
         from .signals import MODES as _MODES, parse_mode as _parse_mode
 
         if not ai and not any(_MODES[_parse_mode(signals or cfg.moments.signals)]):
-            what = "a Kick video" if source.platform == "kick" else "a video file"
-            raise PipelineError(f"{what} has no chat to find moments from. Choose sound, picture or AI reading, "
+            raise PipelineError("a video file has no chat to find moments from. Choose sound, picture or AI reading, "
                                 "or use \"Your own clip\" to pick the range yourself")
         messages = []
     else:
@@ -94,12 +93,21 @@ def stage_find(
             # A YouTube upload (not a stream) has no chat. Its words are free to read, so moments can still be
             # found from what is said, and from sound, picture or AI reading when those were chosen.
             from . import ytcaptions
+            from .signals import MODES as _MODES, parse_mode as _parse_mode
 
-            if source.platform != "youtube" or meta.get("is_live") or not ytcaptions.video_words(source.url, work, cfg):
+            if source.platform == "kick":
+                # An old Kick video can have lost its chat. Sound, picture and AI reading still work on it.
+                if not ai and not any(_MODES[_parse_mode(signals or cfg.moments.signals)]):
+                    raise PipelineError(f"{e}. Choose sound, picture or AI reading to find its moments, "
+                                        "or use \"Your own clip\" to pick the range yourself") from e
+                log.warning("%s. Moments are found from what you chose instead.", e)
+                messages = []
+            elif source.platform != "youtube" or meta.get("is_live") or not ytcaptions.video_words(source.url, work, cfg):
                 raise
-            log.warning("%s Moments are found from what is said instead%s.", e,
-                        ", plus what you chose" if ai or (signals or cfg.moments.signals) not in ("chat", "A") else "")
-            messages, no_chat = [], True
+            else:
+                log.warning("%s Moments are found from what is said instead%s.", e,
+                            ", plus what you chose" if ai or (signals or cfg.moments.signals) not in ("chat", "A") else "")
+                messages, no_chat = [], True
     overrides = {k: v for k, v in (("top", top), ("mode", mode)) if v is not None}
     settings = replace(cfg.moments, **overrides)
     settings.validate()

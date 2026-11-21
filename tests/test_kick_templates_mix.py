@@ -38,11 +38,13 @@ def test_kick_details_and_the_picture_size_are_read(monkeypatch):
     assert kick.pick_variant("#EXTM3U\n#EXTINF:2,\nseg0.ts\n", base, 720) == base  # already the stream itself
 
 
-def test_a_kick_video_has_no_chat_and_says_what_to_do(tmp_path):
+def test_a_kick_video_whose_channel_is_unknown_says_its_chat_cannot_be_read(tmp_path, monkeypatch):
+    from clipper import kick
     from clipper.fetch import NoChatError, fetch_chat
     from clipper.sources import parse_source
 
-    with pytest.raises(NoChatError, match="Kick"):
+    monkeypatch.setattr(kick, "details", lambda video_id: {"chat_id": None, "started_at": None, "playlist": "https://x/master.m3u8"})
+    with pytest.raises(NoChatError, match="Kick did not say which channel"):
         fetch_chat(parse_source(f"https://kick.com/video/{ID}"), tmp_path, load_config())
 
 

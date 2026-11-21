@@ -118,9 +118,12 @@ def live_info(channel: str, cfg: Config) -> dict | None:
 
 def feed_url(channel: str, cfg: Config) -> str:
     """Address of the playlist for the best live quality within fetch.max_height."""
+    from . import kick
     from .fetch import _ytdlp
 
     h = cfg.fetch.max_height
+    if channel.startswith(kick.NAME):
+        return kick.live_feed(channel[len(kick.NAME):], h)
     proc = run(_ytdlp(cfg) + ["-g", "-f", f"b[height<={h}]/b", f"https://www.twitch.tv/{channel}"],
                timeout_s=90, retries=1, retry_wait_s=5, what=f"{channel} live feed address")
     url = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
@@ -129,8 +132,8 @@ def feed_url(channel: str, cfg: Config) -> str:
     return url
 
 
-def _get(url: str, timeout: float = 20.0) -> bytes:
-    with urllib.request.urlopen(urllib.request.Request(url, headers=_AGENT), timeout=timeout) as r:
+def _get(url: str, timeout: float = 20.0, agent: dict | None = None) -> bytes:
+    with urllib.request.urlopen(urllib.request.Request(url, headers=agent or _AGENT), timeout=timeout) as r:
         return r.read()
 
 
@@ -141,6 +144,7 @@ class LiveBuffer(threading.Thread):
         super().__init__(daemon=True, name=f"buffer-{channel}")
         self.channel, self.folder, self.stream_start, self.cfg = channel, folder, stream_start, cfg
         self.keep_s = max(2.0, float(cfg.watch.buffer_minutes)) * 60
+        self.agent = {"User-Agent": "stream-clipper/1.0"} if channel.startswith("kick.com/") else None  # Kick is asked under our own name
         self.stop_event = threading.Event()
         self.pieces: list[dict] = []  # {"t", "d", "file"}, oldest first
         self.adverts = 0
@@ -154,7 +158,7 @@ class LiveBuffer(threading.Thread):
         data = b""
         for attempt in range(3):
             try:
-                data = _get(piece.url)
+                data = _get(piece.url, agent=self.agent)
                 break
             except Exception as e:  # a dropped connection; the piece is tried again, then given up
                 if attempt == 2:
@@ -189,7 +193,7 @@ class LiveBuffer(threading.Thread):
             try:
                 if not url:
                     url = feed_url(self.channel, self.cfg)
-                found = parse_playlist(_get(url).decode("utf-8", "replace"), url)
+                found = parse_playlist(_get(url, agent=self.agent).decode("utf-8", "replace"), url)
                 failures, wait = 0, 5.0
                 for piece in found:
                     if piece.url in self._seen or self.stop_event.is_set():

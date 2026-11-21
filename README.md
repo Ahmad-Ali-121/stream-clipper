@@ -13,10 +13,10 @@ Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, d
 - **Never downloads a whole stream.** Only the clip ranges are fetched, at full quality. For streams Twitch is not recording, a rolling copy of the last ten minutes of the live feed stands in for the recording.
 - **Listens to finished streams too.** `--signals B` (or the choice on the page) measures a finished stream's sound or picture and adds moments chat missed.
 - **AI can read a finished stream.** `--ai` turns all of its speech into text and has Claude pick moments from what was said (needs a Claude key; a few cents a stream).
-- **Works live or on finished streams, on Twitch and YouTube.** `watch` follows several live channels at once (Twitch names, YouTube handles like `@channel`); `run` processes a finished Twitch VOD or a YouTube recording with chat replay.
+- **Works live or on finished streams, on Twitch, Kick and YouTube.** `watch` follows several live channels at once (Twitch names, Kick channels like `kick.com/name`, YouTube handles like `@channel`); `run` processes a finished Twitch or Kick stream or a YouTube recording with chat replay.
 - **Your own clips.** Give a YouTube or Twitch video link, or a video file such as a screen recording, with a start and an end; get one clip, or the range split into parts labelled "Part 1", "Part 2" on screen.
 - **Built-in help.** An **Ask** button answers questions about the program in plain words, in English or Roman Urdu, and can walk you through the steps: it opens the right place, highlights the button and blurs the rest.
-- **Kick videos.** Finished Kick videos work for your own clips, the cutting board, and finding moments by sound, picture or AI reading.
+- **Kick, like Twitch.** Live Kick channels are watched (chat, hype meter, drafts, clip-the-last); finished Kick streams are searched from their chat replay, and work for your own clips and the cutting board.
 - **Templates and a background card.** The clip as a rounded card on a blur, a colour, a gradient or your image; inside a social post; under a breaking-news banner; or with the opening text in a box on top.
 - **Safe zones, moment mix, music riser.** See where TikTok, Reels and Shorts cover the video; lean the search towards action or dialogue; let the music grow louder at the end.
 - **Transcript search.** Search a video's words, click where a clip starts and ends, and make it. For people with no AI: the transcript in small parts with a ready prompt for any free chatbot, whose answers are read back as moments.
@@ -84,7 +84,7 @@ The code is plain Python and FFmpeg, so it should run on macOS and Linux, but th
 
 | Command | What it does |
 |---|---|
-| `watch CHANNEL... [--mode A\|B\|C\|D] [--minutes N]` | Watch live Twitch channels and make a draft clip for each moment |
+| `watch CHANNEL... [--mode A\|B\|C\|D] [--minutes N]` | Watch live Twitch, Kick and YouTube channels and make a draft clip for each moment |
 | `cut SOURCE [--start T] [--end T] [--parts N \| --part-seconds S]` | Make clips from a range you choose in a video link or a video file, whole or in numbered parts |
 | `range SOURCE [--start T] [--end T]` | Download one part of a video once, for the cutting board on the review page |
 | `cut SOURCE --ranges 750-790,3725-3770` | Make a clip from each of several separate stretches of one video |
@@ -132,7 +132,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           244 unit tests (uv run pytest -q)
+tests/           254 unit tests (uv run pytest -q)
 ```
 
 ## Limits you should know about

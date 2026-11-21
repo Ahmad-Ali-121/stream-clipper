@@ -58,8 +58,8 @@ def fetch_meta(source: Source, work: Path, cfg: Config) -> dict:
         meta = {
             "url": source.url, "platform": "kick", "video_id": source.video_id, "title": info["title"],
             "channel": info["channel_name"], "channel_id": info["channel"], "channel_url": f"https://kick.com/{info['channel']}" if info["channel"] else "",
-            "duration_s": info["duration_s"] or None, "is_live": info["is_live"], "started_at": None, "width": None, "height": None,
-            "playlist": info["playlist"],
+            "duration_s": info["duration_s"] or None, "is_live": info["is_live"], "started_at": info["started_at"], "width": None, "height": None,
+            "playlist": info["playlist"], "chat_id": info["chat_id"],
         }
         write_json(out, meta)
         return meta
@@ -96,10 +96,10 @@ def fetch_chat(source: Source, work: Path, cfg: Config, refresh: bool = False) -
     out = work / "chat.json"
     if source.platform == "local":
         raise NoChatError("a video file on this computer has no chat")
-    if source.platform == "kick":
-        raise NoChatError("a Kick video has no chat replay that can be read")
     if done(out) and not refresh:
         return out
+    if source.platform == "kick":
+        return _kick_chat(source, work, out)
     tmp_dir = cfg.data_dir / "tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     part = work / "chat.part.json"
@@ -137,6 +137,34 @@ def fetch_chat(source: Source, work: Path, cfg: Config, refresh: bool = False) -
     if not done(part):
         raise NoChatError("chat download produced an empty file")
     os.replace(part, out)
+    return out
+
+
+def _kick_chat(source: Source, work: Path, out: Path) -> Path:
+    """A Kick stream's chat replay, with times counted from the start of its video."""
+    from . import kick
+
+    meta = json.loads((work / "meta.json").read_text(encoding="utf-8")) if done(work / "meta.json") else {}
+    if not meta.get("chat_id"):  # details saved by an older version of the program did not hold it: ask again
+        info = kick.details(source.video_id)
+        meta.update(chat_id=info["chat_id"], started_at=info["started_at"], playlist=info["playlist"])
+        if meta.get("chat_id"):
+            write_json(work / "meta.json", meta)
+    if not meta.get("chat_id"):
+        raise NoChatError("Kick did not say which channel this video belongs to, so its chat cannot be read")
+    # The video's own list says when its first second was broadcast and how long it is (also while still live).
+    start, length = kick.playlist_times(meta["playlist"])
+    start = start or meta.get("started_at")
+    length = length or float(meta.get("duration_s") or 0)
+    if not start or not length:
+        raise NoChatError("Kick did not say when this video was broadcast, so its chat cannot be lined up with it")
+    part = work / "chat.part.json"
+    count = kick.save_chat(int(meta["chat_id"]), float(start), length, part, on_progress=lambda f: progress.sub(f, f"{round(100 * f)}% of the chat"))
+    if not count:
+        part.unlink(missing_ok=True)
+        raise NoChatError("Kick has no chat for this video (nobody wrote, or the video is too old for Kick to still keep its chat)")
+    os.replace(part, out)
+    log.info("Kick chat: %d messages", count)
     return out
 
 

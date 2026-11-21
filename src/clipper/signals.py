@@ -85,7 +85,11 @@ def ask_mode(default: str = "chat") -> str:
 
 def live_url(channel: str, cfg: Config, video: bool) -> str:
     """Address of the channel's lowest-quality live feed (with or without picture)."""
+    from . import kick
     from .fetch import _ytdlp
+
+    if channel.startswith(kick.NAME):
+        return kick.live_feed(channel[len(kick.NAME):], 160)  # Kick has no sound-only feed; its smallest picture is used
 
     proc = run(
         _ytdlp(cfg) + ["--no-warnings", "-g", "-f", "160p/worst" if video else "audio_only/worst", f"https://www.twitch.tv/{channel}"],

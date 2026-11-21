@@ -330,7 +330,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
 
     f = sub.add_parser("find", help="download a VOD's chat and find its best moments")
-    f.add_argument("url", help="Twitch VOD URL or YouTube video URL")
+    f.add_argument("url", help="Twitch, YouTube or Kick video URL")
     f.add_argument("--top", type=int)
     f.add_argument("--mode", choices=["symmetric", "trailing"])
     f.add_argument("--signals", help="what finds moments: A or chat, B or audio (chat + sound), C or video (chat + picture), D or all")
@@ -441,8 +441,8 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("url")
     st.set_defaults(func=_cmd_status)
 
-    wa = sub.add_parser("watch", help="watch live Twitch channels and make draft clips as moments happen")
-    wa.add_argument("channels", nargs="+", help="channel names or channel URLs, e.g. lacy kaicenat")
+    wa = sub.add_parser("watch", help="watch live Twitch, Kick and YouTube channels and make draft clips as moments happen")
+    wa.add_argument("channels", nargs="+", help="channel names or channel URLs, e.g. lacy kick.com/name @handle")
     wa.add_argument("--minutes", type=float, help="stop after this many minutes (default: run until Ctrl+C)")
     wa.add_argument("--mode", help="A or chat, B or audio, C or video, D or all. Asked in the terminal when left out")
     wa.set_defaults(func=_cmd_watch)
