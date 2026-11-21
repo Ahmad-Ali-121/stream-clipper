@@ -136,7 +136,15 @@ The **? Ask** button at the bottom right opens a chat. Type a question about the
 - It knows what the program is doing right now, so it can explain an error that is on screen.
 - It only answers questions about this program.
 
-It needs Claude (your Claude Code plan or an API key). Without Claude it still answers, by showing the parts of this guide that match your question. Each question counts towards your Claude plan like any other use.
+**Telling it to do something.** You can also give it an order instead of a question, in English or Roman Urdu: "start watching lacy and kick.com/name with chat only", "stop watching", "set the template to No template", "make a clip from this link from 3:53:30 to 3:54:00", "watching band kar do". It then does the steps on the page while you watch: each thing is highlighted, the text is typed, the choice is made, the button is pressed, and the step gets a tick in the chat. **Stop** (or Esc) ends it at once; steps already done stay done. When it is finished it says how many steps it did, and if something could not be done it says which step and why, and does nothing after it.
+
+- If you only asked how to do something, it does nothing by itself; the answer has a **Do it for me** button.
+- It can use anything that is on the page: boxes, lists, tick boxes, sliders, tabs and buttons. A new feature can be used the day it is added.
+- If you left out something it needs (which channel, which link, what time), it asks instead of guessing.
+- **Some presses always stay yours.** Approve, Reject, Delete, Back to review and everything else on a clip's card, deleting anything, and updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
+- It cannot post or upload anything; the program has no way to do that.
+
+It needs Claude (your Claude Code plan or an API key). Without Claude it still answers, by showing the parts of this guide that match your question, but it cannot do things for you. Each question counts towards your Claude plan like any other use.
 
 ### Order, filters and the New tag
 

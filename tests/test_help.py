@@ -40,7 +40,8 @@ def test_an_answer_can_only_point_at_things_the_page_listed(monkeypatch):
 
     monkeypatch.setattr(llm, "ask", fake)
     r = help_mod.answer(load_config(), "  how do I clip now?  ", [], PAGE, {})
-    assert r["source"] == "ai" and r["steps"] == [{"text": "Press it", "target": "b-clipnow"}, {"text": "Then this", "target": ""}]  # the invented key is dropped
+    assert r["source"] == "ai" and [(x["text"], x["target"]) for x in r["steps"]] == [("Press it", "b-clipnow"), ("Then this", "")]  # the invented key is dropped
+    assert r["run"] is False and all(x["act"] == "" and not x["yours"] for x in r["steps"])  # an answer that only points does nothing
     assert r["follow_ups"] == ["And then?"]
 
 
@@ -62,3 +63,77 @@ def test_an_empty_or_huge_question_is_refused_plainly():
         help_mod.answer(cfg, "   ")
     with pytest.raises(ValueError, match="very long"):
         help_mod.answer(cfg, "x" * 2000)
+
+
+# ---- doing things for the user ----
+
+DOABLE = [
+    {"key": "o-channels", "kind": "box", "label": "Channels, separated by spaces", "where": "Find moments > tab \"Live streams\"", "now": "(empty)"},
+    {"key": "b-watch", "kind": "button", "label": "Start watching", "where": "Find moments > tab \"Live streams\""},
+    {"key": "o-auto", "kind": "tick box", "label": "Start watching by itself", "where": "Find moments", "now": "not ticked"},
+    {"key": "c-anim", "kind": "choice", "label": "Caption movement", "where": "Make the videos", "now": "Pop", "choices": "Highlight; Pop; One word"},
+    {"key": "k7", "kind": "button", "label": "Approve", "where": "Clips view > on each clip's card (this is the first clip's)"},
+    {"key": "k9", "kind": "button", "label": "Fine-tune", "where": "Clips view > on each clip's card (this is the first clip's)"},
+    {"key": "b-delrej", "kind": "button", "label": "Delete all rejected", "where": "Clips view"},
+    {"key": "b-update", "kind": "button", "label": "Update now", "where": "top bar"},
+    {"key": "b-clear", "kind": "button", "label": "Clear filters", "where": "Clips view"},
+]
+
+
+def _steps(*rows):
+    return [{"text": t, "target": k, "act": a, "value": v} for t, k, a, v in rows]
+
+
+def test_the_page_list_carries_what_each_thing_holds_and_its_choices():
+    clean = help_mod.clean_targets(DOABLE)
+    p = help_mod.build_prompt("set the caption movement to one word", [], clean, {})
+    assert "c-anim | choice | Caption movement | Make the videos | now: Pop | choices: Highlight; Pop; One word" in p
+    assert "o-channels | box |" in p and "now: (empty)" in p
+
+
+def test_steps_the_ai_may_do_keep_their_act_and_value():
+    got = help_mod.checked_steps(_steps(("Type the channel", "o-channels", "type", "lacy kick.com/name"), ("Tick it", "o-auto", "tick", "ignored"),
+                                        ("Choose one word", "c-anim", "type", "One word"), ("Start", "b-watch", "press", ""),
+                                        ("Clear", "b-clear", "press", "")), help_mod.clean_targets(DOABLE))
+    assert [(s["act"], s["value"], s["yours"]) for s in got] == [("type", "lacy kick.com/name", False), ("tick", "", False), ("type", "One word", False),
+                                                                 ("press", "", False), ("press", "", False)]
+
+
+def test_decisions_deleting_and_updating_are_never_done_for_the_user():
+    got = help_mod.checked_steps(_steps(("Approve it", "k7", "press", ""), ("Open fine-tune", "k9", "press", ""), ("Delete them", "b-delrej", "press", ""),
+                                        ("Update", "b-update", "press", "")), help_mod.clean_targets(DOABLE))
+    assert all(s["act"] == "" and s["yours"] and s["target"] for s in got)  # still pointed at, never pressed
+
+
+def test_an_act_that_does_not_fit_the_thing_or_is_made_up_is_dropped():
+    long = "x" * 1000
+    got = help_mod.checked_steps(_steps(("Type into a button", "b-watch", "type", "hello"), ("Press a box", "o-channels", "press", ""),
+                                        ("Run a script", "b-watch", "javascript", "alert(1)"), ("No such thing", "nope", "press", ""),
+                                        ("Long value", "o-channels", "type", long)) + ["junk", {"text": ""}], help_mod.clean_targets(DOABLE))
+    assert [s["act"] for s in got] == ["", "", "", "", "type"] and got[3]["target"] == "" and len(got[4]["value"]) == help_mod.MAX_VALUE
+    assert not any(s["yours"] for s in got)
+
+
+def test_run_is_only_true_when_there_is_something_left_to_do(monkeypatch):
+    answers = {"steps": _steps(("Type", "o-channels", "type", "lacy"), ("Start", "b-watch", "press", "")), "run": True}
+    monkeypatch.setattr(llm, "ask", lambda *a, **k: {"answer": "I am starting it.", "follow_ups": [], **answers})
+    r = help_mod.answer(load_config(), "start watching lacy", [], DOABLE, {})
+    assert r["run"] is True and [s["act"] for s in r["steps"]] == ["type", "press"]
+    answers["steps"] = _steps(("Approve it", "k7", "press", ""))
+    r = help_mod.answer(load_config(), "approve the first clip", [], DOABLE, {})
+    assert r["run"] is False and r["steps"][0]["yours"]  # told to do it, but it is the user's own press
+
+
+def test_the_ai_is_told_what_it_can_do_and_what_stays_the_users():
+    low = help_mod.SYSTEM.lower()
+    assert '"press"' in low and '"type"' in low and "do it for me" in low and "yours to press" in low
+    assert help_mod.SCHEMA["properties"]["steps"]["items"]["properties"]["act"]["enum"] == ["", "press", "type", "tick", "untick"]
+
+
+def test_without_claude_nothing_is_done_for_the_user(monkeypatch):
+    def down(*a, **k):
+        raise llm.LlmUnavailable("Claude Code is not signed in")
+
+    monkeypatch.setattr(llm, "ask", down)
+    r = help_mod.answer(load_config(), "start watching lacy", [], DOABLE, {})
+    assert r["run"] is False and all(s["act"] == "" for s in r["steps"])

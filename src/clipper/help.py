@@ -1,4 +1,4 @@
-"""The built-in help assistant: answers a newcomer's question in plain words and points at the thing on the page.
+"""The built-in help assistant: answers a question in plain words, points at the thing on the page, and can do it.
 
 It is built so that it does not need to be kept up to date by hand:
   - what the program does comes from GUIDE.md, read fresh every time (the guide is updated with every feature);
@@ -7,6 +7,12 @@ It is built so that it does not need to be kept up to date by hand:
     list the day it is added.
 The assistant answers in steps and may attach one key from that list to a step; the page then opens the right
 tab, scrolls to the thing and highlights it. It can only point at keys that were sent, so it cannot make one up.
+
+It can also do the steps: a step may say what to do with its thing (press it, type into it, tick it), and the page
+then does that in front of the user, one step at a time, with a Stop button. Because the actions are "use this
+thing on the page", a new button can be used the day it is added. What it may never do for the user is decided
+here, not by the AI: deciding about a clip (approve, reject, delete, back to review), deleting anything, and
+updating the program stay the user's own presses (``YOURS``); those steps are only pointed at.
 
 Claude is asked through the usual connection (Claude Code on this computer, or an API key). Without Claude the
 question is matched against the guide's sections and the best ones are shown, so help never comes back empty.
@@ -24,6 +30,15 @@ log = logging.getLogger(__name__)
 
 MAX_QUESTION = 600
 MAX_TARGETS = 420
+MAX_VALUE = 300
+
+ACTS = ("press", "type", "tick", "untick")
+# What each kind of thing on the page can have done to it.
+FITS = {"press": ("button", "fold-out", "link", "option", "item"), "type": ("box", "choice", "slider"),
+        "tick": ("tick box", "option"), "untick": ("tick box",)}
+# Presses that stay the user's own, whatever the AI says: deciding about clips, deleting, updating, installing.
+YOURS = re.compile(r"\b(approve|approved|reject|rejected|delete|deleted|deleting|remove|back to review|update|updates|install|reinstall|reset|forget)\b", re.IGNORECASE)
+ON_A_CLIP = "on each clip's card"
 
 SYSTEM = """You are the help assistant built into "Stream Clipper", a program that runs on the user's own computer and turns \
 long livestreams and videos into short vertical clips. The user is looking at the program's page right now and may be \
@@ -49,6 +64,17 @@ target whenever a step says to press, choose, tick or type into something that i
 - Things on a clip's card (Approve, Reject, Fine-tune, Captions…) exist once per clip; the list shows the first clip's as the \
 example, and that is the one to point at.
 
+Doing things for the user:
+- You can also DO a step, not only point at it. Give the step an "act" and the page does it in front of the user:
+  "press" (a button, a tab, a fold-out, an option), "type" (put "value" into a box; for a choice list, "value" is one of its choices exactly as listed; for a slider, a number), "tick" or "untick" (a tick box). Use "" when the step is only an explanation, or when its thing is not in the list.
+- The list shows what each box holds now and the choices of each list. Do not add a step for something that is already as wanted.
+- Set "run" to true when the user TOLD you to do something ("start watching lacy", "set captions to yellow", "make a clip from this link 1:00 to 1:30", "ye kar do"). Set it to false when they asked how, what or why; then the steps still carry their acts and the user can press "Do it for me".
+- Only give acts that can be done right now, one after another. Something that has to wait for a job to finish is a plain step.
+- Put the steps in the order a person would do them: open the tab first only if the list says the thing is inside another tab (the page opens tabs and fold-outs by itself when it uses a thing, so you rarely need a step for that).
+- If the user did not give something a step needs (which channel, which link, what time), do not invent it: ask for it in "answer" and give no acts.
+- Some presses always stay the user's own and the page will only point at them: Approve, Reject, Delete, Back to review and everything else on a clip's card, deleting anything, and updating the program. Say so in the step ("this one is yours to press").
+- When "run" is true, write "answer" as what you are doing ("I am setting ... and starting ..."), not as instructions.
+
 You also get what the program is doing right now (watching, a job running, any error shown). Use it when the question is \
 "why is it not working" or "what is it doing": quote the error in plain words and say what to do, from the guide.
 
@@ -66,14 +92,17 @@ SCHEMA = {
                 "properties": {
                     "text": {"type": "string", "description": "One action, in plain words."},
                     "target": {"type": "string", "description": "A key from the page list for the thing this step uses, or an empty string."},
+                    "act": {"type": "string", "enum": ["", "press", "type", "tick", "untick"], "description": "What the page should do with the target, or an empty string to only point at it."},
+                    "value": {"type": "string", "description": "For act \"type\": the text, the choice or the number to put in. Otherwise an empty string."},
                 },
-                "required": ["text", "target"],
+                "required": ["text", "target", "act", "value"],
                 "additionalProperties": False,
             },
         },
         "follow_ups": {"type": "array", "items": {"type": "string"}, "description": "Up to three short questions the user might ask next."},
+        "run": {"type": "boolean", "description": "True when the user told you to do something and the steps should be done now; false when they only asked."},
     },
-    "required": ["answer", "steps", "follow_ups"],
+    "required": ["answer", "steps", "follow_ups", "run"],
     "additionalProperties": False,
 }
 
@@ -109,7 +138,7 @@ def knowledge() -> tuple[str, list[tuple[str, str]]]:
 
 
 def clean_targets(raw) -> list[dict]:
-    """The page's own list of what is on it, checked: [{"key", "kind", "label", "where"}]."""
+    """The page's own list of what is on it, checked: [{"key", "kind", "label", "where", "now", "choices"}]."""
     out: list[dict] = []
     seen: set[str] = set()
     for item in raw if isinstance(raw, list) else []:
@@ -120,7 +149,8 @@ def clean_targets(raw) -> list[dict]:
             continue
         seen.add(key)
         flat = lambda v, n: " ".join(str(v or "").split())[:n]  # noqa: E731  one line each, so a label cannot fake another row
-        out.append({"key": key, "kind": flat(item.get("kind"), 12), "label": flat(item.get("label"), 90).replace("|", "/"), "where": flat(item.get("where"), 110).replace("|", "/")})
+        out.append({"key": key, "kind": flat(item.get("kind"), 12), "label": flat(item.get("label"), 90).replace("|", "/"), "where": flat(item.get("where"), 110).replace("|", "/"),
+                    "now": flat(item.get("now"), 70).replace("|", "/"), "choices": flat(item.get("choices"), 240).replace("|", "/")})
         if len(out) >= MAX_TARGETS:
             break
     return out
@@ -145,10 +175,11 @@ def build_prompt(question: str, history, targets: list[dict], state) -> str:
     for turn in (history if isinstance(history, list) else [])[-6:]:
         if isinstance(turn, dict) and turn.get("q"):
             past.append(f"User: {' '.join(str(turn['q']).split())[:300]}\nYou: {' '.join(str(turn.get('a') or '').split())[:500]}")
-    page = "\n".join(f"{t['key']} | {t['kind']} | {t['label']} | {t['where']}" for t in targets) or "(the page sent no list)"
+    page = "\n".join(f"{t['key']} | {t['kind']} | {t['label']} | {t['where']}" + (f" | now: {t['now']}" if t.get("now") else "")
+                     + (f" | choices: {t['choices']}" if t.get("choices") else "") for t in targets) or "(the page sent no list)"
     return (
         "THE GUIDE (everything the program does, written for its users):\n" + guide
-        + "\n\nWHAT IS ON THE PAGE RIGHT NOW (key | kind | label | where):\n" + page
+        + "\n\nWHAT IS ON THE PAGE RIGHT NOW (key | kind | label | where | what it holds now | its choices):\n" + page
         + "\n\nWHAT THE PROGRAM IS DOING RIGHT NOW:\n" + _state_text(state)
         + ("\n\nEARLIER IN THIS CHAT:\n" + "\n".join(past) if past else "")
         + "\n\nTHE USER'S QUESTION:\n" + question
@@ -168,19 +199,49 @@ def from_guide(question: str, targets: list[dict]) -> dict:
     scored.sort(key=lambda x: -x[0])
     best = scored[:2]
     if not best:
-        return {"answer": "I could not find that in the guide. Try other words, or open the full guide (GUIDE.md in the program's folder).", "steps": [], "follow_ups": [], "source": "guide"}
+        return {"answer": "I could not find that in the guide. Try other words, or open the full guide (GUIDE.md in the program's folder).", "steps": [], "follow_ups": [], "run": False, "source": "guide"}
     steps = []
     for _hits, title, body in best:
         plain = re.sub(r"[*`#>|]", "", body)
         plain = "\n".join(line.strip() for line in plain.splitlines() if line.strip())[:900]
         match = max(targets, key=lambda t: sum(1 for w in words if w in (t["label"] + " " + t["where"]).lower()), default=None)
         fits = match and any(w in (match["label"] + " " + match["where"]).lower() for w in words)
-        steps.append({"text": f"{title}:\n{plain}", "target": match["key"] if fits and not steps else ""})
-    return {"answer": "Claude cannot be reached right now, so here is what the guide says about it.", "steps": steps, "follow_ups": [], "source": "guide"}
+        steps.append({"text": f"{title}:\n{plain}", "target": match["key"] if fits and not steps else "", "act": "", "value": "", "yours": False})
+    return {"answer": "Claude cannot be reached right now, so here is what the guide says about it. Without Claude I can show where things are, but not do them for you.",
+            "steps": steps, "follow_ups": [], "run": False, "source": "guide"}
+
+
+def checked_steps(raw, listed: list[dict]) -> list[dict]:
+    """The AI's steps, with everything it may not decide taken out of its hands.
+
+    Each step comes back as {"text", "target", "act", "value", "yours"}. A key that was not sent is dropped. An act that
+    does not fit the thing (typing into a button) is dropped. A press that is the user's own (``YOURS``, or anything
+    on a clip's card) keeps its target, so it can be pointed at, but loses its act and is marked "yours".
+    """
+    by_key = {t["key"]: t for t in listed}
+    steps = []
+    for step in (raw or [])[:12]:
+        step = step if isinstance(step, dict) else {}
+        text = " ".join(str(step.get("text") or "").split())
+        if not text:
+            continue
+        thing = by_key.get(str(step.get("target") or ""))
+        act = str(step.get("act") or "")
+        value = str(step.get("value") or "")[:MAX_VALUE]
+        yours = False
+        if thing is None or act not in ACTS or thing["kind"] not in FITS[act]:
+            act = ""
+        elif YOURS.search(thing["label"]) or ON_A_CLIP in thing["where"]:
+            act, yours = "", True
+        steps.append({"text": text[:500], "target": thing["key"] if thing else "", "act": act, "value": value if act == "type" else "", "yours": yours})
+    return steps
 
 
 def answer(cfg: Config, question: str, history=None, targets=None, state=None) -> dict:
-    """Answer one question. Returns {"answer", "steps": [{"text", "target"}], "follow_ups", "source": "ai" | "guide", "note"}."""
+    """Answer one question.
+
+    Returns {"answer", "steps": [{"text", "target", "act", "value", "yours"}], "follow_ups", "run", "source": "ai" | "guide", "note"}.
+    """
     from . import llm
 
     question = " ".join(str(question or "").split())
@@ -198,12 +259,7 @@ def answer(cfg: Config, question: str, history=None, targets=None, state=None) -
         out = from_guide(question, listed)
         out["note"] = f"Answered from the guide without AI, because Claude could not be reached: {str(e)[:300]}"
         return out
-    keys = {t["key"] for t in listed}
-    steps = []
-    for step in (data.get("steps") or [])[:12]:
-        text = " ".join(str((step or {}).get("text") or "").split())
-        if text:
-            target = str((step or {}).get("target") or "")
-            steps.append({"text": text[:500], "target": target if target in keys else ""})  # a key that was not sent is dropped, not trusted
+    steps = checked_steps(data.get("steps"), listed)
     return {"answer": str(data.get("answer") or "").strip()[:1500] or "I have no answer for that.", "steps": steps,
+            "run": bool(data.get("run")) and any(s["act"] for s in steps),
             "follow_ups": [" ".join(str(f).split())[:120] for f in (data.get("follow_ups") or [])[:3] if str(f).strip()], "source": "ai", "note": ""}
