@@ -120,6 +120,11 @@ pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid
 .clip[data-status=pending] .badge{border-color:var(--warn);color:var(--warn)}
 .clips[data-filter=pending] .clip:not([data-status=pending]){display:none}
 .modal>.card.small{width:min(500px,100%)}
+.acts .brk{flex-basis:100%;height:0}
+.acts .tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex:1;padding-top:10px;border-top:1px dashed var(--line)}
+.acts .tools .btn{padding:6px 12px;font-size:13px}
+.makebar{position:sticky;bottom:0;z-index:2;background:var(--surface);padding:10px 0 6px;margin-top:10px;border-top:1px solid var(--line)}
+.makebar .btns{margin-top:0}
 img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:10px;display:block;margin:8px 0;border:1px solid var(--line)}
 button.pill{cursor:pointer;color:inherit;font:inherit;font-size:12.5px;border-color:var(--ok)}
 .minibar{display:inline-block;width:70px;height:6px;border-radius:999px;background:var(--line);overflow:hidden}.minibar i{display:block;height:100%;width:0;background:var(--ok);transition:width .4s}
@@ -425,7 +430,7 @@ kbd{background:rgba(255,255,255,.06)!important}
         <label class="switch"><input type="checkbox" id="o-ab" onchange="saveOpts()"><span><b>A and B versions</b>Two versions of each clip with different opening text and title, to test which does better.</span></label>
         <label class="switch"><input type="checkbox" id="o-opening" onchange="saveOpts()"><span><b>Eye-catching first seconds</b>Zoom-in, pop-in text, a whoosh and a progress bar.</span></label>
         <label class="f" for="o-thumb">Thumbnail for each clip <small>(a cover picture, made together with its videos)</small></label>
-        <select id="o-thumb" onchange="act('/api/options',{thumbnail:val('o-thumb')})"></select>
+        <select id="o-thumb" data-yours onchange="act('/api/options',{thumbnail:val('o-thumb')})"></select>
         <p class="help" id="thumb-note" style="margin:6px 0 0"></p>
         <label class="f" for="o-camp">Campaign (checks every clip against its rules)</label>
         <select id="o-camp" onchange="saveOpts()"></select>
@@ -481,11 +486,11 @@ kbd{background:rgba(255,255,255,.06)!important}
           <input type="range" id="g-rise" min="0" max="20" oninput="$('g-risev').textContent=this.value" onchange="saveBrand()">
           <p class="help" style="margin-top:6px">Use only music you have the right to use: platforms mute or remove clips with other people's songs. Branding is added when a draft or a video is made; press Make videos to add it to clips already drafted.</p>
         </details>
-        <div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button>
+        <div class="makebar"><div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button>
           <button class="btn" id="b-fstop" disabled onclick="stopAsk(true)" title="Stop making videos: now, or after the one being made">Stop</button>
           <button class="btn" id="b-ready" onclick="openReady()" title="Opens the folder on this computer where the finished videos are">Open the videos folder</button></div>
         <div class="bar" id="f-bar" hidden><i></i></div><div class="pct" id="f-pct" hidden></div>
-        <div class="note" id="f-note">Nothing made yet in this session.</div>
+        <div class="note" id="f-note">Nothing made yet in this session.</div></div>
         <ul class="ready" id="f-ready"></ul>
         <details class="log"><summary>Activity log</summary><pre class="log" id="flog"></pre></details>
       </div>
@@ -735,9 +740,9 @@ function show(s){
   $('r-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?(/ stopped$/.test(lastLine(s.run_log))?'<b>Stopped by you.</b>':'<b>Done.</b> '+esc(lastLine(s.run_log))):'Nothing running.'));
   logTo('rlog',s.run_log);
   const ready=s.finish_log.filter(l=>l.startsWith('READY ')), notMade=s.finish_log.filter(l=>l.startsWith('NOT MADE ')||l.startsWith('FAILED'));
-  $('f-note').innerHTML=s.finishing?'<b>Working…</b> '+(fp.total?'clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total+(fp.now?': '+esc(fp.now):''):'starting')+'. The bar below shows how far it is.'
+  $('f-note').innerHTML=s.finishing?'<b>Working…</b> '+(fp.total?'clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total+(fp.now?': '+esc(fp.now):''):'starting')+'. The bar above shows how far it is.'
       +(s.finish_stopping==='after'?' <b>Stopping after this video.</b>':(s.finish_stopping==='now'?' <b>Stopping now…</b>':''))
-    :(s.finish_log.length?(s.finish_stopped?'<b>Stopped by you.</b> ':'')+(ready.length?'<b>'+ready.length+' video file'+(ready.length>1?'s':'')+' made.</b> ':(s.finish_stopped?'No video was finished before the stop. ':(notMade.length?'':'<b>Nothing new to make:</b> every approved clip already has its videos. ')))+(notMade.length?notMade.length+' could not be made. ':'')+(ready.length?'They are in the <b>ready</b> folder inside your data folder; press Open the videos folder.':'')+(s.finish_stopped?' The clips that were not made are still under Approved.':''):'Nothing made yet in this session.');
+    :(s.finish_log.length?(s.finish_stopped?'<b>Stopped by you.</b> ':'')+(ready.length?'<b>'+ready.length+' video file'+(ready.length>1?'s':'')+' made.</b> ':(s.finish_stopped?'No video was finished before the stop. ':(notMade.length?'':'<b>Nothing to make:</b> no approved clip is waiting for its videos. ')))+(notMade.length?notMade.length+' could not be made. ':'')+(ready.length?'They are in the <b>ready</b> folder inside your data folder; press Open the videos folder.':'')+(s.finish_stopped?(s.finish_left?' '+s.finish_left+' clip'+(s.finish_left>1?'s were':' was')+' not made and '+(s.finish_left>1?'are':'is')+' still under Approved.':' Nothing else was waiting.'):''):'Nothing made yet in this session.');
   $('f-ready').innerHTML=ready.map(l=>'<li>'+esc(l.slice(6).split(/[\\/]/).pop())+'</li>').join('')+notMade.map(l=>'<li class="nm">'+esc(l)+'</li>').join('');
   /* How far the making of the videos is, at the top of the page too: it is seen from wherever you are. */
   const pm=$('p-make'), fq=s.finish_percent; pm.hidden=!s.finishing;
@@ -768,8 +773,8 @@ function show(s){
 }
 async function act(url,body){
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(!r.ok){toast(await r.text(),true);return} show(await r.json())}
-  catch(e){toast('The program is not answering: '+e,true)}
+    if(!r.ok){toast(await r.text(),true);return false} show(await r.json());return true}
+  catch(e){toast('The program is not answering: '+e,true);return false}
 }
 async function localAi(){
   if(!confirm('Set up the free local AI on this computer?'+NL+NL+'It installs Ollama (a free program that runs AI models, about 1 GB) and downloads one model (about 2 GB). This takes a while. Progress shows under Setup check.'))return;
@@ -862,11 +867,13 @@ function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
   if(t==='ai')parts.push('Found by AI from the speech');
   if(t==='manual')return [c.parts?'Part '+c.part+' of '+c.parts:'Chosen by you'];
   return parts.length?parts:[t]}
+const coverText=new Map();   /* a thumbnail description being typed, kept through redraws and failures */
 const coverOpen=new Set(), COVER_BY={frame:'Made from the clip',chatgpt:'Drawn by ChatGPT',prompt:'Drawn by ChatGPT from your description'};
 function cardHtml(c){
   const cv=c.cover||{}, k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
   const VN={'final.mp4':'A','final_b.mp4':'B','explained.mp4':'Explained A','explained_b.mp4':'Explained B','source.mp4':'Raw'};
   const tabs=(c.videos||[]).length>1||(c.videos||[]).includes('final.mp4')?'<div class="vtabs">'+(c.videos||[]).map(n=>'<button class="'+(n===c.video?'on':'')+'" onclick="showVid(\''+k+'\',\''+n+'\',this)">'+VN[n]+'</button>').join('')
+    +(cv.made?'<button onclick="showCover(\''+k+'\',this)" title="This clip\'s thumbnail">Thumbnail</button>':'')
     +((c.videos||[]).includes('final.mp4')&&!(c.videos||[]).includes('final_b.mp4')?'<button onclick="makeB(\''+k+'\',this)" title="Render version B now so you can compare it">Make B preview</button>':'')+'</div>':'';
   const vid=c.video?'<video controls preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+'"></video>'+tabs+'<small>'+shown+'</small>'
     :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
@@ -880,7 +887,8 @@ function cardHtml(c){
         :'<span class="chip '+(c.ai_keep?'good':'meh')+'">'+(c.ai_keep?'AI: worth posting':'AI: probably filler')+'</span>'):'')
     +(String(c.copy_source||'').startsWith('local')?'<span class="chip" title="Claude could not be reached, so the free AI on this computer wrote the text. It is redone by Claude when Claude is available.">Text by free local AI</span>':'')
     +(c.words_from==="YouTube's captions"?'<span class="chip" title="The captions are YouTube\'s own words for this video, not heard by the speech model. Fix any wrong word under Captions.">Captions from YouTube</span>':'')
-    +(c.exported?'<span class="chip good">Videos made</span>':'');
+    +(c.exported?'<span class="chip good">Videos made</span>':'')
+    +(cv.made?'<span class="chip good" title="'+esc(COVER_BY[cv.by]||'')+'">Thumbnail made</span>':'');
   const lay=[['','Automatic'],['split','Face on top, video below'],['crop','Video only, full height'],['split_under','Video on top, face below'],['blur','Whole picture on a blurred background'],['pip','Face in a corner over the video'],['circle','Face in a circle over the video']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
   return '<div class="vid">'+vid+'</div><div class="info">'
    +'<div class="chead"><h3>'+esc(c.channel||c.stream_title||'Your video')+'</h3>'+'<span class="newtag" title="Made in the last hour and not reviewed yet"'+(isNew(c)?'':' hidden')+'>NEW</span>'
@@ -898,7 +906,7 @@ function cardHtml(c){
    +(String(c.transcript||'').length>260?'<button class="more" onclick="this.previousElementSibling.classList.toggle(\'open\');this.textContent=this.textContent===\'Show all\'?\'Show less\':\'Show all\'">Show all</button>':'')
    +'<div class="two"><div><label class="f">Opening text on the video (version A)</label><input type="text" name="hook" value="'+esc(c.hook)+'"></div>'
    +'<div><label class="f">Opening text, version B <small>(empty = same as A)</small></label><input type="text" name="hook_b" value="'+esc(c.hook_b)+'"></div></div>'
-   +'<details class="sec"'+(c.explainer||c.simple===false?' open':'')+'><summary>Versions to make <small>the normal video, an explainer with a narrator</small></summary>'
+   +'<details class="sec"'+(c.explainer||c.simple===false?' open':'')+'><summary>Versions to make <small>now: '+(c.simple===false?'the explainer only':(c.explainer?'the normal video and an explainer':'the normal video'))+'</small></summary>'
    +'<label class="check"><input type="checkbox" name="simple"'+(c.simple!==false?' checked':'')+'> Make the normal video (the clip as it is, without a narrator)</label>'
    +'<label class="check"><input type="checkbox" name="explainer"'+(c.explainer?' checked':'')+'> Make an explainer version (a narrator sets up the moment, then the clip plays)</label>'
    +'<div class="two"><div><label class="f">What the narrator says (version A)</label><input type="text" name="intro" value="'+esc(c.intro)+'"></div>'
@@ -922,14 +930,14 @@ function cardHtml(c){
    +(c.framing?'<div class="btns" style="margin-top:0"><button class="btn" onclick="openBoxes(\''+k+'\')">Set the face box and the video box</button>'
        +'<button class="btn" title="Draft every unfinished clip of this video again with the caption style, template and branding chosen now" onclick="remakeAll(\''+k+'\')">Make this video\'s drafts again</button></div>':'')
    +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
-   +'<details class="sec"'+(coverOpen.has(k)?' open':'')+' ontoggle="this.open?coverOpen.add(\''+k+'\'):coverOpen.delete(\''+k+'\')"><summary>Thumbnail <small>a cover picture for Shorts, Reels and TikTok (optional)'+(cv.made?' · made':'')+'</small></summary>'
-   +(cv.made?'<img class="cover" alt="This clip\'s thumbnail" src="/media/'+k+'/cover.jpg?v='+cv.mtime+'"><p class="help" style="margin:0 0 6px">'+esc(COVER_BY[cv.by]||'Made')+(cv.at?' · '+esc(cv.at):'')+(cv.words&&cv.by!=='frame'?' · words on it: '+esc(cv.words):'')+'. It is saved beside the finished video, with the same name.</p>'
+   +'<details class="sec"'+(coverOpen.has(k)||cv.error?' open':'')+' ontoggle="this.open?coverOpen.add(\''+k+'\'):coverOpen.delete(\''+k+'\')"><summary>Thumbnail <small>a cover picture for Shorts, Reels and TikTok (optional)'+(cv.made?' · made':'')+(cv.error?' · <b style="color:var(--bad)">could not be made</b>':'')+'</small></summary>'
+   +(cv.made?'<img class="cover" alt="This clip\'s thumbnail" src="/media/'+k+'/cover.jpg?v='+cv.mtime+'"><p class="help" style="margin:0 0 6px">'+esc(COVER_BY[cv.by]||'Made')+(cv.at?' · '+esc(cv.at):'')+(cv.words&&cv.by!=='frame'?' · words on it: '+esc(cv.words):'')+'. '+(c.exported?'It is saved beside the finished video, with the same name.':'It is put beside the finished video, with the same name, when the videos are made.')+'</p>'
      :'<p class="help" style="margin-top:8px">No thumbnail yet. Nothing has to be made: this is an extra.</p>')
    +(cv.error?'<div class="cliperr"><b>The thumbnail could not be made:</b> '+esc(cv.error)+'</div>':'')
    +'<div class="btns" style="margin-top:0"><button class="btn" title="Free, no AI: the sharpest frame of the clip with its opening text" onclick="makeCover(\''+k+'\',\'frame\',this)">Make it from the clip (free)</button>'
    +'<button class="btn" title="ChatGPT looks at the clip and decides the picture itself. Uses your ChatGPT plan; about a minute" onclick="makeCover(\''+k+'\',\'chatgpt\',this)">Let ChatGPT make it</button></div>'
    +'<label class="f">Or describe the picture yourself <small>(ChatGPT draws it; it still sees the clip)</small></label>'
-   +'<textarea name="t_cover" maxlength="2000" style="min-height:64px" placeholder="For example: the streamer shocked on the left, the bike upside down in the air on the right, big yellow text NO WAY">'+esc(cv.prompt||'')+'</textarea>'
+   +'<textarea name="t_cover" maxlength="2000" style="min-height:64px" oninput="coverText.set(\''+k+'\',this.value)" placeholder="For example: the streamer shocked on the left, the bike upside down in the air on the right, big yellow text NO WAY">'+esc(coverText.has(k)?coverText.get(k):(cv.prompt||''))+'</textarea>'
    +'<div class="btns"><button class="btn" onclick="makeCover(\''+k+'\',\'prompt\',this)">Make it from my description</button>'
    +(cv.made?'<a class="btn" href="/media/'+k+'/cover.jpg" download="thumbnail.jpg">Download</a><button class="btn quiet" onclick="makeCover(\''+k+'\',\'none\',this)">Remove thumbnail</button>':'')+'</div></details>'
    +(c.exported?'<details class="sec"><summary>Posted it? Log it <small>keeps views, payouts and rejections in the Tracker</small></summary>'
@@ -938,14 +946,16 @@ function cardHtml(c){
      +'<div><label class="f">Link to the post</label><input type="text" name="t_url" placeholder="https://..."></div></div>'
      +'<label class="f">Campaign (leave empty if none)</label><input type="text" name="t_campaign" value="'+esc(c.campaign)+'">'
      +'<div class="btns"><button class="btn" data-act="log" data-key="'+esc(k)+'">Add to the tracker</button></div></details>':'')
-   +'<div class="acts"><button class="btn ok" onclick="save(\''+k+'\',{status:\'approved\'})">Approve</button>'
-   +'<button class="btn bad" onclick="save(\''+k+'\',{status:\'rejected\'})">Reject</button>'
-   +'<button class="btn" onclick="save(\''+k+'\')">Save changes</button>'
-   +'<button class="btn" onclick="rewrite(\''+k+'\',this)">Write text with AI</button>'
-   +(c.status==='approved'&&!c.made?'<button class="btn" title="Make the videos of this one clip now, and leave the other approved clips for later" onclick="makeOne(\''+k+'\')">Make this clip\'s videos now</button>':'')
+   /* The buttons that decide about the clip come first and fit where the clip is now; the tools sit on their own line. */
+   +'<div class="acts">'
+   +(c.status!=='approved'?'<button class="btn ok" onclick="save(\''+k+'\',{status:\'approved\'})">Approve</button>':'')
+   +(c.status==='approved'&&!c.made?'<button class="btn ok" title="Make the videos of this one clip now, and leave the other approved clips for later" onclick="makeOne(\''+k+'\')">Make this clip\'s videos now</button>':'')
    +(c.status==='approved'?'<button class="btn" title="Takes it out of Approved without mixing it into To review: it waits in the Pending list" onclick="save(\''+k+'\',{status:\'candidate\',held:true})">Move to Pending</button>':'')
    +(c.status!=='candidate'||c.held?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\',held:false})">Back to review</button>':'')
-   +'<span class="saved"></span><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+k+'\')">Delete</button></div></div>';
+   +(c.status!=='rejected'?'<button class="btn bad" onclick="save(\''+k+'\',{status:\'rejected\'})">Reject</button>':'')
+   +'<span class="brk"></span><div class="tools"><button class="btn" onclick="save(\''+k+'\')">Save changes</button>'
+   +'<button class="btn" onclick="rewrite(\''+k+'\',this)">Write text with AI</button>'
+   +'<span class="saved"></span><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+k+'\')">Delete</button></div></div></div>';
 }
 function domId(k){return 'c-'+k.replace('/','--')}
 function busy(el){return el.dataset.dirty==='1'||[...el.querySelectorAll('video')].some(v=>!v.paused)||el.contains(document.activeElement)}
@@ -997,7 +1007,8 @@ async function loadClips(){
   const turn=++loadTurn;
   let clips;try{const r=await fetch('/api/clips');
     if(!r.ok){const why=await r.text();if(why!==clipsWhy){clipsWhy=why;toast('The clip list could not be loaded: '+why,true)}return}
-    clips=await r.json();clipsWhy=''}catch(e){return}  /* the program not answering is reported by the status check */
+    clips=await r.json();clipsWhy='';if(!HAS_PANEL)setErr('')}
+  catch(e){if(!HAS_PANEL)setErr('THE PROGRAM IS NOT ANSWERING. It has stopped or crashed: look at the terminal window where you started it; the reason is printed there.');return}  /* with the panel, the status check reports it */
   if(turn!==loadTurn)return;
   const a=arrangeNow();
   clips=arrange(clips,a);
@@ -1092,20 +1103,23 @@ async function makeCover(key,how,btn){
   catch(e){toast('The program is not answering: '+e,true);for(const b of box.querySelectorAll('button'))b.disabled=false;btn.textContent=was;return}
   const bad=r.ok?'':await r.text();
   coverOpen.add(key); if(document.activeElement)document.activeElement.blur(); el.dataset.m='';
-  if(bad){toast('The thumbnail was not made: '+bad,true);for(const b of box.querySelectorAll('button'))b.disabled=false;btn.textContent=was}
-  else toast(how==='none'?'Thumbnail removed':'Thumbnail made');
+  for(const b of box.querySelectorAll('button'))b.disabled=false; btn.textContent=was;   /* the card may not be redrawn at once (unsaved typing, a playing video) */
+  if(bad)toast('The thumbnail was not made: '+bad,true);
+  else{toast(how==='none'?'Thumbnail removed':'Thumbnail made');if(how!=='prompt')coverText.delete(key)}
   loadClips();
 }
 async function holdApproved(n){
   if(!confirm('Move all '+n+' approved clip'+(n>1?'s':'')+' to Pending?'+NL+NL+'They are not made into videos until you approve them again. Nothing is deleted, and they are kept apart from To review.'))return;
   const r=await post('/api/clips/hold-approved'); if(!r)return;
   for(const el of $('clips').children)el.dataset.m='';
-  toast(r.moved+' clip'+(r.moved===1?'':'s')+' moved to Pending'); loadClips();
+  const stuck=r.stuck||[];
+  toast(r.moved+' clip'+(r.moved===1?'':'s')+' moved to Pending'+(stuck.length?'. '+stuck.length+' could not be moved: '+stuck[0]:''),stuck.length>0); loadClips();
 }
 /* The videos of one approved clip, without the others. */
 async function makeOne(key){
   const el=$(domId(key));
   if(el&&el.dataset.dirty==='1'){toast('This clip has unsaved changes. Press Save changes first, then make its videos.',true);return}
+  if(document.activeElement)document.activeElement.blur();   /* a focused button would keep the card from being redrawn when it is done */
   await act('/api/finish',{only:key});
 }
 /* Stop making videos: the person chooses between not stopping, after this video, and now. */
@@ -1114,15 +1128,18 @@ function stopText(s){const fp=s.finish_progress||{};
     +(s.finish_stopping==='after'?' It is already set to stop after this video.':'');
   $('stop-after').disabled=s.finish_stopping==='after'}
 function stopAsk(open){if(open){if(!last.finishing){toast('No videos are being made right now.',true);return}stopText(last)}$('stopbox').hidden=!open;if(open)$('stop-cancel').focus()}
-async function finishStop(how){$('stopbox').hidden=true;await act('/api/finish/stop',{how:how});
-  if(last.finish_stopping)toast(how==='now'?'Stopping now. Videos already made are kept.':'It stops after the video being made.')}
+async function finishStop(how){$('stopbox').hidden=true;
+  if(await act('/api/finish/stop',{how:how}))toast(how==='now'?'Stopping now. Videos already made are kept.':'It stops after the video being made.')}
 async function openReady(){const r=await send('/api/ready/open');if(r.error)toast(r.error,true)}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('stopbox').hidden)stopAsk(false)});
 async function clearErr(key){if(await post('/api/clip/'+key+'/clear-error')){const el=$(domId(key));if(document.activeElement)document.activeElement.blur();if(el)el.dataset.m='';loadClips()}}
+function showCover(key,btn){const el=$(domId(key)),v=el.querySelector('.vid video'),c=known.find(x=>x.key===key)||{};
+  v.pause();v.removeAttribute('src');v.poster='/media/'+key+'/cover.jpg?v='+((c.cover||{}).mtime||0);v.load();
+  for(const b of btn.parentElement.children)b.classList.toggle('on',b===btn)}
 function showVid(key,name,btn){const el=$(domId(key)),v=el.querySelector('.vid video');const c=known.find(x=>x.key===key)||{};
-  v.src='/media/'+key+'/'+name+'?v='+c.mtime;for(const b of btn.parentElement.children)b.classList.toggle('on',b===btn);v.play().catch(()=>{})}
+  v.removeAttribute('poster');v.src='/media/'+key+'/'+name+'?v='+c.mtime;for(const b of btn.parentElement.children)b.classList.toggle('on',b===btn);v.play().catch(()=>{})}
 async function makeB(key,btn){btn.disabled=true;btn.textContent='Making B…';
-  if(await post('/api/clip/'+key+'/render-b')){const el=$(domId(key));if(document.activeElement)document.activeElement.blur();el.dataset.m='';toast('Version B is ready');loadClips()}else{btn.disabled=false;btn.textContent='Make B preview'}}
+  if(await post('/api/clip/'+key+'/render-b')){const el=$(domId(key));if(document.activeElement)document.activeElement.blur();if(el)el.dataset.m='';toast('Version B is ready');loadClips()}else{btn.disabled=false;btn.textContent='Make B preview'}}
 
 /* ---------- trimmer: drag the start and end over the sound wave ---------- */
 async function initTrim(key){
@@ -1542,7 +1559,7 @@ function helpWhere(el){
   if(card&&!clip){const h=card.querySelector('h2');if(h)out.push(h.textContent.trim().replace(/\s+/g,' '))}
   if(tabp)out.push('tab "'+({live:'Live streams',vod:'Finished stream',own:'Your own clip'}[tabp.id.slice(4)]||tabp.id)+'"');
   for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details')){const s=d.querySelector('summary');if(s&&s!==el)out.push('inside the fold-out "'+s.textContent.trim().replace(/\s+/g,' ').slice(0,50)+'"')}
-  if(modal)out.push('in the box editor window');
+  if(modal)out.push(modal.id==='stopbox'?'in the "Stop making videos?" window':'in the box editor window');
   if(el.closest('.top'))out.push('top bar');
   return out.join(' > ')||'on the page'}
 function helpLabel(el){
@@ -1617,7 +1634,7 @@ async function helpAsk(text){
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 /* Presses that are never done for the user, whatever an answer says (the server takes them out as well). */
 const HELP_YOURS=/\b(approve|approves|approving|reject|rejects|rejecting|delet\w*|remov\w*|eras\w*|discard\w*|clear\w*|wipe\w*|forget\w*|reset\w*|updat\w*|upgrad\w*|install|installs|installing|reinstall\w*|restart\w*|repair\w*|back to review|back to automatic|take it off)\b/i;
-function helpYours(el){const l=helpLabel(el);return !!(el.closest('.clip,#boxes,[data-yours]')||HELP_YOURS.test(l)||/^(×|x|close)$/i.test(l.trim()))}
+function helpYours(el){const l=helpLabel(el);return !!(el.closest('.clip,#boxes,#stopbox,[data-yours]')||HELP_YOURS.test(l)||/^(×|x|close)$/i.test(l.trim()))}
 function helpColour(v){   /* a colour name or code as #rrggbb, or '' when it is not a colour */
   v=String(v).trim();if(/^#[0-9a-f]{6}$/i.test(v))return v.toLowerCase();
   const c=document.createElement('canvas').getContext('2d');c.fillStyle='#000001';c.fillStyle=v;const a=c.fillStyle;c.fillStyle='#000002';c.fillStyle=v;
@@ -1805,7 +1822,8 @@ document.addEventListener('keydown',e=>{
   const i=cards.indexOf(cur), k=e.key.toLowerCase();
   if(k==='j'||k==='arrowdown'){setCur(cards[Math.min(cards.length-1,i+1)]);e.preventDefault()}
   else if(k==='k'||k==='arrowup'){setCur(cards[Math.max(0,i<0?0:i-1)]);e.preventDefault()}
-  else if(cur&&(k==='a'||k==='r')){const key=cur.id.slice(2).replace('--','/'), next=cards[i+1]||cards[i-1]||null;
+  else if(cur&&(k==='a'||k==='r')){if(e.repeat){e.preventDefault();return}   /* a key held down decides one clip, not every clip after it */
+    const key=(cur._c&&cur._c.key)||cur.id.slice(2).replace('--','/'), next=cards[i+1]||cards[i-1]||null;
     save(key,{status:k==='a'?'approved':'rejected'});setCur(next);e.preventDefault()}
   else if(cur&&k===' '){const v=cur.querySelector('.vid video');if(v){v.paused?v.play().catch(()=>{}):v.pause()}e.preventDefault()}
 });

@@ -193,8 +193,11 @@ def export_clip(clip_dir: Path, ready_root: Path, brief: Brief | None = None, vi
     while titled and video.exists() and not same(video, before):  # another clip has this title today: keep both
         video, n = day / f"{stem} ({n}).mp4", n + 1
     tmp = video.with_name(video.name + ".part")
-    shutil.copyfile(final, tmp)
-    tmp.replace(video)
+    try:
+        shutil.copyfile(final, tmp)
+        tmp.replace(video)
+    finally:
+        tmp.unlink(missing_ok=True)  # only still there when the copy or the swap failed (the video is open elsewhere)
     if before is not None and not same(video, before) and same(before.parent, day):
         # The same version made earlier today under another title: one video, one name.
         for old in (before, before.with_suffix(".txt"), before.with_suffix(".jpg")):

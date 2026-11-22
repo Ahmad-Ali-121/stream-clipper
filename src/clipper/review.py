@@ -215,7 +215,18 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
 
 
 def apply_edit(work: Path, cid: str, edit: dict) -> dict:
-    """Validate and apply one review edit to a clip's clip.json. Returns the new state."""
+    """Validate and apply one review edit to a clip's clip.json. Returns the new state.
+
+    Done under the same lock as ``work.update_clip``: a step that finishes this clip's export at the same moment
+    (and records where the file went) and an edit made on the page can then never overwrite each other.
+    """
+    from .work import _update_lock
+
+    with _update_lock:
+        return _apply_edit(work, cid, edit)
+
+
+def _apply_edit(work: Path, cid: str, edit: dict) -> dict:
     d = work / "clips" / cid
     path = d / "clip.json"
     if not re.fullmatch(r"[0-9a-z]+", cid) or not path.exists():
@@ -281,6 +292,10 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
     typed = {k for k, v in text_before.items() if (state.get(k) or ("" if k != "tags" else [])) != v}
     if typed:
         state["copy_auto"] = [k for k in state.get("copy_auto") or [] if k not in typed]
+    if typed & {"title", "title_b", "description", "tags"}:
+        # The finished file is named after the title and its text file holds all four: both are out of date now.
+        # The clip goes back to Approved; "Make videos" only copies it again under the new name (nothing is rendered).
+        state.pop("exported", None)
     # A choice made by a person is final: automatic layout and cut snapping must not undo it.
     after = shown(state)
     if after[1] != before[1]:
@@ -782,18 +797,22 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 return self._send(200, json.dumps({"words": count, "lines": len(cues)}).encode(), "application/json")
             if self.path == "/api/clips/hold-approved":
                 # Every approved clip whose videos are not made yet goes to Pending: out of "Make videos", and not mixed into To review.
-                moved = 0
+                moved, stuck = 0, []
                 for d in list_clips(list(by_name.values())):
                     st = read_json(d / "clip.json", {})
                     if st.get("status") == "approved" and not videos_made(d, st):
-                        apply_edit(d.parent.parent, d.name, {"status": "candidate", "held": True})
-                        moved += 1
+                        try:
+                            apply_edit(d.parent.parent, d.name, {"status": "candidate", "held": True})
+                            moved += 1
+                        except (ValueError, KeyError) as e:  # one clip that cannot be moved must not stop the others
+                            log.error("clip %s could not be moved to Pending: %s", d.name, e)
+                            stuck.append(f"{st.get('title') or d.name}: {e}")
                 if moved and cfg is not None:
                     from . import scoring
 
                     scoring.relearn(cfg.data_dir, all_states(list(by_name.values())))
                 log.info("moved %d approved clip(s) to Pending", moved)
-                return self._send(200, json.dumps({"moved": moved}).encode(), "application/json")
+                return self._send(200, json.dumps({"moved": moved, "stuck": stuck}).encode(), "application/json")
             if self.path == "/api/clips/delete-rejected":
                 gone, mb, busy = 0, 0.0, 0
                 for d in list_clips(list(by_name.values())):

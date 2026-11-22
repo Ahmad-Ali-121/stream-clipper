@@ -313,6 +313,8 @@ def save_clip(path: Path, state: dict) -> dict:
     for key in HUMAN_KEYS:
         if key in disk:
             state[key] = disk[key]
+        elif disk:
+            state.pop(key, None)  # taken away by the person meanwhile (a clip that left Pending): not put back
     write_json(path, state)
     return state
 

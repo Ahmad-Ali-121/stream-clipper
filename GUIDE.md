@@ -82,13 +82,19 @@ On each clip you can also:
 - **Trim it:** open *Fine-tune*, drag the two handles over the sound wave, and press Save changes.
 - **Fix the captions:** open *Captions*, correct a word or empty its box to remove it, and press Save captions.
 - **Compare versions:** the small buttons under the video switch between A, B and the raw download.
-- **Use the keyboard:** J and K move between clips, Space plays, A approves, R rejects.
+- **Use the keyboard:** J and K move between clips, Space plays, A approves, R rejects. A key held down decides one clip only.
 
 The caption look (four styles) is chosen in *Make the videos*. So is the **campaign**: pick one and every clip shows whether it meets that campaign's rules, and what to fix. Campaign rule files live in the `briefs` folder; copy `example.yaml` and fill it in from the campaign's own page.
 
 **Tracker.** After you post a clip by hand, open the clip, use *Posted it? Log it*, and paste the link. The **Tracker** tab (above the clip list) then keeps your posts, views, payouts and rejections together, adds them up per campaign, and warns you before the same clip goes to the same campaign twice.
 
-Once a clip's videos are made it moves to the **Done** list. If you change it afterwards, it goes back to Approved until you press the green button again.
+Once a clip's videos are made it moves to the **Done** list. If you change it afterwards, it goes back to Approved until you press the green button again. That includes its title, description and hashtags: the finished file is named after the title and its text file holds all of them, so the green button copies the video again under the new name (nothing is rendered again, it takes a moment).
+
+**The buttons on a clip** are in two rows. The top row decides about the clip and only shows what fits where the clip is now: a clip to review has **Approve** and **Reject**; an approved clip has **Make this clip's videos now**, **Move to Pending**, **Back to review** and **Reject**; a finished clip has **Move to Pending**, **Back to review** and **Reject**; a rejected clip has **Approve** and **Back to review**. The second row holds the tools: **Save changes**, **Write text with AI** and **Delete**.
+
+Under the clip's video, small buttons switch between its versions (A, B, Explained, Raw) and, when it has one, its **Thumbnail**.
+
+The green button, **Stop** and **Open the videos folder** stay in sight at the bottom of the left side while you scroll through step 3.
 
 #### Which versions a clip gets
 
@@ -114,6 +120,7 @@ The text file with the upload text has the same name as its video. A Done clip a
 #### Making one clip, and stopping
 
 - **Make this clip's videos now** (on an approved clip) makes that one clip and leaves the other approved clips for later.
+- If you reject a clip or move it to Pending while the videos are being made, and its turn has not come yet, it is not made.
 - **Stop** (next to the green button) asks what you want, with three buttons: **Cancel** keeps going; **Stop after this video** finishes the clip being made and then stops; **Stop now** ends it in the middle, and that clip is not made. Videos already made are always kept. The clips that were not made stay under Approved, and the Activity log names them. Press the green button again to carry on.
 
 #### Thumbnails (optional)
@@ -126,7 +133,7 @@ A thumbnail is a cover picture for a clip: one 1080 x 1920 picture, for YouTube 
 - **From the clip, with the opening text (free)**: no AI. The program takes the sharpest frame of the clip and puts the opening text on it in big letters. A few seconds per clip.
 - **Drawn by ChatGPT (uses your ChatGPT plan)**: ChatGPT is shown three frames of the clip, its title, the opening text and what is said, decides itself what the picture should be, and draws it. You write nothing. About a minute per clip.
 
-With one of the two chosen, the thumbnail is made when you press the green button, as one more step for each clip whose videos are being made. It is saved in the ready folder beside the video, with the same name and `.jpg` at the end. Clips that were finished before you switched it on are left alone; make theirs with the buttons on the clip.
+With one of the two chosen, the thumbnail is made when you press the green button, as one more step for each clip whose videos are being made. It is saved in the ready folder beside the video, with the same name and `.jpg` at the end. Only a clip whose videos are made for the first time gets one this way. A clip that was finished before (even if it is made again for a new title, a new caption look or a campaign) is left alone; make its thumbnail with the buttons on the clip. That way ChatGPT never draws for a pile of old clips by surprise.
 
 **For one clip, by hand.** Open **Thumbnail** on a clip's card:
 
@@ -134,6 +141,8 @@ With one of the two chosen, the thumbnail is made when you press the green butto
 - **Or describe the picture yourself**: type what you want in your own words and press **Make it from my description**. ChatGPT draws that; it still sees the clip's frames, so "the streamer" or "the car" mean the ones in the video.
 - Each press makes a new picture and replaces the old one. **Download** saves it; **Remove thumbnail** takes it off the clip.
 - A thumbnail you made by hand is kept: the green button does not replace it.
+- One at a time per clip: a second press while one is being made is refused with a message, so ChatGPT is never asked twice for the same picture.
+- What you typed as a description stays in the box if ChatGPT fails, so you can press again.
 
 **Setting up ChatGPT (once).** It works through Codex, OpenAI's command-line tool, signed in with your own ChatGPT account, the same way Claude works through Claude Code. In a terminal run `npm install -g @openai/codex`, then `codex login`, and sign in. The line under the choice in step 3 says **ChatGPT: Ready** when it is linked, or what is missing. Pictures need a paid ChatGPT plan; they use the plan's allowance several times faster than text. Frames of the clip, its title and its words are sent to OpenAI when ChatGPT is used. Each use is written to `usage.jsonl` in the data folder. The program never reads Codex's sign-in files.
 
@@ -197,7 +206,7 @@ The **? Ask** button at the bottom right opens a chat. Type a question about the
 - While the chat is open, the keyboard shortcuts for clips (J, K, A, R) are switched off, so words you type can never approve or reject a clip.
 - It can use anything that is on the page: boxes, lists, tick boxes, sliders, tabs and buttons. A new feature can be used the day it is added.
 - If you left out something it needs (which channel, which link, what time), it asks instead of guessing.
-- **Some presses always stay yours.** Approve, Reject, Delete, Back to review, Move to Pending, the Thumbnail buttons, the Versions to make tick boxes and everything else on a clip's card, moving all approved clips to Pending, the box editor window, deleting, removing or clearing anything, taking a logo or music off, cutting the cutting board into equal parts (it replaces your cuts), which Claude connection is used, setting up the free local AI, and repairing, restarting or updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
+- **Some presses always stay yours.** Approve, Reject, Delete, Back to review, Move to Pending, the Thumbnail buttons, the **Thumbnail for each clip** choice in step 3, the three buttons of the "Stop making videos?" window, the Versions to make tick boxes and everything else on a clip's card, moving all approved clips to Pending, the box editor window, deleting, removing or clearing anything, taking a logo or music off, cutting the cutting board into equal parts (it replaces your cuts), which Claude connection is used, setting up the free local AI, and repairing, restarting or updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
 - It cannot post or upload anything; the program has no way to do that.
 
 It needs Claude (your Claude Code plan or an API key). Without Claude it still answers, by showing the parts of this guide that match your question, but it cannot do things for you. Each question counts towards your Claude plan like any other use.

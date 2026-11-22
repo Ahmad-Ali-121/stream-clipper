@@ -439,15 +439,17 @@ def prepare_clip(d: Path, state: dict, cfg: Config) -> dict:
 
 def note_error(d: Path, message: str | None) -> None:
     """Keep the reason a clip could not be made in its clip.json, so the review page can show it; None clears it."""
+    from .work import update_clip
+
     path = d / "clip.json"
     state = read_json(path, {})
     if not state or (message is None and "error" not in state):
         return
+    # Only this one key is written, on the clip as it is now: an edit made on the page a moment ago is not undone.
     if message is None:
-        state.pop("error", None)
+        update_clip(path, {}, drop=("error",))
     else:
-        state["error"] = f"{time.strftime('%H:%M:%S')} {message}"
-    write_json(path, state)
+        update_clip(path, {"error": f"{time.strftime('%H:%M:%S')} {message}"})
 
 
 LIVE_FILE = "live.json"  # what the watcher is doing right now, for the page: who is live, and how hot each chat is

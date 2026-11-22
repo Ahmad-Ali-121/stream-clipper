@@ -679,6 +679,11 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
         label = clip_label(read_json(d / "clip.json", {}), d.name)
         steps["clip"] = f"clip {n + 1} of {len(todo)}: {label}"
         before = steps["done"]
+        if read_json(d / "clip.json", {}).get("status") != "approved":
+            # rejected, deleted or moved to Pending while the clips before it were being made: that decision counts
+            log.info("clip %s/%s is no longer approved; its videos are not made", work.name, d.name)
+            steps["done"] = before + sizes[n]
+            continue
         if stop and stop():
             if left is not None:
                 from .review import videos_made
@@ -699,7 +704,7 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
                     from .review import videos_made
 
                     left += [clip_label(st, o.name) for _w, o in todo[n:] if not videos_made(o, st := read_json(o / "clip.json", {}))]
-                for half in list(d.glob("*.part.mp4")) + list(d.glob("*.part")):  # the video that was being written when it ended
+                for half in list(d.glob("*.part.mp4")) + list(d.glob("*.part")) + list(d.glob("*.part.jpg")) + list(d.glob("cover_try*.png")):  # the video that was being written when it ended
                     try:
                         half.unlink(missing_ok=True)
                     except OSError as e:
@@ -777,8 +782,10 @@ def plan_clip(d: Path, state: dict, cfg: Config, brief) -> tuple[bool, list[tupl
         jobs.append(("copy", key, name, suffix))
     if fresh and jobs:
         jobs.insert(0, ("render", "a", "final.mp4", ""))
-    if cfg.render.thumbnail != "off" and jobs and not done(d / "cover.jpg") and not state.get("cover_error_mode") == cfg.render.thumbnail:
-        # Thumbnails are switched on and this clip, whose videos are being made now, has none yet. One made by hand on the
+    if (cfg.render.thumbnail != "off" and jobs and not state.get("exported_at") and not done(d / "cover.jpg")
+            and not state.get("cover_error_mode") == cfg.render.thumbnail):
+        # Thumbnails are switched on and this clip, whose videos are being made for the first time, has none yet
+        # (a clip made before and made again, for a campaign, a new caption look or a moved file, is left alone). One made by hand on the
         # clip's card is kept as it is. Clips finished earlier are left alone: switching thumbnails on must not start
         # drawing one for every old clip (with ChatGPT that would spend the plan's allowance by surprise).
         jobs.append(("cover", "a", "cover.jpg", ""))
@@ -808,7 +815,7 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
     if not isinstance(state.get("exports"), dict) and known:
         update_clip(d / "clip.json", {"exports": known})  # a clip exported by an older version: note where its files are
     ready = cfg.data_dir / "ready"
-    first = next((key for work_, key, _n, _s in jobs if work_ == "copy"), "")
+    first = "a" if state.get("simple", True) else "xa"  # the version the clip's own record and post sheet describe
     narrated: set[str] = set()
     if jobs and all(job[0] == "copy" for job in jobs):
         step("putting it in the ready folder")
@@ -841,6 +848,8 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
                 thumbs.make_cover(d, cfg, cfg.render.thumbnail)
             except Stopped:
                 raise
+            except thumbs.CoverBusy as e:  # the person is making this clip's thumbnail by hand right now: theirs is the one
+                log.info("clip %s/%s: %s", work.name, d.name, e)
             except Exception as e:
                 log.error("clip %s/%s: the thumbnail could not be made: %s", work.name, d.name, e, exc_info=not isinstance(e, (ToolError, ValueError)))
                 update_clip(d / "clip.json", {"cover_error": f"{e}", "cover_error_mode": cfg.render.thumbnail})

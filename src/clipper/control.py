@@ -267,6 +267,7 @@ class Control:
         self.finish_progress = {"done": 0, "total": 0, "now": ""}
         self.finish_stopping = ""  # "after" or "now" once Stop was pressed while videos are being made
         self.finish_stop = threading.Event()  # set by "Stop now": ends the video tool in the middle
+        self.finish_left = 0  # how many approved clips the last run left unmade because it was stopped
         self.watch_problem = ""  # why the watcher is not running although nobody stopped it
         self.run_proc: subprocess.Popen | None = None  # "analyse a finished stream", the same as `clipper run URL`
         self.run_log_path = cfg.data_dir / "run.log"
@@ -322,7 +323,7 @@ class Control:
             "finish_progress": self.finish_progress,
             "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
             "finishing": self.finishing, "finish_log": self.finish_lines[-200:], "finish_stopping": self.finish_stopping if self.finishing else "",
-            "finish_stopped": bool(self.finish_stopping) and not self.finishing,
+            "finish_stopped": bool(self.finish_stopping) and not self.finishing, "finish_left": self.finish_left,
             "running": self.running(), "run_log": self._run_tail(), "run_problem": self.run_problem,
             "run_progress": self._progress(self.progress_path, self.running()),
             "finish_percent": self._progress(self.finish_progress_path, self.finishing),
@@ -334,7 +335,8 @@ class Control:
         """Whether ChatGPT (Codex) can draw thumbnails here. Asked in the background, so the page never waits for it."""
         from . import thumbs
 
-        if thumbs._status["value"] is None or time.time() - thumbs._status["at"] > 60:
+        # Asked once when the page opens; after that only while ChatGPT thumbnails are switched on (a press on a clip asks again itself).
+        if thumbs._status["value"] is None or (self.cfg.render.thumbnail == "chatgpt" and time.time() - thumbs._status["at"] > 60):
             if not getattr(self, "_chatgpt_asking", False):
                 self._chatgpt_asking = True
 
@@ -864,6 +866,7 @@ class Control:
                 raise ValueError("videos are already being made; wait for that to end, or press Stop")
             self.finishing = True
             self.finish_stopping = ""
+            self.finish_left = 0
             self.finish_stop.clear()
             self.finish_lines = [f"{time.strftime('%H:%M:%S')} " + ("making the videos of one clip..." if only else "rendering approved clips...")]
         threading.Thread(target=self._finish, args=(only,), daemon=True, name="finish").start()
@@ -928,7 +931,10 @@ class Control:
             self.finish_lines += [f"READY {video}" if ok else f"NOT MADE to the campaign's rules: {video} (see its text file for what to fix)"
                                   for video, ok in results]
             self.finish_lines += [f"NOT MADE {p}" for p in problems]
+            if self.finish_stopping == "after" and not left:
+                self.finish_stopping = ""  # the clip it was to stop after was the last one: everything was made, nothing was cut short
             if self.finish_stopping:
+                self.finish_left = len(left)
                 self.finish_lines += [f"left for later (still approved): {name}" for name in left]
                 self.finish_lines.append(f"{time.strftime('%H:%M:%S')} stopped by you: {len(results)} file(s) made in {self.cfg.data_dir / 'ready'}, "
                                          f"{len(left)} clip(s) left approved for next time")
