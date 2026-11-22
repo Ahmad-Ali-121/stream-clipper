@@ -75,8 +75,8 @@ Open http://127.0.0.1:8765/ in your browser. The page follows three numbered ste
 1. **Find moments** (left side). Two tabs:
    - **Live streams:** type channel names, pick A, B, C or D, press **Start watching**. **Stop** ends it.
    - **Finished stream:** paste the link of a Twitch video that has ended, choose how many clips, press **Find the best moments**.
-2. **Review the clips** (right side). Each clip shows its video, why it was picked, what was said and the opening text. Press **Approve** or **Reject**. The buttons at the top switch between clips to review, approved and rejected. New drafts appear by themselves.
-3. **Make the videos** (left side). Switch the A/B versions and the eye-catching opening on or off, then press the green button. It makes the videos for every clip you approved.
+2. **Review the clips** (right side). Each clip shows its video, why it was picked, what was said and the opening text. Press **Approve** or **Reject**. The buttons at the top switch between the lists: To review, Approved, Pending, Done, Rejected and All. New drafts appear by themselves.
+3. **Make the videos** (left side). Switch the A/B versions and the eye-catching opening on or off, then press the green button. It makes the videos for every clip you approved. **Stop** next to it stops the making (see below), and **Open the videos folder** shows the finished files.
 
 On each clip you can also:
 - **Trim it:** open *Fine-tune*, drag the two handles over the sound wave, and press Save changes.
@@ -89,6 +89,36 @@ The caption look (four styles) is chosen in *Make the videos*. So is the **campa
 **Tracker.** After you post a clip by hand, open the clip, use *Posted it? Log it*, and paste the link. The **Tracker** tab (above the clip list) then keeps your posts, views, payouts and rejections together, adds them up per campaign, and warns you before the same clip goes to the same campaign twice.
 
 Once a clip's videos are made it moves to the **Done** list. If you change it afterwards, it goes back to Approved until you press the green button again.
+
+#### Which versions a clip gets
+
+Open **Versions to make** on a clip. It has two tick boxes:
+
+- **Make the normal video**: the clip as it is, without a narrator. Ticked on every clip to begin with.
+- **Make an explainer version**: a narrator sets up the moment, then the clip plays.
+
+Tick one or both, then press Save changes. Untick the normal video and tick the explainer to get only the explained one. A clip needs at least one; the page refuses to save a clip with neither. If you tick a version after the videos were made, the clip goes back to Approved and only the missing version is made.
+
+#### What the finished files are called
+
+Each finished video is named after its title, so you can find it by reading the name:
+
+- The A version is called by **Title (version A)**, the B version by **Title, version B**. If B has no title of its own, it is the A title with "(B)".
+- An explainer has "(explained)" after the title.
+- A clip with no real title (AI was not available, so its title is only the placeholder "... stream moment") keeps the old kind of name: the streamer, the clip's number, and `_A`, `_B` or `_explained`.
+- Signs Windows does not allow in a file name (such as ? : " /) are left out. Two clips with the same title on one day both stay: the second gets "(2)".
+- If you change a title and make the video again the same day, the file with the old title is replaced, so you never have two copies of one video.
+
+The text file with the upload text has the same name as its video. A Done clip also lists its finished files on its card (**Finished files in the ready folder**), and **Open the videos folder** under the green button opens today's folder on this computer.
+
+#### Making one clip, and stopping
+
+- **Make this clip's videos now** (on an approved clip) makes that one clip and leaves the other approved clips for later.
+- **Stop** (next to the green button) asks what you want, with three buttons: **Cancel** keeps going; **Stop after this video** finishes the clip being made and then stops; **Stop now** ends it in the middle, and that clip is not made. Videos already made are always kept. The clips that were not made stay under Approved, and the Activity log names them. Press the green button again to carry on.
+
+#### Pending: take a clip out of Approved without losing it
+
+**Move to Pending** on an approved clip takes it out of Approved, so the green button does not make it, and puts it in the **Pending** list instead of mixing it back into To review. In the Approved list, **Move all ... to Pending** does that for every approved clip at once (clips that are already Done are not touched). In Pending, **Approve** sends a clip back to Approved, **Reject** rejects it, and **Back to review** returns it to To review. Nothing is deleted by any of these.
 
 **Delete** on a clip removes it and its files for good; in the Rejected list, **Delete all rejected** clears them all. Videos you already made stay in the ready folder. Red messages can be closed with the × in their corner.
 
@@ -142,7 +172,7 @@ The **? Ask** button at the bottom right opens a chat. Type a question about the
 - While the chat is open, the keyboard shortcuts for clips (J, K, A, R) are switched off, so words you type can never approve or reject a clip.
 - It can use anything that is on the page: boxes, lists, tick boxes, sliders, tabs and buttons. A new feature can be used the day it is added.
 - If you left out something it needs (which channel, which link, what time), it asks instead of guessing.
-- **Some presses always stay yours.** Approve, Reject, Delete, Back to review and everything else on a clip's card, the box editor window, deleting, removing or clearing anything, taking a logo or music off, cutting the cutting board into equal parts (it replaces your cuts), which Claude connection is used, setting up the free local AI, and repairing, restarting or updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
+- **Some presses always stay yours.** Approve, Reject, Delete, Back to review, Move to Pending, the Versions to make tick boxes and everything else on a clip's card, moving all approved clips to Pending, the box editor window, deleting, removing or clearing anything, taking a logo or music off, cutting the cutting board into equal parts (it replaces your cuts), which Claude connection is used, setting up the free local AI, and repairing, restarting or updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
 - It cannot post or upload anything; the program has no way to do that.
 
 It needs Claude (your Claude Code plan or an API key). Without Claude it still answers, by showing the parts of this guide that match your question, but it cannot do things for you. Each question counts towards your Claude plan like any other use.
@@ -331,7 +361,7 @@ The choice applies to clips made from then on. Set it back to English before wat
    uv run clipper review
    ```
 
-   Open the address it prints (http://127.0.0.1:8765/) in your browser. For each clip: watch it, fix the hook text if you want, press **Approve** or **Reject**. Tick **Also make an explainer version** on a clip if you want the narrated version of it too. Press Ctrl+C in that terminal when finished.
+   Open the address it prints (http://127.0.0.1:8765/) in your browser. For each clip: watch it, fix the hook text if you want, press **Approve** or **Reject**. Under **Versions to make** tick **Make an explainer version** on a clip if you want the narrated version of it too. Press Ctrl+C in that terminal when finished.
 3. **Finish.** This renders everything you approved and writes the upload text:
 
    ```powershell
@@ -344,7 +374,7 @@ The choice applies to clips made from then on. Set it back to English before wat
    uv run clipper finish --brief briefs/lacy-gta-marathon.yaml
    ```
    Every approved clip comes out as two videos for A/B testing: `..._A.mp4` and `..._B.mp4`. They are the same moment with different opening text and titles. Post A and B on different accounts or platforms and see which gets more views; never send both to the same campaign. Clips you ticked also get `..._explained_A.mp4` and `..._explained_B.mp4` (different narration line and animation). To get one version only, set `ab_versions: false` in `config.yaml`.
-4. **Upload.** Open `D:\clipper-data\ready\` and today's date folder. Each `.mp4` has a `.txt` beside it with the title, description and hashtags for YouTube, TikTok, Instagram and Facebook. Upload the video, paste the text. For a campaign, submit the post link on the campaign site straight away.
+4. **Upload.** Open `D:\clipper-data\ready\` and today's date folder. Each `.mp4` is named after the clip's title and has a `.txt` with the same name beside it, with the title, description and hashtags for YouTube, TikTok, Instagram and Facebook. Upload the video, paste the text. For a campaign, submit the post link on the campaign site straight away.
 5. **Stop watching** with Ctrl+C in the first terminal. Starting it again later carries on.
 
 ### B. A stream that already happened

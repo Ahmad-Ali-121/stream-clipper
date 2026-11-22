@@ -19,7 +19,7 @@ from .fetch import NoChatError, fetch_chat, fetch_meta, fetch_range, probe
 from .moments import find_moments, format_time
 from .sources import Source, parse_source
 from .tools import ToolError
-from .work import clip_dir, clip_dirs, clip_id, done, free_gb, read_json, remove, save_clip, work_dir, write_json
+from .work import clip_dir, clip_dirs, clip_id, done, free_gb, read_json, remove, save_clip, update_clip, work_dir, write_json
 
 log = logging.getLogger(__name__)
 
@@ -620,36 +620,71 @@ def all_works(cfg: Config) -> list[Path]:
     return sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
 
 
+def clip_label(state: dict, clip_id: str) -> str:
+    """A clip in a few words a person recognises: its title, or the streamer and the clip's number when it has none."""
+    from .post import export_stem
+
+    stem, titled = export_stem(state, clip_id)
+    return stem if titled else f"{state.get('channel', '')} {clip_id}".strip()
+
+
 def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = None,
-                 problems: list[str] | None = None, progress=None) -> list[tuple[Path, bool]]:
+                 problems: list[str] | None = None, progress=None, only: tuple[str, str] | None = None,
+                 stop=None, left: list[str] | None = None) -> list[tuple[Path, bool]]:
     """Render every approved clip that lacks an up-to-date render, then export it with a post sheet.
 
     Works across every stream, or one if ``url`` is given. Clips already exported
     and unchanged since are skipped, so this is safe to run after every review.
     A clip that cannot be made is described in ``problems`` and the rest carry on.
+    ``only`` (work folder name, clip id) makes one clip's videos and leaves the others.
+    ``stop()`` is asked before each clip; once it says yes the rest are left as they are, approved, and named in
+    ``left``. A tool ended by Stop (``tools.Stopped``) ends the run the same way, in the middle of a clip.
     """
     from .brief import load_brief
+    from .tools import Stopped
 
     works = [open_work(url, cfg)[1]] if url else all_works(cfg)
     brief = load_brief(brief_path) if brief_path else None
     results: list[tuple[Path, bool]] = []
     todo = [(work, d) for work in works for d in select_clips(work, status="approved")]
+    if only:
+        todo = [(work, d) for work, d in todo if (work.name, d.name) == tuple(only)]
     for n, (work, d) in enumerate(todo):
+        label = clip_label(read_json(d / "clip.json", {}), d.name)
+        if stop and stop():
+            if left is not None:
+                from .review import videos_made
+
+                left += [clip_label(st, o.name) for _w, o in todo[n:] if not videos_made(o, st := read_json(o / "clip.json", {}))]
+            break
         if progress:
-            progress(n, len(todo), f"{read_json(d / 'clip.json', {}).get('channel', '')} {d.name}")
+            progress(n, len(todo), label)
         if True:
             from .watch import note_error
 
             try:
                 _finish_clip(work, d, cfg, brief, results)
                 note_error(d, None)
+            except Stopped:  # Stop now: this clip is left unfinished, with the ones after it
+                if left is not None:
+                    from .review import videos_made
+
+                    left += [clip_label(st, o.name) for _w, o in todo[n:] if not videos_made(o, st := read_json(o / "clip.json", {}))]
+                for half in list(d.glob("*.part.mp4")) + list(d.glob("*.part")):  # the video that was being written when it ended
+                    try:
+                        half.unlink(missing_ok=True)
+                    except OSError as e:
+                        log.warning("clip %s: the half-made file %s could not be removed (%s); the next run replaces it", d.name, half.name, e)
+                log.info("making the videos was stopped during clip %s/%s", work.name, d.name)
+                return results
             except Exception as e:  # one bad clip must not stop the others
                 log.exception("clip %s/%s could not be finished", work.name, d.name)
                 note_error(d, f"finish failed: {e}")
                 if problems is not None:
                     problems.append(f"{work.name}/{d.name}: {e}")
-    if progress:
-        progress(len(todo), len(todo), "")
+    else:  # every clip was gone through (not stopped part-way)
+        if progress:
+            progress(len(todo), len(todo), "")
     return results
 
 
@@ -689,26 +724,58 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
         render_clip(d, cfg, force=True)
         for name in ("explained.mp4", "explained_b.mp4", "final_b.mp4"):  # made with the old settings too
             (d / name).unlink(missing_ok=True)
-    exported = Path(state["exported"]) if state.get("exported") else None
-    again = bool(brief) or exported is None or not exported.exists() or (ab and "_A." not in exported.name)
-    ready = cfg.data_dir / "ready"
-    if fresh or again:
-        results.append(export_clip(d, ready, brief, suffix="_A" if ab else ""))
-    if ab:
-        fresh_b = not done(d / "final_b.mp4")
-        if fresh_b:
-            render_clip(d, cfg, out_name="final_b.mp4", variant="b")
-        if fresh_b or again:
-            results.append(export_clip(d, ready, brief, video_name="final_b.mp4", suffix="_B", main=False))
+    # Which versions this clip is to have: the plain video (ticked unless the person unticked it) and the explainer.
+    wanted: list[tuple[str, str, str]] = []
+    if state.get("simple", True):
+        wanted.append(("a", "final.mp4", "_A" if ab else ""))
+        if ab:
+            wanted.append(("b", "final_b.mp4", "_B"))
     if state.get("explainer"):
         if not (state.get("intro") or "").strip():
             raise ToolError("explainer ticked but there is no narration line; type one on the review page")
-        for variant, name, suffix in (("a", "explained.mp4", "_explained_A" if ab else "_explained"), ("b", "explained_b.mp4", "_explained_B")):
-            if variant == "b" and not ab:
-                continue
-            if not done(d / name) or again:
-                explained(d, cfg, variant=variant)
-                results.append(export_clip(d, ready, brief, video_name=name, suffix=suffix, main=False))
+        wanted.append(("xa", "explained.mp4", "_explained_A" if ab else "_explained"))
+        if ab:
+            wanted.append(("xb", "explained_b.mp4", "_explained_B"))
+    if not wanted:
+        raise ToolError("neither the normal video nor the explainer is ticked for this clip; tick one under 'Versions to make' on the review page")
+    known = known_exports(state, ab)
+    if not isinstance(state.get("exports"), dict) and known:
+        update_clip(d / "clip.json", {"exports": known})  # a clip exported by an older version: note where its files are
+    again = bool(brief) or not state.get("exported") or not known
+    ready = cfg.data_dir / "ready"
+    for key, name, suffix in wanted:
+        need = fresh or again or not known.get(key) or not Path(known[key]).exists()
+        if not done(d / name):
+            need = True
+            if key == "b":
+                render_clip(d, cfg, out_name=name, variant="b")
+        if need:
+            if key.startswith("x"):
+                explained(d, cfg, variant=key[1])
+            results.append(export_clip(d, ready, brief, video_name=name, suffix=suffix, main=key == wanted[0][0]))
+
+
+def known_exports(state: dict, ab: bool) -> dict[str, str]:
+    """Where each version of a clip was exported: {"a": path, "b": ..., "xa": ..., "xb": ...}.
+
+    Clips exported before this was recorded only kept the main file's path; the others are looked for beside it under
+    the names they were given then. Empty when the main file was made without A/B and A/B is wanted now (as before:
+    everything is exported again).
+    """
+    if isinstance(state.get("exports"), dict):
+        return dict(state["exports"])
+    if not state.get("exported"):
+        return {}
+    old = Path(state["exported"])
+    if ab and not old.stem.endswith("_A"):
+        return {}
+    out = {"a": str(old)}
+    base = old.stem[:-2] if old.stem.endswith("_A") else old.stem
+    for key, suffix in (("b", "_B"), ("xa", "_explained_A" if old.stem.endswith("_A") else "_explained"), ("xb", "_explained_B")):
+        other = old.with_name(f"{base}{suffix}.mp4")
+        if other.exists():
+            out[key] = str(other)
+    return out
 
 
 COPY_FIELDS = ("hook", "hook_b", "title", "title_b", "description", "tags", "intro", "intro_b", "rank_line")

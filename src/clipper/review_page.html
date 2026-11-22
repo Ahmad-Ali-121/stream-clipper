@@ -116,7 +116,10 @@ pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid
 .chipbtn i{font-style:normal;opacity:.8;margin-left:4px}
 .clips{display:flex;flex-direction:column;gap:16px}
 .clip{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;padding:16px;border-left:4px solid var(--line)}
-.clip[data-status=approved]{border-left-color:var(--ok)}.clip[data-status=done]{border-left-color:var(--accent)}
+.clip[data-status=approved]{border-left-color:var(--ok)}.clip[data-status=done]{border-left-color:var(--accent)}.clip[data-status=pending]{border-left-color:var(--warn)}
+.clip[data-status=pending] .badge{border-color:var(--warn);color:var(--warn)}
+.clips[data-filter=pending] .clip:not([data-status=pending]){display:none}
+.modal>.card.small{width:min(500px,100%)}
 .clips[data-filter=done] .clip:not([data-status=done]){display:none}
 .clip[data-status=done] .badge{background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent);color:var(--accent)}.clip[data-status=rejected]{border-left-color:var(--bad);opacity:.6}
 @media (max-width:680px){.clip{grid-template-columns:1fr}}
@@ -471,7 +474,9 @@ kbd{background:rgba(255,255,255,.06)!important}
           <input type="range" id="g-rise" min="0" max="20" oninput="$('g-risev').textContent=this.value" onchange="saveBrand()">
           <p class="help" style="margin-top:6px">Use only music you have the right to use: platforms mute or remove clips with other people's songs. Branding is added when a draft or a video is made; press Make videos to add it to clips already drafted.</p>
         </details>
-        <div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button></div>
+        <div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button>
+          <button class="btn" id="b-fstop" disabled onclick="stopAsk(true)" title="Stop making videos: now, or after the one being made">Stop</button>
+          <button class="btn" id="b-ready" onclick="openReady()" title="Opens the folder on this computer where the finished videos are">Open the videos folder</button></div>
         <div class="bar" id="f-bar" hidden><i></i></div><div class="pct" id="f-pct" hidden></div>
         <div class="note" id="f-note">Nothing made yet in this session.</div>
         <ul class="ready" id="f-ready"></ul>
@@ -594,6 +599,16 @@ kbd{background:rgba(255,255,255,.06)!important}
     <div class="btns"><button class="btn primary" id="bx-save">Save and make the draft again</button><button class="btn" id="bx-auto">Back to automatic</button><button class="btn" id="bx-cancel">Cancel</button><span class="saved" id="bx-note"></span></div>
   </div>
 </div>
+<div class="modal" id="stopbox" hidden>
+  <div class="card small">
+    <h2>Stop making videos?</h2>
+    <p class="help" id="stop-what"></p>
+    <div class="btns"><button class="btn" id="stop-cancel" onclick="stopAsk(false)">Cancel</button>
+      <button class="btn primary" id="stop-after" onclick="finishStop('after')">Stop after this video</button>
+      <button class="btn bad" id="stop-now" onclick="finishStop('now')">Stop now</button></div>
+    <p class="help" style="margin-top:8px"><b>Cancel</b> keeps going. <b>Stop after this video</b> finishes the one being made, then stops. <b>Stop now</b> ends it in the middle; that one is not made. Videos already made are kept either way, and the clips that were not made stay approved.</p>
+  </div>
+</div>
 <button id="helpbtn" onclick="helpToggle()" title="Ask how something works">? Ask</button>
 <div id="helpbox" hidden>
   <header><b>Ask about Stream Clipper</b><button class="btn quiet" style="margin:0;padding:4px 8px" onclick="helpClear()" title="Start a new chat">New chat</button><button class="x" style="position:static" onclick="helpToggle()" aria-label="Close help">×</button></header>
@@ -706,9 +721,12 @@ function show(s){
   $('r-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?(/ stopped$/.test(lastLine(s.run_log))?'<b>Stopped by you.</b>':'<b>Done.</b> '+esc(lastLine(s.run_log))):'Nothing running.'));
   logTo('rlog',s.run_log);
   const ready=s.finish_log.filter(l=>l.startsWith('READY ')), notMade=s.finish_log.filter(l=>l.startsWith('NOT MADE ')||l.startsWith('FAILED'));
-  $('f-note').innerHTML=s.finishing?'<b>Working…</b> '+(fp.total?'clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total+(fp.now?': '+esc(fp.now):''):'starting')+'. About a minute per clip.':(s.finish_log.length?'<b>'+ready.length+' video file(s) made.</b> '+(notMade.length?notMade.length+' could not be made.':'')+' They are in the <b>ready</b> folder inside your data folder.':'Nothing made yet in this session.');
+  $('f-note').innerHTML=s.finishing?'<b>Working…</b> '+(fp.total?'clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total+(fp.now?': '+esc(fp.now):''):'starting')+'. About a minute per clip.'
+      +(s.finish_stopping==='after'?' <b>Stopping after this video.</b>':(s.finish_stopping==='now'?' <b>Stopping now…</b>':''))
+    :(s.finish_log.length?(s.finish_stopped?'<b>Stopped by you.</b> ':'')+(ready.length?'<b>'+ready.length+' video file'+(ready.length>1?'s':'')+' made.</b> ':(s.finish_stopped?'No video was finished before the stop. ':(notMade.length?'':'<b>Nothing new to make:</b> every approved clip already has its videos. ')))+(notMade.length?notMade.length+' could not be made. ':'')+(ready.length?'They are in the <b>ready</b> folder inside your data folder; press Open the videos folder.':'')+(s.finish_stopped?' The clips that were not made are still under Approved.':''):'Nothing made yet in this session.');
   $('f-ready').innerHTML=ready.map(l=>'<li>'+esc(l.slice(6).split(/[\\/]/).pop())+'</li>').join('')+notMade.map(l=>'<li class="nm">'+esc(l)+'</li>').join('');
-  $('b-finish').disabled=s.finishing;
+  $('b-finish').disabled=s.finishing; $('b-fstop').disabled=!s.finishing||s.finish_stopping==='now';
+  if(!$('stopbox').hidden){if(!s.finishing)stopAsk(false);else stopText(s)}
   logTo('flog',s.finish_log);
   if(s.health)drawHealth(s.health);
   const bad=s.watch_log.concat(s.finish_log,s.run_log,(s.health&&s.health.maint.lines)||[]).filter(isBad), probs=[s.watch_problem,s.run_problem].filter(Boolean);
@@ -813,9 +831,9 @@ async function poll(){
   setTimeout(poll,(s&&(s.running||s.finishing||(s.health&&s.health.maint.running)))?1500:5000)}
 
 /* ---------- clips ---------- */
-const STATUS_TEXT={candidate:'To review',approved:'Approved, videos not made yet',done:'Done: videos made',rejected:'Rejected'};
+const STATUS_TEXT={candidate:'To review',approved:'Approved, videos not made yet',pending:'Pending: taken back from Approved',done:'Done: videos made',rejected:'Rejected'};
 /* Where a clip is listed: an approved clip whose videos are made (and not edited since) is Done. */
-function place(c){return c.made?'done':c.status}
+function place(c){return c.made?'done':(c.status==='candidate'&&c.held?'pending':c.status)}
 let filter='candidate';
 function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
   if(t.includes('chat'))parts.push('Chat spike ×'+c.score);
@@ -856,12 +874,14 @@ function cardHtml(c){
       +((c.campaign_issues||[]).length?'<ul>'+c.campaign_issues.map(i=>'<li class="'+(i.level==='fail'?'fail':'')+'">'+(i.level==='fail'?'Fix: ':'Check by hand: ')+esc(i.message)+'</li>').join('')+'</ul>':'')+'</div>':'')
    +(c.error?'<div class="cliperr"><b>This clip has an error:</b> '+esc(c.error)+'<button class="x" title="Close this message" aria-label="Close this message" onclick="clearErr(\''+k+'\')">×</button></div>':'')
    +(c.notes?'<div class="ai"><b>Note:</b> '+esc(c.notes)+'</div>':'')
+   +((c.files||[]).length?'<div class="ai"><b>Finished file'+(c.files.length>1?'s':'')+' in the ready folder:</b> '+c.files.map(esc).join(' · ')+'</div>':'')
    +'<div class="said">'+(c.transcript?'“'+esc(c.transcript)+'”':'<span style="color:var(--muted)">No transcript yet.</span>')+'</div>'
    +(String(c.transcript||'').length>260?'<button class="more" onclick="this.previousElementSibling.classList.toggle(\'open\');this.textContent=this.textContent===\'Show all\'?\'Show less\':\'Show all\'">Show all</button>':'')
    +'<div class="two"><div><label class="f">Opening text on the video (version A)</label><input type="text" name="hook" value="'+esc(c.hook)+'"></div>'
    +'<div><label class="f">Opening text, version B <small>(empty = same as A)</small></label><input type="text" name="hook_b" value="'+esc(c.hook_b)+'"></div></div>'
-   +'<details class="sec"'+(c.explainer?' open':'')+'><summary>Explainer version <small>a narrator sets up the moment, then the clip plays</small></summary>'
-   +'<label class="check"><input type="checkbox" name="explainer"'+(c.explainer?' checked':'')+'> Also make an explainer version of this clip</label>'
+   +'<details class="sec"'+(c.explainer||c.simple===false?' open':'')+'><summary>Versions to make <small>the normal video, an explainer with a narrator</small></summary>'
+   +'<label class="check"><input type="checkbox" name="simple"'+(c.simple!==false?' checked':'')+'> Make the normal video (the clip as it is, without a narrator)</label>'
+   +'<label class="check"><input type="checkbox" name="explainer"'+(c.explainer?' checked':'')+'> Make an explainer version (a narrator sets up the moment, then the clip plays)</label>'
    +'<div class="two"><div><label class="f">What the narrator says (version A)</label><input type="text" name="intro" value="'+esc(c.intro)+'"></div>'
    +'<div><label class="f">Narrator, version B <small>(empty = same as A)</small></label><input type="text" name="intro_b" value="'+esc(c.intro_b)+'"></div></div></details>'
    +'<details class="sec"><summary>Upload text <small>title, description and hashtags to paste when you post</small></summary>'
@@ -893,32 +913,33 @@ function cardHtml(c){
    +'<button class="btn bad" onclick="save(\''+k+'\',{status:\'rejected\'})">Reject</button>'
    +'<button class="btn" onclick="save(\''+k+'\')">Save changes</button>'
    +'<button class="btn" onclick="rewrite(\''+k+'\',this)">Write text with AI</button>'
-   +(c.status!=='candidate'?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\'})">Back to review</button>':'')
+   +(c.status==='approved'&&!c.made?'<button class="btn" title="Make the videos of this one clip now, and leave the other approved clips for later" onclick="makeOne(\''+k+'\')">Make this clip\'s videos now</button>':'')
+   +(c.status==='approved'?'<button class="btn" title="Takes it out of Approved without mixing it into To review: it waits in the Pending list" onclick="save(\''+k+'\',{status:\'candidate\',held:true})">Move to Pending</button>':'')
+   +(c.status!=='candidate'||c.held?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\',held:false})">Back to review</button>':'')
    +'<span class="saved"></span><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+k+'\')">Delete</button></div></div>';
 }
 function domId(k){return 'c-'+k.replace('/','--')}
 function busy(el){return el.dataset.dirty==='1'||[...el.querySelectorAll('video')].some(v=>!v.paused)||el.contains(document.activeElement)}
 function drawFilters(clips,shownList){
-  const n={candidate:0,approved:0,rejected:0};for(const c of clips)n[c.status]=(n[c.status]||0)+1;
-  for(const c of clips)if(c.made){n.approved--;n.done=(n.done||0)+1}
-  n.done=n.done||0;
-  $('filters').innerHTML=[['candidate','To review'],['approved','Approved'],['done','Done'],['rejected','Rejected'],['all','All']].map(f=>
+  const n={candidate:0,approved:0,pending:0,done:0,rejected:0};for(const c of clips){const p=place(c);n[p]=(n[p]||0)+1}
+  $('filters').innerHTML=[['candidate','To review'],['approved','Approved'],['pending','Pending'],['done','Done'],['rejected','Rejected'],['all','All']].map(f=>
     '<button class="chipbtn'+(filter===f[0]?' on':'')+'" onclick="setFilter(\''+f[0]+'\')">'+f[1]+'<i>'+(f[0]==='all'?clips.length:n[f[0]])+'</i></button>').join('');
   if(filter==='rejected'&&n.rejected)$('filters').insertAdjacentHTML('beforeend','<button class="chipbtn" style="color:var(--bad);border-color:var(--bad)" onclick="delRejected('+n.rejected+')">Delete all rejected</button>');
-  $('p-count').textContent=n.candidate+' to review · '+n.approved+' approved · '+n.done+' done';
+  if(filter==='approved'&&n.approved)$('filters').insertAdjacentHTML('beforeend','<button class="chipbtn" data-yours title="Takes every approved clip out of Make videos. They wait in the Pending list, not mixed into To review" onclick="holdApproved('+n.approved+')">Move all '+n.approved+' to Pending</button>');
+  $('p-count').textContent=n.candidate+' to review · '+n.approved+' approved · '+(n.pending?n.pending+' pending · ':'')+n.done+' done';
   if(HAS_PANEL)$('b-finish').textContent=n.approved?'Make videos for '+n.approved+' approved clip'+(n.approved>1?'s':''):'Make videos (approve a clip first)';
   const shown=shownList.filter(c=>filter==='all'||place(c)===filter).length, em=$('empty');
   em.hidden=shown>0;
-  em.innerHTML=(clips.length&&shownList.length<clips.length&&(filter==='all'?clips.length:n[filter])>0)?'<b>No clip matches the filters.</b>Press Clear filters above the list.':clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',done:'finished yet. Approve a clip and press the green button',rejected:'rejected'}[filter]||'in this list')+'.'
+  em.innerHTML=(clips.length&&shownList.length<clips.length&&(filter==='all'?clips.length:n[filter])>0)?'<b>No clip matches the filters.</b>Press Clear filters above the list.':clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',pending:'in Pending. A clip you take back from Approved with "Move to Pending" waits here',done:'finished yet. Approve a clip and press the green button',rejected:'rejected'}[filter]||'in this list')+'.'
     :'<b>No clips yet.</b>'+(HAS_PANEL?'Start watching a live stream, or paste a finished stream, in step 1 on the left.':'Run find first.');
 }
 function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
 let known=[];
 /* What a card was drawn from: when any of this changes, the card is drawn again. */
-function sig(c){return [c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join()].join('|')}
+function sig(c){return [c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join(),c.held,c.simple,(c.files||[]).join()].join('|')}
 let loadTurn=0, clipsWhy='';
 /* ---------- order and filters ---------- */
-function isNew(c){return c.status==='candidate'&&c.made_at&&Date.now()/1000-c.made_at<3600}
+function isNew(c){return c.status==='candidate'&&!c.held&&c.made_at&&Date.now()/1000-c.made_at<3600}
 function madeText(t){if(!t)return '';const d=new Date(t*1000), age=(Date.now()-d)/60000, hm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   if(age<1)return 'made just now';if(age<60)return 'made '+Math.round(age)+' min ago';
   const day=x=>new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime(), diff=Math.round((day(new Date())-day(d))/864e5);
@@ -981,12 +1002,12 @@ async function loadClips(){
 async function save(key,extra){
   const el=$(domId(key)), g=n=>el.querySelector('[name='+n+']');
   if(!el){toast('That clip is not on the page any more.',true);return false}
-  const all={hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,
+  const all={hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,simple:g('simple').checked,
     title:g('title').value,title_b:g('title_b').value,description:g('description').value,tags:g('tags').value,
     layout:g('layout').value,disclosure:g('disclosure').checked,cut_start_s:parseFloat(g('cut_start_s').value),cut_end_s:parseFloat(g('cut_end_s').value)};
   /* What the card showed when it was drawn. A field you did not touch is not sent: the card may be older than the clip
      (text written by AI since), and sending it all would put the old text back as if you had typed it. */
-  const c=el._c||{}, was={hook:c.hook||'',hook_b:c.hook_b||'',intro:c.intro||'',intro_b:c.intro_b||'',explainer:!!c.explainer,title:c.title||'',title_b:c.title_b||'',
+  const c=el._c||{}, was={hook:c.hook||'',hook_b:c.hook_b||'',intro:c.intro||'',intro_b:c.intro_b||'',explainer:!!c.explainer,simple:c.simple!==false,title:c.title||'',title_b:c.title_b||'',
     description:c.description||'',tags:(c.tags||[]).join(' '),layout:c.layout||'',disclosure:!!c.disclosure,cut_start_s:Number(c.cut_start_s??c.start_s),cut_end_s:Number(c.cut_end_s??c.end_s)};
   const body={};for(const k in all)if(all[k]!==was[k])body[k]=all[k];
   if(('cut_start_s' in body)!==('cut_end_s' in body)){body.cut_start_s=all.cut_start_s;body.cut_end_s=all.cut_end_s}
@@ -999,7 +1020,7 @@ async function save(key,extra){
   el.dataset.dirty='';el.dataset.wdirty='';el.dataset.m='';  /* redraw from the saved state on the next load */
   if(document.activeElement)document.activeElement.blur();
   const v=el.querySelector('video');if(v)v.pause();
-  toast(extra&&extra.status?({approved:'Approved',rejected:'Rejected',candidate:'Moved back to review'}[s.status]):'Saved');
+  toast(extra&&extra.held?'Moved to Pending':(extra&&extra.status?({approved:'Approved',rejected:'Rejected',candidate:'Moved back to review'}[s.status]):'Saved'));
   loadClips();
   return true;
 }
@@ -1029,6 +1050,28 @@ async function delRejected(n){
   const r=await post('/api/clips/delete-rejected'); if(!r)return;
   toast(r.deleted+' clip'+(r.deleted===1?'':'s')+' deleted ('+r.mb+' MB freed)'+(r.busy?'. '+r.busy+' could not be deleted because a job is still using them; try again when it has ended.':''),r.busy>0); loadClips();
 }
+async function holdApproved(n){
+  if(!confirm('Move all '+n+' approved clip'+(n>1?'s':'')+' to Pending?'+NL+NL+'They are not made into videos until you approve them again. Nothing is deleted, and they are kept apart from To review.'))return;
+  const r=await post('/api/clips/hold-approved'); if(!r)return;
+  for(const el of $('clips').children)el.dataset.m='';
+  toast(r.moved+' clip'+(r.moved===1?'':'s')+' moved to Pending'); loadClips();
+}
+/* The videos of one approved clip, without the others. */
+async function makeOne(key){
+  const el=$(domId(key));
+  if(el&&el.dataset.dirty==='1'){toast('This clip has unsaved changes. Press Save changes first, then make its videos.',true);return}
+  await act('/api/finish',{only:key});
+}
+/* Stop making videos: the person chooses between not stopping, after this video, and now. */
+function stopText(s){const fp=s.finish_progress||{};
+  $('stop-what').textContent=(fp.total?'Video '+Math.min(fp.total,fp.done+1)+' of '+fp.total+' is being made'+(fp.now?': '+fp.now:'')+'. '+Math.max(0,fp.total-fp.done-1)+' more wait after it.':'The first video is being started.')
+    +(s.finish_stopping==='after'?' It is already set to stop after this video.':'');
+  $('stop-after').disabled=s.finish_stopping==='after'}
+function stopAsk(open){if(open){if(!last.finishing){toast('No videos are being made right now.',true);return}stopText(last)}$('stopbox').hidden=!open;if(open)$('stop-cancel').focus()}
+async function finishStop(how){$('stopbox').hidden=true;await act('/api/finish/stop',{how:how});
+  if(last.finish_stopping)toast(how==='now'?'Stopping now. Videos already made are kept.':'It stops after the video being made.')}
+async function openReady(){const r=await send('/api/ready/open');if(r.error)toast(r.error,true)}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('stopbox').hidden)stopAsk(false)});
 async function clearErr(key){if(await post('/api/clip/'+key+'/clear-error')){const el=$(domId(key));if(document.activeElement)document.activeElement.blur();if(el)el.dataset.m='';loadClips()}}
 function showVid(key,name,btn){const el=$(domId(key)),v=el.querySelector('.vid video');const c=known.find(x=>x.key===key)||{};
   v.src='/media/'+key+'/'+name+'?v='+c.mtime;for(const b of btn.parentElement.children)b.classList.toggle('on',b===btn);v.play().catch(()=>{})}
@@ -1710,7 +1753,7 @@ let cur=null;
 function shownCards(){return [...$('clips').children].filter(e=>e.offsetParent!==null)}
 function setCur(el){if(cur)cur.classList.remove('cur');cur=el||null;if(cur){cur.classList.add('cur');cur.scrollIntoView({block:'center',behavior:'smooth'})}}
 document.addEventListener('keydown',e=>{
-  if($('view-clips').hidden||!$('boxes').hidden||!$('spot').hidden||!$('helpbox').hidden||HELP.doing)return;   /* words meant for the chat must never approve or reject */
+  if($('view-clips').hidden||!$('boxes').hidden||!$('stopbox').hidden||!$('spot').hidden||!$('helpbox').hidden||HELP.doing)return;   /* words meant for the chat must never approve or reject */
   if(e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary,[contenteditable]')))return;
   const cards=shownCards(); if(cur&&!cards.includes(cur)){cur.classList.remove('cur');cur=null}
   const i=cards.indexOf(cur), k=e.key.toLowerCase();

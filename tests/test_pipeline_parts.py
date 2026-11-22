@@ -249,7 +249,7 @@ def test_b_version_is_exported_with_its_own_title_and_an_ab_note(tmp_path):
     (d / "final_b.mp4").write_bytes(b"b")
     a, _ = export_clip(d, tmp_path / "ready", suffix="_A")
     b, _ = export_clip(d, tmp_path / "ready", video_name="final_b.mp4", suffix="_B", main=False)
-    assert a.name == "Lacy_0h01m00s_A.mp4" and b.name == "Lacy_0h01m00s_B.mp4" and b.read_bytes() == b"b"
+    assert a.name == "Title A.mp4" and b.name == "Title B.mp4" and b.read_bytes() == b"b"  # each version carries its own title
     sheet_a, sheet_b = a.with_suffix(".txt").read_text(encoding="utf-8"), b.with_suffix(".txt").read_text(encoding="utf-8")
     assert "Title: Title A" in sheet_a and "Title: Title B" in sheet_b
     assert "This is version B" in sheet_b and "Never submit both to the same campaign" in sheet_a

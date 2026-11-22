@@ -10,6 +10,7 @@ import logging
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -20,6 +21,45 @@ log = logging.getLogger(__name__)
 
 class ToolError(RuntimeError):
     pass
+
+
+class Stopped(BaseException):
+    """The person pressed Stop while a tool was working: the tool was ended and the job must end too.
+
+    Not an ordinary error on purpose: code that catches a failed tool to try again, or to carry on with the next clip,
+    must not catch this one.
+    """
+
+
+_stop = threading.local()
+
+
+def stop_on(event: threading.Event | None) -> None:
+    """From now on, tools started by this thread are ended as soon as ``event`` is set (None switches it off)."""
+    _stop.event = event
+
+
+def _stop_event() -> threading.Event | None:
+    return getattr(_stop, "event", None)
+
+
+def _wait(proc: subprocess.Popen, timeout_s: float | None, wait) -> None:
+    """Wait for a tool to end, looking twice a second whether the person pressed Stop.
+
+    ``wait(seconds)`` is the tool's own way of waiting; it raises TimeoutExpired when that time is up."""
+    event = _stop_event()
+    if event is None:
+        return wait(timeout_s)
+    end = None if timeout_s is None else time.monotonic() + timeout_s
+    while True:
+        if event.is_set():
+            kill_tree(proc)
+            raise Stopped()
+        try:
+            return wait(0.5)
+        except subprocess.TimeoutExpired:
+            if end is not None and time.monotonic() > end:
+                raise
 
 
 @lru_cache(maxsize=None)
@@ -60,13 +100,14 @@ def kill_tree(proc: subprocess.Popen) -> None:
 def _run_plain(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None) -> subprocess.CompletedProcess[str]:
     proc = subprocess.Popen(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,  # never wait on a prompt
                             text=True, encoding="utf-8", errors="replace", cwd=str(cwd) if cwd else None)
+    got: list = []
     try:
-        out, err = proc.communicate(timeout=timeout_s)
-    except subprocess.TimeoutExpired:
+        _wait(proc, timeout_s, lambda t: got.extend(proc.communicate(timeout=t)))
+    except (subprocess.TimeoutExpired, Stopped):
         kill_tree(proc)
         proc.communicate()
         raise
-    return subprocess.CompletedProcess(list(cmd), proc.returncode, out, err)
+    return subprocess.CompletedProcess(list(cmd), proc.returncode, got[0], got[1])
 
 
 def _run_watched(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, on_line) -> subprocess.CompletedProcess[str]:
@@ -108,8 +149,8 @@ def _run_watched(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, 
     reader = threading.Thread(target=pump, daemon=True)
     reader.start()
     try:
-        proc.wait(timeout=timeout_s)
-    except subprocess.TimeoutExpired:
+        _wait(proc, timeout_s, lambda t: proc.wait(timeout=t))
+    except (subprocess.TimeoutExpired, Stopped):
         kill_tree(proc)
         reader.join(timeout=5)
         raise
@@ -135,6 +176,8 @@ def run(
     label = what or Path(cmd[0]).name
     last = ""
     for attempt in range(retries + 1):
+        if (event := _stop_event()) is not None and event.is_set():
+            raise Stopped()  # Stop was pressed between two tools: the next one is not started
         started = time.monotonic()
         try:
             proc = _run_watched(cmd, timeout_s, cwd, on_line) if on_line else _run_plain(cmd, timeout_s, cwd)

@@ -17,7 +17,7 @@ from .work import FileInUse, clip_dirs, read_json, remove, write_json
 
 log = logging.getLogger(__name__)
 
-EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "disclosure", "layout", "facecam", "game", "face_corner", "face_size",
+EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "simple", "held", "disclosure", "layout", "facecam", "game", "face_corner", "face_size",
             "cut_start_s", "cut_end_s",
             "title", "title_b", "description", "tags", "notes"}
 TEXT_FIELDS = ("hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags")
@@ -73,6 +73,10 @@ def videos_made(d: Path, state: dict) -> bool:
     """True when an approved clip's videos exist as it stands now: made, not edited since, explainer included if ticked."""
     if state.get("status") != "approved" or not state.get("exported") or not (d / "final.mp4").exists():
         return False
+    exports = state.get("exports")
+    if isinstance(exports, dict):  # a version ticked after the videos were made is still to be made
+        if (state.get("simple", True) and "a" not in exports) or (state.get("explainer") and "xa" not in exports):
+            return False
     return not state.get("explainer") or (d / "explained.mp4").exists()
 
 
@@ -120,6 +124,9 @@ def clip_view(d: Path, weights: dict | None = None, brief=None, cfg=None) -> dic
         videos=[n for n in ("final.mp4", "final_b.mp4", "explained.mp4", "explained_b.mp4", "source.mp4") if (d / n).exists()],
         fetch_start_s=c.get("fetch_start_s", 0), has_words=(d / "words.json").exists(),
         exported_name=Path(c["exported"]).name if c.get("exported") else "",
+        simple=bool(c.get("simple", True)), held=bool(c.get("held")) and c.get("status", "candidate") == "candidate",
+        # the finished files of this clip that are still in the ready folder, so they can be found by name
+        files=[Path(p).name for p in (c.get("exports") or {"a": c.get("exported")}).values() if p and Path(p).exists()],
         made_at=_made_at(d, c), decided_at=c.get("decided_at") or "", platform=c.get("platform") or "", live=bool(c.get("live")),
         framing=_framing(c, cfg), said=float((c.get("signals") or {}).get("said") or 0), words_from=c.get("words_from") or "",
         campaign=brief.name if brief else "", campaign_issues=_campaign_issues(c, brief), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
@@ -252,7 +259,17 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
     before = shown(state)
     text_before = {k: state.get(k) or ("" if k != "tags" else []) for k in TEXT_FIELDS}
     status_before = state.get("status", "candidate")
+    for name in ("simple", "held", "explainer", "disclosure"):
+        if name in edit:
+            edit[name] = bool(edit[name])
     state.update(edit)
+    if not state.get("simple", True) and not state.get("explainer"):
+        raise ValueError("a clip needs at least one version: tick the normal video or the explainer")
+    # Pending is a shelf for clips taken back from Approved; a clip that is approved or rejected again leaves it.
+    if state.get("status", "candidate") != "candidate":
+        if edit.get("held"):
+            raise ValueError("only a clip that is back in review can be put in Pending")
+        state.pop("held", None)
     if state.get("status", "candidate") != status_before:
         import time as _time
 
@@ -614,7 +631,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             except ValueError:
                 return self._send(400, b"the request's length is not a valid number", "text/plain")
             actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch", "/api/watch/clip-now": "clip_now",
-                       "/api/finish": "start_finish", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check", "/api/ai/local-setup": "start_local_ai",
+                       "/api/finish": "start_finish", "/api/finish/stop": "stop_finish", "/api/ready/open": "open_ready", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check", "/api/ai/local-setup": "start_local_ai",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
                        "/api/restart": "restart"}
             if self.path.startswith("/api/brand/upload") and cfg is not None and control:
@@ -679,7 +696,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
                     name = actions[self.path]
-                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut", "clip_now") else getattr(control, name)()
+                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut", "clip_now", "start_finish", "stop_finish") else getattr(control, name)()
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 if isinstance(result, dict) and "watching" in result:
@@ -756,6 +773,20 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     raise ValueError("every subtitle in that file starts after this clip ends. Its times must count from the start of the clip")
                 count = save_words(d, words_mod.words_from_cues(cues, shift_s=offset))  # a clip's words are timed from its download's start
                 return self._send(200, json.dumps({"words": count, "lines": len(cues)}).encode(), "application/json")
+            if self.path == "/api/clips/hold-approved":
+                # Every approved clip whose videos are not made yet goes to Pending: out of "Make videos", and not mixed into To review.
+                moved = 0
+                for d in list_clips(list(by_name.values())):
+                    st = read_json(d / "clip.json", {})
+                    if st.get("status") == "approved" and not videos_made(d, st):
+                        apply_edit(d.parent.parent, d.name, {"status": "candidate", "held": True})
+                        moved += 1
+                if moved and cfg is not None:
+                    from . import scoring
+
+                    scoring.relearn(cfg.data_dir, all_states(list(by_name.values())))
+                log.info("moved %d approved clip(s) to Pending", moved)
+                return self._send(200, json.dumps({"moved": moved}).encode(), "application/json")
             if self.path == "/api/clips/delete-rejected":
                 gone, mb, busy = 0, 0.0, 0
                 for d in list_clips(list(by_name.values())):

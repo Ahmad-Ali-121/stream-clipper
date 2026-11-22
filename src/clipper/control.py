@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -258,6 +259,8 @@ class Control:
         self.finish_lines: list[str] = []
         self.finishing = False
         self.finish_progress = {"done": 0, "total": 0, "now": ""}
+        self.finish_stopping = ""  # "after" or "now" once Stop was pressed while videos are being made
+        self.finish_stop = threading.Event()  # set by "Stop now": ends the video tool in the middle
         self.watch_problem = ""  # why the watcher is not running although nobody stopped it
         self.run_proc: subprocess.Popen | None = None  # "analyse a finished stream", the same as `clipper run URL`
         self.run_log_path = cfg.data_dir / "run.log"
@@ -311,7 +314,8 @@ class Control:
             "caption_presets": {k: {"label": v[0], **v[1]} for k, v in CAPTION_PRESETS.items()},
             "finish_progress": self.finish_progress,
             "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
-            "finishing": self.finishing, "finish_log": self.finish_lines[-200:],
+            "finishing": self.finishing, "finish_log": self.finish_lines[-200:], "finish_stopping": self.finish_stopping if self.finishing else "",
+            "finish_stopped": bool(self.finish_stopping) and not self.finishing,
             "running": self.running(), "run_log": self._run_tail(), "run_problem": self.run_problem,
             "run_progress": self._progress(self.progress_path, self.running()),
             "finish_percent": self._progress(self.finish_progress_path, self.finishing),
@@ -816,21 +820,69 @@ class Control:
 
     # ---- finish ----
 
-    def start_finish(self) -> dict:
+    def start_finish(self, raw: dict | None = None) -> dict:
+        """Make the videos of every approved clip, or of one (``only``: "work folder/clip id", from that clip's own button)."""
+        only = None
+        if (raw or {}).get("only"):
+            m = re.fullmatch(r"([A-Za-z0-9_-]+)/([0-9a-z]+)", str(raw["only"]))
+            if not m:
+                raise ValueError("that is not a clip of this program")
+            only = (m.group(1), m.group(2))
+            from .work import read_json
+
+            if read_json(self.cfg.data_dir / "work" / only[0] / "clips" / only[1] / "clip.json", {}).get("status") != "approved":
+                raise ValueError("approve this clip first; only approved clips are made into videos")
         with self._lock:
             if self.finishing:
-                raise ValueError("finish is already running")
+                raise ValueError("videos are already being made; wait for that to end, or press Stop")
             self.finishing = True
-            self.finish_lines = [f"{time.strftime('%H:%M:%S')} rendering approved clips..."]
-        threading.Thread(target=self._finish, daemon=True, name="finish").start()
+            self.finish_stopping = ""
+            self.finish_stop.clear()
+            self.finish_lines = [f"{time.strftime('%H:%M:%S')} " + ("making the videos of one clip..." if only else "rendering approved clips...")]
+        threading.Thread(target=self._finish, args=(only,), daemon=True, name="finish").start()
         return self.status()
 
-    def _finish(self) -> None:
+    def stop_finish(self, raw: dict | None = None) -> dict:
+        """Stop making videos: "after" lets the clip being made finish first, "now" ends it in the middle."""
+        how = str((raw or {}).get("how") or "")
+        if how not in ("after", "now"):
+            raise ValueError("say how to stop: after this video, or now")
+        with self._lock:
+            if not self.finishing:
+                raise ValueError("no videos are being made right now")
+            if self.finish_stopping != how and self.finish_stopping != "now":
+                self.finish_lines.append(f"{time.strftime('%H:%M:%S')} " + ("you pressed Stop: ending now, in the middle of this clip"
+                                                                           if how == "now" else "you pressed Stop: this clip is finished first, then it ends"))
+                self.finish_stopping = how
+            if how == "now":
+                self.finish_stop.set()
+        return self.status()
+
+    def open_ready(self) -> dict:
+        """Show the folder with the finished videos (today's, when there is one) in the file manager."""
+        root = self.cfg.data_dir / "ready"
+        day = root / time.strftime("%Y-%m-%d")
+        folder = day if day.is_dir() else root
+        if not folder.is_dir():
+            raise ValueError(f"no videos have been made yet, so the folder {root} does not exist")
+        try:
+            if sys.platform == "win32":
+                os.startfile(str(folder))  # noqa: S606 - the program's own folder, on the user's own PC
+            else:
+                subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(folder)], stdin=subprocess.DEVNULL)
+        except OSError as e:
+            raise ValueError(f"the folder could not be opened ({e}). It is here: {folder}") from e
+        return {"folder": str(folder)}
+
+    def _finish(self, only: tuple[str, str] | None = None) -> None:
+        from . import tools
         from .pipeline import stage_finish
 
         try:
             problems: list[str] = []
+            left: list[str] = []
             self.finish_progress = {"done": 0, "total": 0, "now": ""}
+            tools.stop_on(self.finish_stop)  # "Stop now" ends the video tool this thread is waiting for
 
             from . import progress as report
 
@@ -846,15 +898,22 @@ class Control:
 
             cfg = self.reload()
             brief = str(PROJECT_ROOT / "briefs" / f"{cfg.render.campaign}.yaml") if cfg.render.campaign else None
-            results = stage_finish(cfg, brief_path=brief, problems=problems, progress=progress)
+            results = stage_finish(cfg, brief_path=brief, problems=problems, progress=progress, only=only,
+                                   stop=lambda: bool(self.finish_stopping), left=left)
             self.finish_lines += [f"READY {video}" if ok else f"NOT MADE to the campaign's rules: {video} (see its text file for what to fix)"
                                   for video, ok in results]
             self.finish_lines += [f"NOT MADE {p}" for p in problems]
-            self.finish_lines.append(f"{time.strftime('%H:%M:%S')} done: {len(results)} file(s) in {self.cfg.data_dir / 'ready'}")
+            if self.finish_stopping:
+                self.finish_lines += [f"left for later (still approved): {name}" for name in left]
+                self.finish_lines.append(f"{time.strftime('%H:%M:%S')} stopped by you: {len(results)} file(s) made in {self.cfg.data_dir / 'ready'}, "
+                                         f"{len(left)} clip(s) left approved for next time")
+            else:
+                self.finish_lines.append(f"{time.strftime('%H:%M:%S')} done: {len(results)} file(s) in {self.cfg.data_dir / 'ready'}")
         except Exception as e:  # shown on the page instead of killing the server
             import traceback
 
             log.exception("finish failed")
             self.finish_lines += [f"FAILED: {type(e).__name__}: {e}"] + traceback.format_exc().splitlines()
         finally:
+            tools.stop_on(None)
             self.finishing = False

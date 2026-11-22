@@ -304,7 +304,7 @@ def write_json(path: Path, data: Any, reopen: bool = False) -> None:
 # What only a person sets, on the review page. An automatic step (the watcher making a draft, a render, the text
 # writer) may be half-way through with an older copy of a clip's state when the person approves it or ticks a box;
 # these keys are therefore always taken from what is on disk at the moment of writing, never from that older copy.
-HUMAN_KEYS = ("status", "explainer", "disclosure", "notes")
+HUMAN_KEYS = ("status", "explainer", "simple", "held", "disclosure", "notes")
 
 
 def save_clip(path: Path, state: dict) -> dict:

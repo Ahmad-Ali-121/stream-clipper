@@ -127,13 +127,49 @@ def _video_seconds(path: Path) -> float | None:
         cap.release()
 
 
+_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+# Which version of a clip a file-name ending stands for: a and b are the plain video, xa and xb the explainer.
+VERSION_OF = {"": "a", "_A": "a", "_B": "b", "_explained": "xa", "_explained_A": "xa", "_explained_B": "xb"}
+
+
+def safe_name(text: str, limit: int = 90) -> str:
+    """A title as a file name Windows accepts: no \\ / : * ? " < > |, no line breaks, not too long. Empty when nothing is left."""
+    text = re.sub(r'[<>:"/\\|?*\x00-\x1f]', " ", str(text or ""))
+    text = re.sub(r"\s+", " ", text).strip(" .")[:limit].rstrip(" .")
+    return "" if not text or text.split(".")[0].upper() in _RESERVED else text
+
+
+def export_stem(state: dict, clip_id: str, suffix: str = "") -> tuple[str, bool]:
+    """The name of an exported video, without ".mp4", and whether it is the clip's title.
+
+    The title is used when there is a real one (written by AI or typed by you): title A for the A version, title B for
+    the B version, "(explained)" added for the explainer. A clip whose title is only the placeholder written without AI,
+    or that has none, keeps the old name: streamer_clip, with _A, _B or _explained.
+    """
+    key = VERSION_OF.get(suffix, "a")
+    placeholder = set(state.get("copy_auto") or []) if state.get("copy_source") == "plain" else set()
+    a, b = (("" if k in placeholder else safe_name(state.get(k))) for k in ("title", "title_b"))
+    if key in ("b", "xb"):
+        title = b if b and b.casefold() != a.casefold() else (f"{a} (B)" if a else "")
+    else:
+        title = a
+    if title:
+        return title + (" (explained)" if key.startswith("x") else ""), True
+    channel = re.sub(r"[^0-9A-Za-z_-]", "", state.get("channel") or "clip") or "clip"
+    return f"{channel}_{clip_id}{suffix}", False
+
+
 def export_clip(clip_dir: Path, ready_root: Path, brief: Brief | None = None, video_name: str = "final.mp4",
                 suffix: str = "", main: bool = True) -> tuple[Path, bool]:
     """Copy one approved clip and its post sheet to the ready folder. Returns (video path, passes brief).
 
     ``video_name``/``suffix`` export another version of the same clip (B version, explainer)
     beside the main one; ``main=False`` keeps that from replacing the main export's record.
+    The file is named after the clip's title (see ``export_stem``). Where each version went is kept in the clip's
+    ``exports``, so making it again replaces its own file instead of leaving a second copy under the old title.
     """
+    import os
+
     state = read_json(clip_dir / "clip.json")
     final = clip_dir / video_name
     if not done(final):
@@ -146,13 +182,27 @@ def export_clip(clip_dir: Path, ready_root: Path, brief: Brief | None = None, vi
         proc_len = _video_seconds(final)
         if proc_len:
             sheet_state["duration_s"] = proc_len
-    channel = re.sub(r"[^0-9A-Za-z_-]", "", state.get("channel") or "clip") or "clip"
     day = ready_root / time.strftime("%Y-%m-%d")
     day.mkdir(parents=True, exist_ok=True)
-    video = day / f"{channel}_{clip_dir.name}{suffix}.mp4"
-    tmp = video.with_suffix(".part")
+    key = VERSION_OF.get(suffix, "a")
+    exports = dict(state.get("exports") or {})
+    before = Path(exports[key]) if exports.get(key) else None
+    stem, titled = export_stem(state, clip_dir.name, suffix)
+    video, n = day / f"{stem}.mp4", 2
+    same = lambda a, b: b is not None and os.path.normcase(str(a)) == os.path.normcase(str(b))  # noqa: E731
+    while titled and video.exists() and not same(video, before):  # another clip has this title today: keep both
+        video, n = day / f"{stem} ({n}).mp4", n + 1
+    tmp = video.with_name(video.name + ".part")
     shutil.copyfile(final, tmp)
     tmp.replace(video)
+    if before is not None and not same(video, before) and same(before.parent, day):
+        # The same version made earlier today under another title: one video, one name.
+        for old in (before, before.with_suffix(".txt")):
+            try:
+                old.unlink(missing_ok=True)
+            except OSError as e:
+                log.warning("the older copy %s could not be removed (%s); it is still in the ready folder", old.name, e)
+    exports[key] = str(video)
     sheet, issues = post_sheet(sheet_state, video.name, brief)
     if suffix.endswith(("_A", "_B")):
         sheet += (
@@ -163,12 +213,13 @@ def export_clip(clip_dir: Path, ready_root: Path, brief: Brief | None = None, vi
         )
     write_text(video.with_suffix(".txt"), sheet)
     ok = passes(issues)
-    if not main:
-        return video, ok
-    write_text(clip_dir / "post.txt", sheet)
     from .work import update_clip
 
+    if not main:
+        update_clip(clip_dir / "clip.json", {"exports": exports})
+        return video, ok
+    write_text(clip_dir / "post.txt", sheet)
     update_clip(clip_dir / "clip.json", {
-        "exported": str(video), "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"), "brief": brief.name if brief else None, "brief_ok": ok if brief else None,
+        "exports": exports, "exported": str(video), "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"), "brief": brief.name if brief else None, "brief_ok": ok if brief else None,
         "brief_issues": [{"level": i.level, "message": i.message} for i in issues] if brief else []})
     return video, ok
