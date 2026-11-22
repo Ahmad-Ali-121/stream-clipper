@@ -197,7 +197,7 @@ def export_clip(clip_dir: Path, ready_root: Path, brief: Brief | None = None, vi
     tmp.replace(video)
     if before is not None and not same(video, before) and same(before.parent, day):
         # The same version made earlier today under another title: one video, one name.
-        for old in (before, before.with_suffix(".txt")):
+        for old in (before, before.with_suffix(".txt"), before.with_suffix(".jpg")):
             try:
                 old.unlink(missing_ok=True)
             except OSError as e:

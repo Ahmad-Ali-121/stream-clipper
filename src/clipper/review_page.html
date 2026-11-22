@@ -120,6 +120,7 @@ pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid
 .clip[data-status=pending] .badge{border-color:var(--warn);color:var(--warn)}
 .clips[data-filter=pending] .clip:not([data-status=pending]){display:none}
 .modal>.card.small{width:min(500px,100%)}
+img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:10px;display:block;margin:8px 0;border:1px solid var(--line)}
 button.pill{cursor:pointer;color:inherit;font:inherit;font-size:12.5px;border-color:var(--ok)}
 .minibar{display:inline-block;width:70px;height:6px;border-radius:999px;background:var(--line);overflow:hidden}.minibar i{display:block;height:100%;width:0;background:var(--ok);transition:width .4s}
 .clips[data-filter=done] .clip:not([data-status=done]){display:none}
@@ -423,6 +424,9 @@ kbd{background:rgba(255,255,255,.06)!important}
         <p class="help">Turns every approved clip into finished 9:16 videos with their upload text. Nothing is posted.</p>
         <label class="switch"><input type="checkbox" id="o-ab" onchange="saveOpts()"><span><b>A and B versions</b>Two versions of each clip with different opening text and title, to test which does better.</span></label>
         <label class="switch"><input type="checkbox" id="o-opening" onchange="saveOpts()"><span><b>Eye-catching first seconds</b>Zoom-in, pop-in text, a whoosh and a progress bar.</span></label>
+        <label class="f" for="o-thumb">Thumbnail for each clip <small>(a cover picture, made together with its videos)</small></label>
+        <select id="o-thumb" onchange="act('/api/options',{thumbnail:val('o-thumb')})"></select>
+        <p class="help" id="thumb-note" style="margin:6px 0 0"></p>
         <label class="f" for="o-camp">Campaign (checks every clip against its rules)</label>
         <select id="o-camp" onchange="saveOpts()"></select>
         <p class="help" id="camp-rules" style="margin:6px 0 0"></p>
@@ -674,6 +678,7 @@ function show(s){
       return '<label class="mode" data-k="'+k+'"><input type="radio" name="o-mode" value="'+k+'" onchange="pickMode()"><b>'+m[0]+'</b><span>'+m[1]+'</span><em>'+m[2]+'</em></label>'}).join('');
     $('o-channels').value=s.channels; drawn=true;
     $('o-camp').innerHTML='<option value="">No campaign</option>'+(s.campaigns||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+(c.problem?' (file has a problem)':'')+'</option>').join('');
+    $('o-thumb').innerHTML=Object.entries(s.thumbnails||{off:'Off'}).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('');
     $('o-cap').innerHTML=Object.entries(s.caption_presets||{}).map(([k,p])=>'<option value="'+k+'">'+esc(p.label)+'</option>').join('');
     $('a-backend').innerHTML=Object.entries(s.ai.backends).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('');
     $('a-prefer').innerHTML=Object.entries(s.ai.ways||{}).map(([k,w])=>'<option value="'+k+'">'+esc(w.name)+'</option>').join('');
@@ -700,6 +705,12 @@ function show(s){
   const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!r.checked&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
   for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);
   $('o-ab').checked=s.ab_versions; $('o-opening').checked=s.opening;
+  if(document.activeElement!==$('o-thumb'))$('o-thumb').value=s.thumbnail||'off';
+  const gpt=s.chatgpt||{text:'this running program is older than the page; restart it'};
+  $('thumb-note').innerHTML=({off:'No thumbnail is made by itself. You can still make one for any clip, under <b>Thumbnail</b> on its card.',
+    frame:'Free, no AI: the sharpest frame of the clip with its opening text in big letters. Saved beside the video with the same name.',
+    chatgpt:'ChatGPT looks at frames of the clip and draws the thumbnail itself; you write nothing. About a minute per clip. Frames, the title and the words of the clip are sent to OpenAI, and it counts towards your ChatGPT plan.'}[s.thumbnail||'off'])
+    +((s.thumbnail==='chatgpt'||gpt.signed_in)?'<br><b>ChatGPT:</b> <span style="color:'+(gpt.signed_in?'var(--ok)':(gpt.checking?'var(--muted)':'var(--bad)'))+'">'+esc(gpt.text)+'</span>':'');
   drawLooks(s);drawFrame(s);
   if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'roman';$('l-text').value=s.text_language||'English';$('l-yt').value=s.youtube_captions||'auto'}
   $('lang-sum').textContent=({en:'English',ur:'Urdu',hi:'Hindi',auto:'detected automatically'})[s.speech_language||'en']+((s.speech_language||'en')!=='en'?', captions in '+(s.caption_script==='roman'?'Latin letters':'its own letters')+', text in '+(s.text_language||'English'):'');
@@ -851,8 +862,9 @@ function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
   if(t==='ai')parts.push('Found by AI from the speech');
   if(t==='manual')return [c.parts?'Part '+c.part+' of '+c.parts:'Chosen by you'];
   return parts.length?parts:[t]}
+const coverOpen=new Set(), COVER_BY={frame:'Made from the clip',chatgpt:'Drawn by ChatGPT',prompt:'Drawn by ChatGPT from your description'};
 function cardHtml(c){
-  const k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
+  const cv=c.cover||{}, k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
   const VN={'final.mp4':'A','final_b.mp4':'B','explained.mp4':'Explained A','explained_b.mp4':'Explained B','source.mp4':'Raw'};
   const tabs=(c.videos||[]).length>1||(c.videos||[]).includes('final.mp4')?'<div class="vtabs">'+(c.videos||[]).map(n=>'<button class="'+(n===c.video?'on':'')+'" onclick="showVid(\''+k+'\',\''+n+'\',this)">'+VN[n]+'</button>').join('')
     +((c.videos||[]).includes('final.mp4')&&!(c.videos||[]).includes('final_b.mp4')?'<button onclick="makeB(\''+k+'\',this)" title="Render version B now so you can compare it">Make B preview</button>':'')+'</div>':'';
@@ -910,6 +922,16 @@ function cardHtml(c){
    +(c.framing?'<div class="btns" style="margin-top:0"><button class="btn" onclick="openBoxes(\''+k+'\')">Set the face box and the video box</button>'
        +'<button class="btn" title="Draft every unfinished clip of this video again with the caption style, template and branding chosen now" onclick="remakeAll(\''+k+'\')">Make this video\'s drafts again</button></div>':'')
    +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
+   +'<details class="sec"'+(coverOpen.has(k)?' open':'')+' ontoggle="this.open?coverOpen.add(\''+k+'\'):coverOpen.delete(\''+k+'\')"><summary>Thumbnail <small>a cover picture for Shorts, Reels and TikTok (optional)'+(cv.made?' · made':'')+'</small></summary>'
+   +(cv.made?'<img class="cover" alt="This clip\'s thumbnail" src="/media/'+k+'/cover.jpg?v='+cv.mtime+'"><p class="help" style="margin:0 0 6px">'+esc(COVER_BY[cv.by]||'Made')+(cv.at?' · '+esc(cv.at):'')+(cv.words&&cv.by!=='frame'?' · words on it: '+esc(cv.words):'')+'. It is saved beside the finished video, with the same name.</p>'
+     :'<p class="help" style="margin-top:8px">No thumbnail yet. Nothing has to be made: this is an extra.</p>')
+   +(cv.error?'<div class="cliperr"><b>The thumbnail could not be made:</b> '+esc(cv.error)+'</div>':'')
+   +'<div class="btns" style="margin-top:0"><button class="btn" title="Free, no AI: the sharpest frame of the clip with its opening text" onclick="makeCover(\''+k+'\',\'frame\',this)">Make it from the clip (free)</button>'
+   +'<button class="btn" title="ChatGPT looks at the clip and decides the picture itself. Uses your ChatGPT plan; about a minute" onclick="makeCover(\''+k+'\',\'chatgpt\',this)">Let ChatGPT make it</button></div>'
+   +'<label class="f">Or describe the picture yourself <small>(ChatGPT draws it; it still sees the clip)</small></label>'
+   +'<textarea name="t_cover" maxlength="2000" style="min-height:64px" placeholder="For example: the streamer shocked on the left, the bike upside down in the air on the right, big yellow text NO WAY">'+esc(cv.prompt||'')+'</textarea>'
+   +'<div class="btns"><button class="btn" onclick="makeCover(\''+k+'\',\'prompt\',this)">Make it from my description</button>'
+   +(cv.made?'<a class="btn" href="/media/'+k+'/cover.jpg" download="thumbnail.jpg">Download</a><button class="btn quiet" onclick="makeCover(\''+k+'\',\'none\',this)">Remove thumbnail</button>':'')+'</div></details>'
    +(c.exported?'<details class="sec"><summary>Posted it? Log it <small>keeps views, payouts and rejections in the Tracker</small></summary>'
      +'<div class="three"><div><label class="f">Where</label><select name="t_platform"><option>YouTube Shorts</option><option>TikTok</option><option>Instagram Reels</option><option>Facebook Reels</option><option>Other</option></select></div>'
      +'<div><label class="f">Version</label><select name="t_version"><option>A</option><option>B</option><option>Explained A</option><option>Explained B</option></select></div>'
@@ -943,7 +965,7 @@ function drawFilters(clips,shownList){
 function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
 let known=[];
 /* What a card was drawn from: when any of this changes, the card is drawn again. */
-function sig(c){return [c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join(),c.held,c.simple,(c.files||[]).join()].join('|')}
+function sig(c){return [c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join(),c.held,c.simple,(c.files||[]).join(),(c.cover||{}).mtime,(c.cover||{}).error].join('|')}
 let loadTurn=0, clipsWhy='';
 /* ---------- order and filters ---------- */
 function isNew(c){return c.status==='candidate'&&!c.held&&c.made_at&&Date.now()/1000-c.made_at<3600}
@@ -1056,6 +1078,23 @@ async function delRejected(n){
   if(!confirm('Delete all '+n+' rejected clip'+(n>1?'s':'')+' for good?'+NL+NL+'Their drafts and downloaded videos are removed and cannot be brought back.'))return;
   const r=await post('/api/clips/delete-rejected'); if(!r)return;
   toast(r.deleted+' clip'+(r.deleted===1?'':'s')+' deleted ('+r.mb+' MB freed)'+(r.busy?'. '+r.busy+' could not be deleted because a job is still using them; try again when it has ended.':''),r.busy>0); loadClips();
+}
+/* A thumbnail for one clip: from the clip (free), by ChatGPT on its own, from your description, or taken off again. */
+async function makeCover(key,how,btn){
+  const el=$(domId(key)); if(!el)return;
+  const text=el.querySelector('[name=t_cover]').value.trim();
+  if(how==='prompt'&&!text){toast('Describe the picture first, or press "Let ChatGPT make it".',true);return}
+  if(how==='none'&&!confirm('Remove this clip\'s thumbnail? A copy already beside a finished video stays there.'))return;
+  const box=btn.closest('details'), was=btn.textContent;
+  for(const b of box.querySelectorAll('button'))b.disabled=true;
+  btn.textContent=how==='frame'?'Making…':(how==='none'?'Removing…':'ChatGPT is drawing… about a minute');
+  let r;try{r=await fetch('/api/clip/'+key+'/cover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({how:how,prompt:text})})}
+  catch(e){toast('The program is not answering: '+e,true);for(const b of box.querySelectorAll('button'))b.disabled=false;btn.textContent=was;return}
+  const bad=r.ok?'':await r.text();
+  coverOpen.add(key); if(document.activeElement)document.activeElement.blur(); el.dataset.m='';
+  if(bad){toast('The thumbnail was not made: '+bad,true);for(const b of box.querySelectorAll('button'))b.disabled=false;btn.textContent=was}
+  else toast(how==='none'?'Thumbnail removed':'Thumbnail made');
+  loadClips();
 }
 async function holdApproved(n){
   if(!confirm('Move all '+n+' approved clip'+(n>1?'s':'')+' to Pending?'+NL+NL+'They are not made into videos until you approve them again. Nothing is deleted, and they are kept apart from To review.'))return;

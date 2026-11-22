@@ -97,9 +97,17 @@ def kill_tree(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
-def _run_plain(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.Popen(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,  # never wait on a prompt
+def _run_plain(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.Popen(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            stdin=subprocess.DEVNULL if input_text is None else subprocess.PIPE,  # never wait on a prompt
                             text=True, encoding="utf-8", errors="replace", cwd=str(cwd) if cwd else None)
+    if input_text is not None:  # what the tool is to read (a request too long or too odd for the command line), then its input ends
+        try:
+            proc.stdin.write(input_text)
+            proc.stdin.close()
+        except OSError:
+            pass  # it ended before reading: its exit code and last words say why
+        proc.stdin = None
     got: list = []
     try:
         _wait(proc, timeout_s, lambda t: got.extend(proc.communicate(timeout=t)))
@@ -167,6 +175,7 @@ def run(
     what: str = "",
     cwd: Path | None = None,
     on_line=None,
+    input_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command, capture its output, retry on failure, raise ToolError with the tail of stderr.
 
@@ -180,7 +189,7 @@ def run(
             raise Stopped()  # Stop was pressed between two tools: the next one is not started
         started = time.monotonic()
         try:
-            proc = _run_watched(cmd, timeout_s, cwd, on_line) if on_line else _run_plain(cmd, timeout_s, cwd)
+            proc = _run_watched(cmd, timeout_s, cwd, on_line) if on_line else _run_plain(cmd, timeout_s, cwd, input_text)
         except subprocess.TimeoutExpired:
             last = f"timed out after {timeout_s:.0f}s"
         else:

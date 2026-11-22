@@ -124,6 +124,7 @@ def clip_view(d: Path, weights: dict | None = None, brief=None, cfg=None) -> dic
         videos=[n for n in ("final.mp4", "final_b.mp4", "explained.mp4", "explained_b.mp4", "source.mp4") if (d / n).exists()],
         fetch_start_s=c.get("fetch_start_s", 0), has_words=(d / "words.json").exists(),
         exported_name=Path(c["exported"]).name if c.get("exported") else "",
+        cover=__import__("clipper.thumbs", fromlist=["cover_info"]).cover_info(d, c),
         simple=bool(c.get("simple", True)), held=bool(c.get("held")) and c.get("status", "candidate") == "candidate",
         # the finished files of this clip that are still in the ready folder, so they can be found by name
         files=[Path(p).name for p in (c.get("exports") or {"a": c.get("exported")}).values() if p and Path(p).exists()],
@@ -569,6 +570,12 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     log.error("downloaded part %s: its sound could not be read: %s", d.name, e, exc_info=True)
                     return self._send(500, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(data).encode(), "application/json")
+            m = re.fullmatch(r"/media/([A-Za-z0-9_-]+)/([0-9a-z]+)/cover\.jpg", self.path.split("?")[0])
+            if m and m.group(1) in by_name:
+                f = by_name[m.group(1)] / "clips" / m.group(2) / "cover.jpg"
+                if not f.exists():
+                    return self._send(404, b"this clip has no thumbnail yet", "text/plain")
+                return self._send(200, f.read_bytes(), "image/jpeg")
             m = re.fullmatch(r"/media/([A-Za-z0-9_-]+)/([0-9a-z]+)/(final|final_b|explained|explained_b|source)\.mp4", self.path.split("?")[0])
             rm = re.fullmatch(r"/media/([A-Za-z0-9_-]+)/([0-9a-z]+-[0-9a-z]+)/range\.mp4", self.path.split("?")[0])
             if rm and rm.group(1) in by_name:
@@ -822,6 +829,32 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 except Exception as e:
                     log.error("clip %s: %s failed: %s", d.name, m.group(3), e, exc_info=True)
                     return self._send(500, f"{type(e).__name__}: {e}".encode(), "text/plain")
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/cover", self.path)
+            if m and m.group(1) in by_name and cfg is not None:
+                # A thumbnail for this one clip: from the clip itself, drawn by ChatGPT, or from the person's own description.
+                from . import thumbs
+                from .tools import ToolError
+                from .work import update_clip
+
+                d = by_name[m.group(1)] / "clips" / m.group(2)
+                if not (d / "clip.json").exists():
+                    return self._send(404, b"no such clip", "text/plain")
+                body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", "0")), 20_000)) or b"{}")
+                if body.get("how") == "none":  # take the thumbnail off again
+                    remove(d / "cover.jpg")
+                    update_clip(d / "clip.json", {}, drop=("cover_by", "cover_at", "cover_words", "cover_prompt", "cover_error", "cover_error_mode"))
+                    return self._send(200, b"{}", "application/json")
+                try:
+                    thumbs.make_cover(d, control.cfg if control else cfg, str(body.get("how") or ""), str(body.get("prompt") or ""))
+                except (ValueError, ToolError) as e:
+                    if isinstance(e, ToolError):
+                        log.error("clip %s: the thumbnail could not be made: %s", d.name, e)
+                        update_clip(d / "clip.json", {"cover_error": str(e)})
+                    return self._send(400, str(e).encode("utf-8", "replace"), "text/plain")
+                state = read_json(d / "clip.json")
+                if state.get("exported") and Path(state["exported"]).exists():
+                    thumbs.export_cover(d, Path(state["exported"]))  # its videos are made already: the picture joins them
+                return self._send(200, json.dumps(thumbs.cover_info(d, state)).encode(), "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/remake-all", self.path)
             if m and m.group(1) in by_name and cfg is not None:
                 # Every unfinished clip of this video is drafted again with the look chosen now (caption style, template, branding).

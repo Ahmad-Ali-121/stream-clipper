@@ -97,6 +97,12 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if not isinstance(value, bool):
                 raise ValueError(f"{key} must be on or off")
             out.setdefault("render", {})[key] = value
+        elif key == "thumbnail":
+            from .thumbs import MODES
+
+            if value not in MODES:
+                raise ValueError(f"thumbnails must be one of: {', '.join(MODES)}")
+            out.setdefault("render", {})["thumbnail"] = value
         elif key == "speech_language":
             if value not in ("en", "ur", "hi", "auto"):
                 raise ValueError("the stream language must be en, ur, hi or auto")
@@ -296,6 +302,7 @@ class Control:
             "mode": parse_mode(cfg.watch.mode), "modes": MODE_TEXT, "channels": " ".join(cfg.watch.channels),
             "watch_autostart": cfg.watch.autostart, "live": self._live(),
             "ab_versions": cfg.render.ab_versions, "opening": cfg.render.opening,
+            "thumbnail": cfg.render.thumbnail, "thumbnails": __import__("clipper.thumbs", fromlist=["MODES"]).MODES, "chatgpt": self._chatgpt(),
             "campaign": cfg.render.campaign, "campaigns": campaigns(),
             "youtube_captions": cfg.transcribe.youtube_captions,
             "speech_language": cfg.transcribe.language, "caption_script": cfg.captions.script, "text_language": cfg.llm.text_language,
@@ -322,6 +329,26 @@ class Control:
             "ai": self._ai_status(),
             "health": self._health_status(),
         }
+
+    def _chatgpt(self) -> dict:
+        """Whether ChatGPT (Codex) can draw thumbnails here. Asked in the background, so the page never waits for it."""
+        from . import thumbs
+
+        if thumbs._status["value"] is None or time.time() - thumbs._status["at"] > 60:
+            if not getattr(self, "_chatgpt_asking", False):
+                self._chatgpt_asking = True
+
+                def ask() -> None:
+                    try:
+                        thumbs.codex_status(fresh=True)
+                    except Exception as e:  # shown as "not ready" with the reason, never a crash of the status check
+                        log.error("asking Codex for its sign-in state failed: %s", e, exc_info=True)
+                        thumbs._status.update(at=time.time(), value={"installed": False, "signed_in": False, "text": f"Codex could not be asked: {e}"})
+                    finally:
+                        self._chatgpt_asking = False
+
+                threading.Thread(target=ask, daemon=True, name="codex-status").start()
+        return thumbs._status["value"] or {"installed": False, "signed_in": False, "text": "Checking…", "checking": True}
 
     def _ai_status(self) -> dict:
         from . import llm

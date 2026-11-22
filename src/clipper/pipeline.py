@@ -691,7 +691,7 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
             from .watch import note_error
 
             try:
-                _finish_clip(work, d, cfg, brief, results, step)
+                _finish_clip(work, d, cfg, brief, results, step, problems)
                 note_error(d, None)
                 steps["done"] = max(steps["done"], before + sizes[n])
             except Stopped:  # Stop now: this clip is left unfinished, with the ones after it
@@ -777,10 +777,15 @@ def plan_clip(d: Path, state: dict, cfg: Config, brief) -> tuple[bool, list[tupl
         jobs.append(("copy", key, name, suffix))
     if fresh and jobs:
         jobs.insert(0, ("render", "a", "final.mp4", ""))
+    if cfg.render.thumbnail != "off" and jobs and not done(d / "cover.jpg") and not state.get("cover_error_mode") == cfg.render.thumbnail:
+        # Thumbnails are switched on and this clip, whose videos are being made now, has none yet. One made by hand on the
+        # clip's card is kept as it is. Clips finished earlier are left alone: switching thumbnails on must not start
+        # drawing one for every old clip (with ChatGPT that would spend the plan's allowance by surprise).
+        jobs.append(("cover", "a", "cover.jpg", ""))
     return fresh, jobs
 
 
-def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Path, bool]], step=None) -> None:
+def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Path, bool]], step=None, problems: list[str] | None = None) -> None:
     from .compose import explained
     from .post import export_clip
     from .render import render_clip
@@ -825,6 +830,27 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
             if key.startswith("x") and key not in narrated:
                 explained(d, cfg, variant=key[1])  # made earlier: this only gives the file back
             results.append(export_clip(d, ready, brief, video_name=name, suffix=suffix, main=key == first))
+        elif kind == "cover":
+            # Optional extra: a thumbnail that cannot be made never costs the clip its videos. The reason is kept on the
+            # clip and reported; it is tried again when the person presses the button on the clip's card.
+            from . import thumbs
+            from .tools import Stopped
+
+            step("making the thumbnail" + (" with ChatGPT (about a minute)" if cfg.render.thumbnail == "chatgpt" else ""))
+            try:
+                thumbs.make_cover(d, cfg, cfg.render.thumbnail)
+            except Stopped:
+                raise
+            except Exception as e:
+                log.error("clip %s/%s: the thumbnail could not be made: %s", work.name, d.name, e, exc_info=not isinstance(e, (ToolError, ValueError)))
+                update_clip(d / "clip.json", {"cover_error": f"{e}", "cover_error_mode": cfg.render.thumbnail})
+                if problems is not None:
+                    problems.append(f"the thumbnail of {clip_label(state, d.name)}: {e}")
+    now = read_json(d / "clip.json", {})
+    if now.get("exported") and done(d / "cover.jpg"):
+        from .thumbs import export_cover
+
+        export_cover(d, Path(now["exported"]))  # the thumbnail sits beside the main video, under the same name
 
 
 def known_exports(state: dict, ab: bool) -> dict[str, str]:

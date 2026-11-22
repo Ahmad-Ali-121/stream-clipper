@@ -116,6 +116,31 @@ The text file with the upload text has the same name as its video. A Done clip a
 - **Make this clip's videos now** (on an approved clip) makes that one clip and leaves the other approved clips for later.
 - **Stop** (next to the green button) asks what you want, with three buttons: **Cancel** keeps going; **Stop after this video** finishes the clip being made and then stops; **Stop now** ends it in the middle, and that clip is not made. Videos already made are always kept. The clips that were not made stay under Approved, and the Activity log names them. Press the green button again to carry on.
 
+#### Thumbnails (optional)
+
+A thumbnail is a cover picture for a clip: one 1080 x 1920 picture, for YouTube Shorts, Instagram Reels and TikTok. Nothing needs one; it is an extra and it is **Off** to begin with.
+
+**For every clip, by itself.** In step 3, **Thumbnail for each clip** has three choices:
+
+- **Off**: no thumbnail is made by itself.
+- **From the clip, with the opening text (free)**: no AI. The program takes the sharpest frame of the clip and puts the opening text on it in big letters. A few seconds per clip.
+- **Drawn by ChatGPT (uses your ChatGPT plan)**: ChatGPT is shown three frames of the clip, its title, the opening text and what is said, decides itself what the picture should be, and draws it. You write nothing. About a minute per clip.
+
+With one of the two chosen, the thumbnail is made when you press the green button, as one more step for each clip whose videos are being made. It is saved in the ready folder beside the video, with the same name and `.jpg` at the end. Clips that were finished before you switched it on are left alone; make theirs with the buttons on the clip.
+
+**For one clip, by hand.** Open **Thumbnail** on a clip's card:
+
+- **Make it from the clip (free)** and **Let ChatGPT make it** do the same two things for this one clip.
+- **Or describe the picture yourself**: type what you want in your own words and press **Make it from my description**. ChatGPT draws that; it still sees the clip's frames, so "the streamer" or "the car" mean the ones in the video.
+- Each press makes a new picture and replaces the old one. **Download** saves it; **Remove thumbnail** takes it off the clip.
+- A thumbnail you made by hand is kept: the green button does not replace it.
+
+**Setting up ChatGPT (once).** It works through Codex, OpenAI's command-line tool, signed in with your own ChatGPT account, the same way Claude works through Claude Code. In a terminal run `npm install -g @openai/codex`, then `codex login`, and sign in. The line under the choice in step 3 says **ChatGPT: Ready** when it is linked, or what is missing. Pictures need a paid ChatGPT plan; they use the plan's allowance several times faster than text. Frames of the clip, its title and its words are sent to OpenAI when ChatGPT is used. Each use is written to `usage.jsonl` in the data folder. The program never reads Codex's sign-in files.
+
+**If a thumbnail cannot be made** (not signed in, the plan's limit is reached, no internet), the clip's videos are still made. The reason is shown in red in the Activity log and on the clip under Thumbnail, and it is not tried again by itself: press the button on the clip when the problem is solved.
+
+**Where to use it.** Instagram Reels: choose it as the cover when you post. YouTube Shorts: in YouTube Studio on a computer, under the Short's thumbnail (not every channel has this yet). TikTok: you can only pick a frame of the video as the cover.
+
 #### Pending: take a clip out of Approved without losing it
 
 **Move to Pending** on an approved clip takes it out of Approved, so the green button does not make it, and puts it in the **Pending** list instead of mixing it back into To review. In the Approved list, **Move all ... to Pending** does that for every approved clip at once (clips that are already Done are not touched). In Pending, **Approve** sends a clip back to Approved, **Reject** rejects it, and **Back to review** returns it to To review. Nothing is deleted by any of these.
@@ -172,7 +197,7 @@ The **? Ask** button at the bottom right opens a chat. Type a question about the
 - While the chat is open, the keyboard shortcuts for clips (J, K, A, R) are switched off, so words you type can never approve or reject a clip.
 - It can use anything that is on the page: boxes, lists, tick boxes, sliders, tabs and buttons. A new feature can be used the day it is added.
 - If you left out something it needs (which channel, which link, what time), it asks instead of guessing.
-- **Some presses always stay yours.** Approve, Reject, Delete, Back to review, Move to Pending, the Versions to make tick boxes and everything else on a clip's card, moving all approved clips to Pending, the box editor window, deleting, removing or clearing anything, taking a logo or music off, cutting the cutting board into equal parts (it replaces your cuts), which Claude connection is used, setting up the free local AI, and repairing, restarting or updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
+- **Some presses always stay yours.** Approve, Reject, Delete, Back to review, Move to Pending, the Thumbnail buttons, the Versions to make tick boxes and everything else on a clip's card, moving all approved clips to Pending, the box editor window, deleting, removing or clearing anything, taking a logo or music off, cutting the cutting board into equal parts (it replaces your cuts), which Claude connection is used, setting up the free local AI, and repairing, restarting or updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
 - It cannot post or upload anything; the program has no way to do that.
 
 It needs Claude (your Claude Code plan or an API key). Without Claude it still answers, by showing the parts of this guide that match your question, but it cannot do things for you. Each question counts towards your Claude plan like any other use.

@@ -166,6 +166,9 @@ class RenderSettings:
     campaign: str = ""  # name of a file in briefs/ (without .yaml): every clip is checked against that campaign's rules
     opening: bool = True  # eye-catching start: quick zoom-in, hook pops in, whoosh, progress bar
     ab_versions: bool = True  # finish makes two versions of each approved clip (A and B) with different hooks
+    # A cover picture per clip, made with its videos: "off", "frame" (free: a frame of the clip with the opening text)
+    # or "chatgpt" (drawn by ChatGPT through the Codex tool, on the person's own ChatGPT plan)
+    thumbnail: str = "off"
     hook_font_size: int = 76
     credit_font_size: int = 40
     disclosure_text: str = "Ad"

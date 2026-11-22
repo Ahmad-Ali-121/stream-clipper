@@ -66,6 +66,7 @@ render:
   hook_seconds: 3
   opening: true           # eye-catching first seconds: quick zoom-in, hook pops in, whoosh, progress bar
   ab_versions: true       # finish makes two versions of each approved clip (A and B) with different hooks
+  thumbnail: "off"        # a cover picture per clip: "off", frame (free, from the clip) or chatgpt (your ChatGPT plan, via Codex)
   hook_font_size: 76
   credit_font_size: 40
   disclosure_text: Ad
