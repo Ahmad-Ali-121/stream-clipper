@@ -891,9 +891,7 @@ class Control:
 
             def progress(done: int, total: int, now: str) -> None:
                 self.finish_progress = {"done": done, "total": total, "now": now}
-                if done < total:
-                    report.item(done, total, f"clip {done + 1} of {total}: {now}".strip())
-                else:
+                if done >= total:  # between clips the bar is moved by the work itself, step by step (see stage_finish)
                     report.finish()
 
             cfg = self.reload()

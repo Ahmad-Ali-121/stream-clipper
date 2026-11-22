@@ -120,6 +120,8 @@ pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid
 .clip[data-status=pending] .badge{border-color:var(--warn);color:var(--warn)}
 .clips[data-filter=pending] .clip:not([data-status=pending]){display:none}
 .modal>.card.small{width:min(500px,100%)}
+button.pill{cursor:pointer;color:inherit;font:inherit;font-size:12.5px;border-color:var(--ok)}
+.minibar{display:inline-block;width:70px;height:6px;border-radius:999px;background:var(--line);overflow:hidden}.minibar i{display:block;height:100%;width:0;background:var(--ok);transition:width .4s}
 .clips[data-filter=done] .clip:not([data-status=done]){display:none}
 .clip[data-status=done] .badge{background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent);color:var(--accent)}.clip[data-status=rejected]{border-left-color:var(--bad);opacity:.6}
 @media (max-width:680px){.clip{grid-template-columns:1fr}}
@@ -283,6 +285,7 @@ kbd{background:rgba(255,255,255,.06)!important}
   <div class="pills">
     <span class="pill" id="p-health" style="cursor:pointer" onclick="const d=$('healthbox');d.open=true;d.scrollIntoView({block:'start'})"><span class="dot"></span><span>Checking setup…</span></span>
     <span class="pill" id="p-watch"><span class="dot"></span><span>Not watching</span></span>
+    <button class="pill" id="p-make" hidden onclick="$('f-bar').scrollIntoView({block:'center',behavior:'smooth'})" title="Videos are being made. Click to see the details and the Stop button."><span class="minibar"><i></i></span><span></span></button>
     <span class="pill" id="p-count">0 to review</span>
   </div>
 </div>
@@ -721,10 +724,14 @@ function show(s){
   $('r-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?(/ stopped$/.test(lastLine(s.run_log))?'<b>Stopped by you.</b>':'<b>Done.</b> '+esc(lastLine(s.run_log))):'Nothing running.'));
   logTo('rlog',s.run_log);
   const ready=s.finish_log.filter(l=>l.startsWith('READY ')), notMade=s.finish_log.filter(l=>l.startsWith('NOT MADE ')||l.startsWith('FAILED'));
-  $('f-note').innerHTML=s.finishing?'<b>Working…</b> '+(fp.total?'clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total+(fp.now?': '+esc(fp.now):''):'starting')+'. About a minute per clip.'
+  $('f-note').innerHTML=s.finishing?'<b>Working…</b> '+(fp.total?'clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total+(fp.now?': '+esc(fp.now):''):'starting')+'. The bar below shows how far it is.'
       +(s.finish_stopping==='after'?' <b>Stopping after this video.</b>':(s.finish_stopping==='now'?' <b>Stopping now…</b>':''))
     :(s.finish_log.length?(s.finish_stopped?'<b>Stopped by you.</b> ':'')+(ready.length?'<b>'+ready.length+' video file'+(ready.length>1?'s':'')+' made.</b> ':(s.finish_stopped?'No video was finished before the stop. ':(notMade.length?'':'<b>Nothing new to make:</b> every approved clip already has its videos. ')))+(notMade.length?notMade.length+' could not be made. ':'')+(ready.length?'They are in the <b>ready</b> folder inside your data folder; press Open the videos folder.':'')+(s.finish_stopped?' The clips that were not made are still under Approved.':''):'Nothing made yet in this session.');
   $('f-ready').innerHTML=ready.map(l=>'<li>'+esc(l.slice(6).split(/[\\/]/).pop())+'</li>').join('')+notMade.map(l=>'<li class="nm">'+esc(l)+'</li>').join('');
+  /* How far the making of the videos is, at the top of the page too: it is seen from wherever you are. */
+  const pm=$('p-make'), fq=s.finish_percent; pm.hidden=!s.finishing;
+  if(s.finishing){pm.firstElementChild.firstElementChild.style.width=(fq?Math.max(2,Math.min(100,fq.percent)):2)+'%';
+    pm.lastElementChild.textContent='Making videos '+(fq?Math.floor(fq.percent)+'%':'…')+(fp.total?' · clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total:'')+(s.finish_stopping?' · stopping':'')}
   $('b-finish').disabled=s.finishing; $('b-fstop').disabled=!s.finishing||s.finish_stopping==='now';
   if(!$('stopbox').hidden){if(!s.finishing)stopAsk(false);else stopText(s)}
   logTo('flog',s.finish_log);

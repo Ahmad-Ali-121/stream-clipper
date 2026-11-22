@@ -649,8 +649,36 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
     todo = [(work, d) for work in works for d in select_clips(work, status="approved")]
     if only:
         todo = [(work, d) for work, d in todo if (work.name, d.name) == tuple(only)]
+    # What there is to do, counted before anything is made, so the bar on the page moves by real work:
+    # one step per video to render, two per explainer (the narrator's card, then joining it to the clip).
+    # A clip whose videos are all there already is not counted and not mentioned.
+    sizes = []
+    for _work, d in todo:
+        try:
+            st = read_json(d / "clip.json")
+            if not isinstance(st.get("exports"), dict) and (known := known_exports(st, cfg.render.ab_versions)):
+                update_clip(d / "clip.json", {"exports": known})  # exported by an older version: note where its files are
+            jobs = plan_clip(d, st, cfg, brief)[1]
+            # copying a finished video to the ready folder takes a moment, so only the real work is counted;
+            # a clip that only needs copying still counts as one step
+            sizes.append(max(1, sum(1 for job in jobs if job[0] != "copy")) if jobs else 0)
+        except Exception:  # it will fail again below, where the reason is reported; it still counts as one thing to do
+            sizes.append(1)
+    todo, sizes = [pair for pair, size in zip(todo, sizes) if size], [size for size in sizes if size]
+    from . import progress as bar
+
+    steps = {"done": 0, "total": max(1, sum(sizes)), "clip": ""}
+
+    def step(text: str) -> None:
+        """One piece of work starts: the bar moves on and says what is being made."""
+        steps["total"] = max(steps["total"], steps["done"] + 1)  # more turned up than was counted: never past 100%
+        bar.item(steps["done"], steps["total"], f"{steps['clip']} · {text}")
+        steps["done"] += 1
+
     for n, (work, d) in enumerate(todo):
         label = clip_label(read_json(d / "clip.json", {}), d.name)
+        steps["clip"] = f"clip {n + 1} of {len(todo)}: {label}"
+        before = steps["done"]
         if stop and stop():
             if left is not None:
                 from .review import videos_made
@@ -663,8 +691,9 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
             from .watch import note_error
 
             try:
-                _finish_clip(work, d, cfg, brief, results)
+                _finish_clip(work, d, cfg, brief, results, step)
                 note_error(d, None)
+                steps["done"] = max(steps["done"], before + sizes[n])
             except Stopped:  # Stop now: this clip is left unfinished, with the ones after it
                 if left is not None:
                     from .review import videos_made
@@ -682,6 +711,7 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
                 note_error(d, f"finish failed: {e}")
                 if problems is not None:
                     problems.append(f"{work.name}/{d.name}: {e}")
+                steps["done"] = max(steps["done"], before + 1)  # the steps it did not get to are not left hanging in the count
     else:  # every clip was gone through (not stopped part-way)
         if progress:
             progress(len(todo), len(todo), "")
@@ -700,30 +730,23 @@ def _look_changed(state: dict, cfg: Config) -> bool:
     return state.get("style_used", "bold") != cfg.captions.preset
 
 
-def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Path, bool]]) -> None:
-    from .compose import explained
-    from .post import export_clip
-    from .render import look_signature, render_clip
+VERSION_TEXT = {"a": "the video", "b": "version B", "xa": "the explainer", "xb": "explainer B"}
 
-    state = read_json(d / "clip.json")
+
+def plan_clip(d: Path, state: dict, cfg: Config, brief) -> tuple[bool, list[tuple[str, str, str, str]]]:
+    """What "Make videos" has to do for one approved clip, worked out without making anything.
+
+    Returns whether the main video must be rendered again, and the steps in order as (work, version, file, name ending):
+    work is "render" (a video is encoded), "card" and "join" (the two halves of an explainer) or "copy" (only put in the
+    ready folder). An empty list means every wanted version is made and in the ready folder already.
+    """
     if not done(d / "source.mp4"):
         raise ToolError("approved, but its video was never downloaded (the draft failed). Reject it on the review page")
-    if "source_width" not in state or not done(d / "words.json"):
-        # The draft stopped part-way while it was being made; do the missing steps now.
-        from .watch import prepare_clip
-
-        log.info("clip %s/%s: the draft was never completed; completing it now", work.name, d.name)
-        state = prepare_clip(d, state, cfg)
-    state = write_clip_copy(d, state, cfg)  # no-op unless its text was written without AI and AI is reachable now
     ab = cfg.render.ab_versions
     # A render made before the opening effects were switched on (or off) no longer matches the settings.
     fresh = (not done(d / "final.mp4") or bool(state.get("opening_used")) != bool(cfg.render.opening)
              # a render with another caption look or other branding is stale too (older drafts only recorded the style's name)
              or _look_changed(state, cfg))
-    if fresh:
-        render_clip(d, cfg, force=True)
-        for name in ("explained.mp4", "explained_b.mp4", "final_b.mp4"):  # made with the old settings too
-            (d / name).unlink(missing_ok=True)
     # Which versions this clip is to have: the plain video (ticked unless the person unticked it) and the explainer.
     wanted: list[tuple[str, str, str]] = []
     if state.get("simple", True):
@@ -739,20 +762,69 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
     if not wanted:
         raise ToolError("neither the normal video nor the explainer is ticked for this clip; tick one under 'Versions to make' on the review page")
     known = known_exports(state, ab)
+    again = bool(brief) or not state.get("exported") or not known
+    jobs: list[tuple[str, str, str, str]] = []
+    b_planned = False
+    for key, name, suffix in wanted:
+        make = fresh or not done(d / name)
+        if not (make or again or not known.get(key) or not Path(known[key]).exists()):
+            continue  # made, unchanged and still in the ready folder
+        if key in ("b", "xb") and not b_planned and (fresh or not done(d / "final_b.mp4")):
+            jobs.append(("render", "b", "final_b.mp4", ""))
+            b_planned = True
+        if key.startswith("x") and make:
+            jobs += [("card", key, name, ""), ("join", key, name, "")]
+        jobs.append(("copy", key, name, suffix))
+    if fresh and jobs:
+        jobs.insert(0, ("render", "a", "final.mp4", ""))
+    return fresh, jobs
+
+
+def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Path, bool]], step=None) -> None:
+    from .compose import explained
+    from .post import export_clip
+    from .render import render_clip
+
+    step = step or (lambda text: None)
+    state = read_json(d / "clip.json")
+    if not done(d / "source.mp4"):
+        raise ToolError("approved, but its video was never downloaded (the draft failed). Reject it on the review page")
+    if "source_width" not in state or not done(d / "words.json"):
+        # The draft stopped part-way while it was being made; do the missing steps now.
+        from .watch import prepare_clip
+
+        log.info("clip %s/%s: the draft was never completed; completing it now", work.name, d.name)
+        step("completing the draft")
+        state = prepare_clip(d, state, cfg)
+    state = write_clip_copy(d, state, cfg)  # no-op unless its text was written without AI and AI is reachable now
+    ab = cfg.render.ab_versions
+    fresh, jobs = plan_clip(d, state, cfg, brief)
+    known = known_exports(state, ab)
     if not isinstance(state.get("exports"), dict) and known:
         update_clip(d / "clip.json", {"exports": known})  # a clip exported by an older version: note where its files are
-    again = bool(brief) or not state.get("exported") or not known
     ready = cfg.data_dir / "ready"
-    for key, name, suffix in wanted:
-        need = fresh or again or not known.get(key) or not Path(known[key]).exists()
-        if not done(d / name):
-            need = True
-            if key == "b":
+    first = next((key for work_, key, _n, _s in jobs if work_ == "copy"), "")
+    narrated: set[str] = set()
+    if jobs and all(job[0] == "copy" for job in jobs):
+        step("putting it in the ready folder")
+    for kind, key, name, suffix in jobs:
+        if kind == "render":
+            step(f"rendering {VERSION_TEXT[key]}")
+            if key == "a":
+                render_clip(d, cfg, force=True)
+                for old in ("explained.mp4", "explained_b.mp4", "final_b.mp4"):  # made with the old settings too
+                    (d / old).unlink(missing_ok=True)
+            else:
                 render_clip(d, cfg, out_name=name, variant="b")
-        if need:
-            if key.startswith("x"):
-                explained(d, cfg, variant=key[1])
-            results.append(export_clip(d, ready, brief, video_name=name, suffix=suffix, main=key == wanted[0][0]))
+        elif kind == "card":
+            if key not in narrated:  # the card and the join are one call; it says itself when the second half starts
+                narrated.add(key)
+                step(f"{VERSION_TEXT[key]}: the narrator's card")
+                explained(d, cfg, variant=key[1], on_step=lambda: step(f"{VERSION_TEXT[key]}: joining it to the clip"))
+        elif kind == "copy":
+            if key.startswith("x") and key not in narrated:
+                explained(d, cfg, variant=key[1])  # made earlier: this only gives the file back
+            results.append(export_clip(d, ready, brief, video_name=name, suffix=suffix, main=key == first))
 
 
 def known_exports(state: dict, ab: bool) -> dict[str, str]:

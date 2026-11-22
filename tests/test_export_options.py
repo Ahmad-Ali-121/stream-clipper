@@ -82,8 +82,10 @@ def _finish(tmp_path, monkeypatch, ab=False, **kw):
         made.append(out_name)
         return d / out_name
 
-    def fake_explained(d, cfg, force=False, variant="a"):
+    def fake_explained(d, cfg, force=False, variant="a", on_step=None):
         name = "explained_b.mp4" if variant == "b" else "explained.mp4"
+        if on_step:
+            on_step()
         (d / name).write_bytes(b"e")
         made.append(name)
         return d / name
@@ -263,3 +265,43 @@ def test_the_page_has_the_new_controls():
     for piece in ('name="simple"', 'id="b-fstop"', 'id="stop-cancel"', "finishStop('after')", "finishStop('now')", "['pending','Pending']",
                   "Move to Pending", "/api/clips/hold-approved", "makeOne(", 'id="b-ready"', "!$('stopbox').hidden||"):
         assert piece in page, piece
+
+
+# ---- how far it is ----
+
+def test_the_work_is_counted_before_it_starts_so_the_bar_moves_by_real_steps(tmp_path, monkeypatch):
+    from clipper import progress
+
+    _ready_clip(tmp_path, "0h01m00s", rank=1, explainer=True)          # render A, render B, two explainers of two halves each
+    done_one = _ready_clip(tmp_path, "0h02m00s", rank=2)
+    _ready_clip(tmp_path, "0h03m00s", rank=3, simple=False, explainer=True)
+    _finish(tmp_path, monkeypatch, ab=True, only=("twitch_1", "0h02m00s"))  # this one is made already: not counted again
+    assert videos_made(done_one, read_json(done_one / "clip.json"))
+    seen: list[tuple] = []
+    monkeypatch.setattr(progress, "item", lambda index, count, text="": seen.append((index, count, text)))
+    clips: list[tuple] = []
+    _finish(tmp_path, monkeypatch, ab=True, progress=lambda done, total, now: clips.append((done, total)))
+    assert clips == [(0, 2), (1, 2), (2, 2)]  # two clips have work; the finished one is not mentioned
+    assert [(i, n) for i, n, _ in seen] == [(i, 12) for i in range(12)]  # every step is one of eleven, in order, never past the end
+    texts = [t for _, _, t in seen]
+    assert texts[0] == "clip 1 of 2: Title 0h01m00s · rendering the video" and texts[1].endswith("rendering version B")
+    assert texts[2].endswith("the explainer: the narrator's card") and texts[3].endswith("the explainer: joining it to the clip")
+    assert texts[6].startswith("clip 2 of 2: Title 0h03m00s") and texts[-1].endswith("explainer B: joining it to the clip")
+
+
+def test_the_plan_of_a_clip_is_only_what_is_missing(tmp_path, monkeypatch):
+    d = _ready_clip(tmp_path)
+    cfg = load_config()
+    cfg.paths.data_dir = str(tmp_path)
+    cfg.render.ab_versions, cfg.render.opening = False, False
+    monkeypatch.setattr(pipeline, "_look_changed", lambda state, cfg: False)
+    fresh, jobs = pipeline.plan_clip(d, read_json(d / "clip.json"), cfg, None)
+    assert fresh and [(k, v) for k, v, *_ in jobs] == [("render", "a"), ("copy", "a")]
+    (d / "final.mp4").write_bytes(b"v")
+    fresh, jobs = pipeline.plan_clip(d, read_json(d / "clip.json"), cfg, None)
+    assert not fresh and [(k, v) for k, v, *_ in jobs] == [("copy", "a")]  # the draft is good: it only goes to the ready folder
+    _finish(tmp_path, monkeypatch)
+    assert pipeline.plan_clip(d, read_json(d / "clip.json"), cfg, None) == (False, [])
+    (d / "source.mp4").unlink()
+    with pytest.raises(tools.ToolError, match="never downloaded"):
+        pipeline.plan_clip(d, read_json(d / "clip.json"), cfg, None)

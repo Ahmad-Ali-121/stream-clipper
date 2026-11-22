@@ -265,7 +265,7 @@ def concat(parts: list[Path], out: Path, cfg: Config) -> Path:
     return out
 
 
-def explained(clip_dir: Path, cfg: Config, force: bool = False, variant: str = "a") -> Path:
+def explained(clip_dir: Path, cfg: Config, force: bool = False, variant: str = "a", on_step=None) -> Path:
     """<clip>/explained.mp4: a narrated set-up card, then the clip.
 
     Variant "b" (explained_b.mp4) is the A/B partner: it speaks ``intro_b``, uses the
@@ -283,6 +283,8 @@ def explained(clip_dir: Path, cfg: Config, force: bool = False, variant: str = "
     t0 = time.monotonic()
     card = make_card(still_frame(clip_dir, cfg), intro, clip_dir / ("intro_card_b.mp4" if b else "intro_card.mp4"), cfg,
                      label=str(state.get("channel") or ""), variant=variant)
+    if on_step:
+        on_step()  # the card is made; joining it to the clip is the second half of the work
     concat([card, body], out, cfg)
     from .work import update_clip
 

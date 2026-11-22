@@ -310,6 +310,8 @@ Every job on the page has a bar with a line under it, for example **41% · Step 
 - A download counts the video it has really received, so the bar moves while it works.
 - "Roughly ... left" is an estimate from the time taken so far. It is least reliable at the start.
 - Two steps move only once per clip: writing captions for a short clip, and writing the text. The bar waits there and then jumps.
+- **Making the videos** has its own bar under the green button, for example **44% · clip 3 of 3: the clip's title · rendering version B · roughly a minute left**. The work is counted before it starts: one step for each video to render and two for each explainer (the narrator's card, then joining it to the clip). Clips whose videos are already made are not counted. While a video is rendered the bar moves with it; during the narrator's card and the joining it waits and then moves on.
+- While videos are being made, a green pill at the top of the page shows the same percentage and "clip 2 of 4", so you see it from anywhere on the page. Click it to jump to the bar and the Stop button.
 - A live watch has no bar: it runs until you stop it.
 
 ### Face box and video box: choose what the clip shows
