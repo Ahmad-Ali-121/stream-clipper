@@ -843,7 +843,7 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
             from . import thumbs
             from .tools import Stopped
 
-            step("making the thumbnail" + (" with ChatGPT (about a minute)" if cfg.render.thumbnail == "chatgpt" else ""))
+            step("making the thumbnail" + (" with ChatGPT (one to three minutes)" if cfg.render.thumbnail == "chatgpt" else ""))
             try:
                 thumbs.make_cover(d, cfg, cfg.render.thumbnail)
             except Stopped:

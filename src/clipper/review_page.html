@@ -935,7 +935,7 @@ function cardHtml(c){
      :'<p class="help" style="margin-top:8px">No thumbnail yet. Nothing has to be made: this is an extra.</p>')
    +(cv.error?'<div class="cliperr"><b>The thumbnail could not be made:</b> '+esc(cv.error)+'</div>':'')
    +'<div class="btns" style="margin-top:0"><button class="btn" title="Free, no AI: the sharpest frame of the clip with its opening text" onclick="makeCover(\''+k+'\',\'frame\',this)">Make it from the clip (free)</button>'
-   +'<button class="btn" title="ChatGPT looks at the clip and decides the picture itself. Uses your ChatGPT plan; about a minute" onclick="makeCover(\''+k+'\',\'chatgpt\',this)">Let ChatGPT make it</button></div>'
+   +'<button class="btn" title="ChatGPT looks at the clip and decides the picture itself. Uses your ChatGPT plan; one to three minutes" onclick="makeCover(\''+k+'\',\'chatgpt\',this)">Let ChatGPT make it</button></div>'
    +'<label class="f">Or describe the picture yourself <small>(ChatGPT draws it; it still sees the clip)</small></label>'
    +'<textarea name="t_cover" maxlength="2000" style="min-height:64px" oninput="coverText.set(\''+k+'\',this.value)" placeholder="For example: the streamer shocked on the left, the bike upside down in the air on the right, big yellow text NO WAY">'+esc(coverText.has(k)?coverText.get(k):(cv.prompt||''))+'</textarea>'
    +'<div class="btns"><button class="btn" onclick="makeCover(\''+k+'\',\'prompt\',this)">Make it from my description</button>'
@@ -1098,7 +1098,7 @@ async function makeCover(key,how,btn){
   if(how==='none'&&!confirm('Remove this clip\'s thumbnail? A copy already beside a finished video stays there.'))return;
   const box=btn.closest('details'), was=btn.textContent;
   for(const b of box.querySelectorAll('button'))b.disabled=true;
-  btn.textContent=how==='frame'?'Making…':(how==='none'?'Removing…':'ChatGPT is drawing… about a minute');
+  btn.textContent=how==='frame'?'Making…':(how==='none'?'Removing…':'ChatGPT is drawing… one to three minutes');
   let r;try{r=await fetch('/api/clip/'+key+'/cover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({how:how,prompt:text})})}
   catch(e){toast('The program is not answering: '+e,true);for(const b of box.querySelectorAll('button'))b.disabled=false;btn.textContent=was;return}
   const bad=r.ok?'':await r.text();

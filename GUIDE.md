@@ -131,7 +131,7 @@ A thumbnail is a cover picture for a clip: one 1080 x 1920 picture, for YouTube 
 
 - **Off**: no thumbnail is made by itself.
 - **From the clip, with the opening text (free)**: no AI. The program takes the sharpest frame of the clip and puts the opening text on it in big letters. A few seconds per clip.
-- **Drawn by ChatGPT (uses your ChatGPT plan)**: ChatGPT is shown three frames of the clip, its title, the opening text and what is said, decides itself what the picture should be, and draws it. You write nothing. About a minute per clip.
+- **Drawn by ChatGPT (uses your ChatGPT plan)**: ChatGPT is shown three frames of the clip, its title, the opening text and what is said, decides itself what the picture should be, and draws it. You write nothing. One to three minutes per clip. The program takes the picture as soon as it has been saved and has not changed for half a minute, even if Codex itself does not close; if no picture has come after eight minutes it gives up with a red message, and you can press again.
 
 With one of the two chosen, the thumbnail is made when you press the green button, as one more step for each clip whose videos are being made. It is saved in the ready folder beside the video, with the same name and `.jpg` at the end. Only a clip whose videos are made for the first time gets one this way. A clip that was finished before (even if it is made again for a new title, a new caption look or a campaign) is left alone; make its thumbnail with the buttons on the clip. That way ChatGPT never draws for a pile of old clips by surprise.
 

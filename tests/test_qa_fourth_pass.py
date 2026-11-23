@@ -149,6 +149,41 @@ def test_every_use_of_chatgpt_is_written_down_also_when_it_fails_or_says_nothing
     thumbs._status.update(at=0.0, value=None)
 
 
+def test_a_codex_that_never_ends_still_gives_its_picture(tmp_path, monkeypatch):
+    """Seen for real: the picture was saved, then Codex sat idle for good. The picture is used and Codex is ended."""
+    import sys
+
+    import cv2
+    import numpy as np
+
+    d, cfg = _clip(tmp_path), _cfg(tmp_path)
+    script = tmp_path / "hang.py"
+    script.write_text("import shutil, sys, time\nsys.stdin.read()\nshutil.copy(sys.argv[1], 'cover.png')\ntime.sleep(600)\n", encoding="utf-8")
+    drawn = tmp_path / "drawn.png"
+    cv2.imwrite(str(drawn), np.zeros((1536, 1024, 3), dtype=np.uint8))
+    real_run = tools.run
+
+    def fake_run(cmd, **kw):
+        if "-frames:v" in cmd:
+            cv2.imwrite(str(kw["cwd"] / cmd[-1]), np.zeros((72, 128, 3), dtype=np.uint8))
+            return None
+        return real_run([sys.executable, str(script), str(drawn)], **kw)  # a real program that makes the picture and never ends
+
+    monkeypatch.setattr(thumbs.shutil, "which", lambda name: "codex")
+    monkeypatch.setattr(thumbs, "find_tool", lambda name, data_dir: "ffmpeg")
+    monkeypatch.setattr(thumbs, "run", fake_run)
+    monkeypatch.setattr(thumbs, "QUIET_S", 1)
+    monkeypatch.setattr(thumbs, "CODEX_LIMIT_S", 60)
+    thumbs._status.update(at=1e18, value={"installed": True, "signed_in": True, "text": "Ready"})
+    import time
+
+    t0 = time.monotonic()
+    assert thumbs.make_cover(d, cfg, "chatgpt") == d / "cover.jpg"
+    assert time.monotonic() - t0 < 30 and (d / "cover.jpg").exists() and not (d / "cover_work").exists()
+    assert json.loads((tmp_path / "usage.jsonl").read_text(encoding="utf-8").splitlines()[-1])["result"] == "made"
+    thumbs._status.update(at=0.0, value=None)
+
+
 def test_a_step_with_an_older_copy_cannot_put_a_clip_back_into_pending(tmp_path):
     d = _clip(tmp_path, status="candidate", held=True)
     stale = read_json(d / "clip.json")  # an automatic step read the clip while it was in Pending

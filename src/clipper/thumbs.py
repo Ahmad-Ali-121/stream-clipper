@@ -206,6 +206,18 @@ def fit_cover(src: Path, out: Path, width: int = 1080, height: int = 1920) -> No
     part.replace(out)
 
 
+QUIET_S = 30  # a picture untouched for this long is finished
+CODEX_LIMIT_S = 480  # a picture takes one to three minutes; after eight with none, it is not coming
+
+
+def _pictures(work: Path, frames: list[str]) -> list[Path]:
+    """The pictures Codex has saved in its working folder (not the frames it was given)."""
+    try:
+        return [f for f in work.iterdir() if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp") and f.name not in frames and ".part" not in f.name]
+    except OSError:
+        return []
+
+
 def chatgpt_cover(d: Path, cfg: Config, prompt: str = "") -> Path:
     """cover.jpg drawn by ChatGPT through the Codex tool. ``prompt`` empty = it decides the picture itself from the clip."""
     exe = shutil.which("codex")
@@ -228,14 +240,22 @@ def chatgpt_cover(d: Path, cfg: Config, prompt: str = "") -> Path:
             cmd += ["-i", name]
         cmd += ["-o", "reply.txt", "-"]  # the request is given on the input, so no quoting can break it
         t0 = time.monotonic()
+
+        def picture_is_there() -> bool:
+            # Seen for real on 2026-11-23: the picture was saved after 3 minutes, then Codex sat idle and never ended,
+            # so the page waited 15 minutes and threw the finished picture away. A picture that has not changed for
+            # half a minute is finished: Codex is not waited for any longer.
+            made = [f.stat() for f in _pictures(work, frames)]
+            return bool(made) and all(m.st_size > 0 for m in made) and time.time() - max(m.st_mtime for m in made) > QUIET_S
+
         try:
-            proc = run(cmd, timeout_s=900, what="ChatGPT (Codex) making a thumbnail", cwd=work, input_text=text)
+            proc = run(cmd, timeout_s=CODEX_LIMIT_S, what="ChatGPT (Codex) making a thumbnail", cwd=work, input_text=text, enough=picture_is_there)
         except ToolError as e:
             _log_use(cfg, d, None, t0, f"failed: {str(e)[:200]}")  # it may have used the plan before it failed
             raise ToolError(f"{e}. If it mentions signing in or a limit: run  codex login  in a terminal, or your ChatGPT plan's limit is reached") from e
         tokens = re.search(r"tokens used\s*([\d,]+)", (proc.stdout or "") + (proc.stderr or ""))
         used = int(tokens.group(1).replace(",", "")) if tokens else None
-        made = [f for f in work.iterdir() if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp") and f.name not in frames]
+        made = _pictures(work, frames)
         if not made:
             _log_use(cfg, d, used, t0, "answered without a picture")
             said = " ".join((work / "reply.txt").read_text(encoding="utf-8", errors="replace").split())[:300] if (work / "reply.txt").exists() else ""
@@ -247,7 +267,11 @@ def chatgpt_cover(d: Path, cfg: Config, prompt: str = "") -> Path:
         words = (said or [""])[-1][:120]
         _log_use(cfg, d, used, t0, "made")
     finally:
-        shutil.rmtree(work, ignore_errors=True)
+        for _ in range(10):  # Windows keeps a file locked for a moment after the program that held it was ended
+            shutil.rmtree(work, ignore_errors=True)
+            if not work.exists():
+                break
+            time.sleep(0.3)
     update_clip(d / "clip.json", {"cover_by": "prompt" if prompt.strip() else "chatgpt",
                                   "cover_at": time.strftime("%Y-%m-%d %H:%M:%S"), "cover_words": words, "cover_prompt": prompt.strip()[:2000]},
                 drop=("cover_error", "cover_error_mode"))
