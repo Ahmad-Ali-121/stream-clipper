@@ -188,3 +188,27 @@ def test_the_option_and_the_page_controls_are_there():
     page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
     for piece in ('id="o-thumb"', "makeCover(", "Let ChatGPT make it", "Make it from the clip (free)", "Make it from my description", 'name="t_cover"', "/cover.jpg"):
         assert piece in page, piece
+
+
+def test_the_not_wanted_list_and_the_face_style_reach_chatgpt(tmp_path):
+    from clipper import control
+    from clipper.config import load_config
+
+    cfg = load_config()
+    cfg.render.thumbnail_face, cfg.render.thumbnail_avoid = True, "no guns,   no blood"
+    state = {"channel": "Lacy", "title": "Cop chase gone wrong"}
+    auto = thumbs.auto_prompt(state, cfg)
+    assert "excited or shocked" in auto and "do not invent one" in auto and "does NOT want" in auto and "no guns, no blood" in auto
+    assert auto.index("no guns") < auto.index("ONE image")  # the fixed rules still close the request
+    mine = thumbs.own_prompt("a red car", cfg)
+    assert "no guns, no blood" in mine and "excited or shocked" not in mine  # the person's own description decides the subject
+    cfg.render.thumbnail_face, cfg.render.thumbnail_avoid = False, ""
+    plain = thumbs.auto_prompt(state, cfg)
+    assert "excited or shocked" not in plain and "does NOT want" not in plain
+    assert control.clean_options({"thumbnail_avoid": "  no   guns ", "thumbnail_face": False}) == {"render": {"thumbnail_avoid": "no guns", "thumbnail_face": False}}
+    for bad in ({"thumbnail_avoid": "x" * 501}, {"thumbnail_face": "yes"}):
+        try:
+            control.clean_options(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)

@@ -67,6 +67,8 @@ render:
   opening: true           # eye-catching first seconds: quick zoom-in, hook pops in, whoosh, progress bar
   ab_versions: true       # finish makes two versions of each approved clip (A and B) with different hooks
   thumbnail: "off"        # a cover picture per clip: "off", frame (free, from the clip) or chatgpt (your ChatGPT plan, via Codex)
+  thumbnail_face: true    # ChatGPT thumbnails: the streamer's own face, big and excited, when it is visible in the clip
+  thumbnail_avoid: ""     # ChatGPT thumbnails: things you never want in the picture, in your own words
   hook_font_size: 76
   credit_font_size: 40
   disclosure_text: Ad

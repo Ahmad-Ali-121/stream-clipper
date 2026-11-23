@@ -103,6 +103,15 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if value not in MODES:
                 raise ValueError(f"thumbnails must be one of: {', '.join(MODES)}")
             out.setdefault("render", {})["thumbnail"] = value
+        elif key == "thumbnail_face":
+            if not isinstance(value, bool):
+                raise ValueError("the streamer's face in thumbnails must be on or off")
+            out.setdefault("render", {})[key] = value
+        elif key == "thumbnail_avoid":
+            text = " ".join(str(value).split())
+            if len(text) > 500:
+                raise ValueError("the list of things you do not want in thumbnails is very long; keep it under 500 letters")
+            out.setdefault("render", {})[key] = text
         elif key == "speech_language":
             if value not in ("en", "ur", "hi", "auto"):
                 raise ValueError("the stream language must be en, ur, hi or auto")
@@ -303,7 +312,7 @@ class Control:
             "mode": parse_mode(cfg.watch.mode), "modes": MODE_TEXT, "channels": " ".join(cfg.watch.channels),
             "watch_autostart": cfg.watch.autostart, "live": self._live(),
             "ab_versions": cfg.render.ab_versions, "opening": cfg.render.opening,
-            "thumbnail": cfg.render.thumbnail, "thumbnails": __import__("clipper.thumbs", fromlist=["MODES"]).MODES, "chatgpt": self._chatgpt(),
+            "thumbnail": cfg.render.thumbnail, "thumbnail_face": cfg.render.thumbnail_face, "thumbnail_avoid": cfg.render.thumbnail_avoid, "thumbnails": __import__("clipper.thumbs", fromlist=["MODES"]).MODES, "chatgpt": self._chatgpt(),
             "campaign": cfg.render.campaign, "campaigns": campaigns(),
             "youtube_captions": cfg.transcribe.youtube_captions,
             "speech_language": cfg.transcribe.language, "caption_script": cfg.captions.script, "text_language": cfg.llm.text_language,

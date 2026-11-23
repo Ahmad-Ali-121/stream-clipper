@@ -131,7 +131,7 @@ A thumbnail is a cover picture for a clip: one 1080 x 1920 picture, for YouTube 
 
 - **Off**: no thumbnail is made by itself.
 - **From the clip, with the opening text (free)**: no AI. The program takes the sharpest frame of the clip and puts the opening text on it in big letters. A few seconds per clip.
-- **Drawn by ChatGPT (uses your ChatGPT plan)**: ChatGPT is shown three frames of the clip, its title, the opening text and what is said, decides itself what the picture should be, and draws it. You write nothing. One to three minutes per clip. The program takes the picture as soon as it has been saved and has not changed for half a minute, even if Codex itself does not close; if no picture has come after eight minutes it gives up with a red message, and you can press again.
+- **Drawn by ChatGPT (uses your ChatGPT plan)**: ChatGPT is shown three frames of the clip, its title, the opening text and what is said, decides itself what the picture should be, and draws it. You write nothing. Usually one to three minutes per clip, sometimes up to six. The program takes the picture as soon as it has been saved and has not changed for half a minute, even if Codex itself does not close; if no picture has come after twelve minutes it gives up with a red message, and you can press again.
 
 With one of the two chosen, the thumbnail is made when you press the green button, as one more step for each clip whose videos are being made. It is saved in the ready folder beside the video, with the same name and `.jpg` at the end. Only a clip whose videos are made for the first time gets one this way. A clip that was finished before (even if it is made again for a new title, a new caption look or a campaign) is left alone; make its thumbnail with the buttons on the clip. That way ChatGPT never draws for a pile of old clips by surprise.
 
@@ -140,6 +140,9 @@ With one of the two chosen, the thumbnail is made when you press the green butto
 - **Make it from the clip (free)** and **Let ChatGPT make it** do the same two things for this one clip.
 - **Or describe the picture yourself**: type what you want in your own words and press **Make it from my description**. ChatGPT draws that; it still sees the clip's frames, so "the streamer" or "the car" mean the ones in the video.
 - Each press makes a new picture and replaces the old one. **Download** saves it; **Remove thumbnail** takes it off the clip.
+- **What ChatGPT thumbnails look like** is a fold-out under the Thumbnail choice in step 3, with two things:
+  - **The streamer's face, big and excited** (ticked at the start): when the streamer is visible in the clip (a face camera, or filmed directly), their face is the main thing in the picture, with a shocked or excited look that fits the moment. If no real face is in the clip, none is invented. It is used when ChatGPT decides the picture itself, not when you describe the picture yourself.
+  - **Things I do not want in thumbnails**: write them in your own words (for example: no guns, no blood, no half-naked people, no red arrows) and press **Save this list**. Every ChatGPT thumbnail made from then on leaves them out, also the ones made from your own description. The list is sent to OpenAI with the request. It cannot change the free thumbnail, which is a real frame of the clip. Thumbnails that were made before are not changed; make them again with the button on the clip.
 - A thumbnail you made by hand is kept: the green button does not replace it.
 - One at a time per clip: a second press while one is being made is refused with a message, so ChatGPT is never asked twice for the same picture.
 - What you typed as a description stays in the box if ChatGPT fails, so you can press again.

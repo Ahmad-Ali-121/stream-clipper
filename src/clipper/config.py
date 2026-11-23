@@ -169,6 +169,8 @@ class RenderSettings:
     # A cover picture per clip, made with its videos: "off", "frame" (free: a frame of the clip with the opening text)
     # or "chatgpt" (drawn by ChatGPT through the Codex tool, on the person's own ChatGPT plan)
     thumbnail: str = "off"
+    thumbnail_face: bool = True  # ChatGPT thumbnails: the streamer's own face, big and excited, when it is in the clip
+    thumbnail_avoid: str = ""  # ChatGPT thumbnails: what the person never wants in the picture, in their own words
     hook_font_size: int = 76
     credit_font_size: int = 40
     disclosure_text: str = "Ad"

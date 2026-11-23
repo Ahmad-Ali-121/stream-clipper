@@ -432,6 +432,13 @@ kbd{background:rgba(255,255,255,.06)!important}
         <label class="f" for="o-thumb">Thumbnail for each clip <small>(a cover picture, made together with its videos)</small></label>
         <select id="o-thumb" data-yours onchange="act('/api/options',{thumbnail:val('o-thumb')})"></select>
         <p class="help" id="thumb-note" style="margin:6px 0 0"></p>
+        <details class="sec" id="thumb-more"><summary>What ChatGPT thumbnails look like <small id="thumb-sum"></small></summary>
+          <label class="switch"><input type="checkbox" id="o-face" onchange="act('/api/options',{thumbnail_face:this.checked})"><span><b>The streamer's face, big and excited</b>When the streamer is visible in the clip, their face is the main thing in the picture, with a shocked or excited look. Used when ChatGPT decides the picture itself.</span></label>
+          <label class="f" for="o-avoid">Things I do not want in thumbnails <small>(optional, in your own words)</small></label>
+          <textarea id="o-avoid" maxlength="500" style="min-height:58px" placeholder="For example: no guns, no blood, no half-naked people, no swear words, no red arrows"></textarea>
+          <div class="btns"><button class="btn" onclick="saveAvoid()">Save this list</button></div>
+          <p class="help" style="margin:6px 0 0">The list is used for every ChatGPT thumbnail, also the ones made from your own description. It is sent to OpenAI with the request. The free thumbnail is a real frame of the clip, so the list cannot change it.</p>
+        </details>
         <label class="f" for="o-camp">Campaign (checks every clip against its rules)</label>
         <select id="o-camp" onchange="saveOpts()"></select>
         <p class="help" id="camp-rules" style="margin:6px 0 0"></p>
@@ -711,10 +718,13 @@ function show(s){
   for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);
   $('o-ab').checked=s.ab_versions; $('o-opening').checked=s.opening;
   if(document.activeElement!==$('o-thumb'))$('o-thumb').value=s.thumbnail||'off';
+  $('o-face').checked=s.thumbnail_face!==false;
+  if(document.activeElement!==$('o-avoid')&&!avoidDirty)$('o-avoid').value=s.thumbnail_avoid||'';
+  $('thumb-sum').textContent=(s.thumbnail_face!==false?'face big and excited':'face not forced')+(s.thumbnail_avoid?' · a not-wanted list is set':' · no not-wanted list');
   const gpt=s.chatgpt||{text:'this running program is older than the page; restart it'};
   $('thumb-note').innerHTML=({off:'No thumbnail is made by itself. You can still make one for any clip, under <b>Thumbnail</b> on its card.',
     frame:'Free, no AI: the sharpest frame of the clip with its opening text in big letters. Saved beside the video with the same name.',
-    chatgpt:'ChatGPT looks at frames of the clip and draws the thumbnail itself; you write nothing. About a minute per clip. Frames, the title and the words of the clip are sent to OpenAI, and it counts towards your ChatGPT plan.'}[s.thumbnail||'off'])
+    chatgpt:'ChatGPT looks at frames of the clip and draws the thumbnail itself; you write nothing. One to three minutes per clip. Frames, the title and the words of the clip are sent to OpenAI, and it counts towards your ChatGPT plan.'}[s.thumbnail||'off'])
     +((s.thumbnail==='chatgpt'||gpt.signed_in)?'<br><b>ChatGPT:</b> <span style="color:'+(gpt.signed_in?'var(--ok)':(gpt.checking?'var(--muted)':'var(--bad)'))+'">'+esc(gpt.text)+'</span>':'');
   drawLooks(s);drawFrame(s);
   if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'roman';$('l-text').value=s.text_language||'English';$('l-yt').value=s.youtube_captions||'auto'}
@@ -1089,6 +1099,12 @@ async function delRejected(n){
   if(!confirm('Delete all '+n+' rejected clip'+(n>1?'s':'')+' for good?'+NL+NL+'Their drafts and downloaded videos are removed and cannot be brought back.'))return;
   const r=await post('/api/clips/delete-rejected'); if(!r)return;
   toast(r.deleted+' clip'+(r.deleted===1?'':'s')+' deleted ('+r.mb+' MB freed)'+(r.busy?'. '+r.busy+' could not be deleted because a job is still using them; try again when it has ended.':''),r.busy>0); loadClips();
+}
+/* The list of things the person never wants in a ChatGPT thumbnail: saved with its own button, never lost to a redraw while typing. */
+let avoidDirty=false;
+document.addEventListener('input',e=>{if(e.target&&e.target.id==='o-avoid')avoidDirty=true});
+async function saveAvoid(){
+  if(await act('/api/options',{thumbnail_avoid:$('o-avoid').value})){avoidDirty=false;toast($('o-avoid').value.trim()?'Saved. ChatGPT thumbnails made from now on leave these out.':'Saved. The list is empty now.')}
 }
 /* A thumbnail for one clip: from the clip (free), by ChatGPT on its own, from your description, or taken off again. */
 async function makeCover(key,how,btn){
