@@ -73,8 +73,6 @@ def _load_locked(cfg: Config, name: str, device: str, compute_type: str, key: tu
     from . import hw
 
     if _model is None or _model_key != key:
-        from faster_whisper import WhisperModel  # imported late: it is slow to import and not needed by other stages
-
         models = cfg.data_dir / "models"
         models.mkdir(parents=True, exist_ok=True)
         from .health import speech_model_there
@@ -91,6 +89,12 @@ def _load_locked(cfg: Config, name: str, device: str, compute_type: str, key: tu
                 f"If nothing above explains it, the model file may be damaged: delete the folders starting with 'models--' in {models} "
                 "and try again (it downloads again)."
             )
+        # Imported late (slow, and no other stage needs it) and only after the trial: on a PC without Windows' C++ runtime
+        # the import itself fails, and the trial above is what says so in plain words.
+        try:
+            from faster_whisper import WhisperModel
+        except (ImportError, OSError) as e:
+            raise ToolError(f"the speech-to-text library could not be started. {hw.runtime_problem() or e}") from e
         _model = WhisperModel(name, device=device, compute_type=compute_type, download_root=str(models))
         _model_key = key
     return _model
