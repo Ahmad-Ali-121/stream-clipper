@@ -132,7 +132,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           309 unit tests (uv run python -m pytest -q)
+tests/           316 unit tests (uv run python -m pytest -q)
 ```
 
 ## Limits you should know about

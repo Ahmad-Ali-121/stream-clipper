@@ -66,16 +66,24 @@ def page_html(title: str, has_panel: bool) -> str:
     return (PAGE_FILE.read_text(encoding="utf-8")
             .replace("__TITLE__", json.dumps(title).replace("</", "<\\/"))
             .replace("__HAS_PANEL__", "true" if has_panel else "false")
-            .replace("__STAMP__", json.dumps(code_stamp())))
+            .replace("__STAMP__", json.dumps(code_stamp()))
+            # the table that puts technical faults into plain words (clipper.plain), so the page explains every error itself
+            .replace("__PLAIN__", json.dumps(__import__("clipper.plain", fromlist=["for_page"]).for_page()).replace("</", "<\\/")))
 
 
 def videos_made(d: Path, state: dict) -> bool:
     """True when an approved clip's videos exist as it stands now: made, not edited since, explainer included if ticked."""
     if state.get("status") != "approved" or not state.get("exported") or not (d / "final.mp4").exists():
         return False
+    if state.get("made_all") is False:  # the making was stopped or failed part-way through this clip: it is not finished
+        return False
     exports = state.get("exports")
     if isinstance(exports, dict):  # a version ticked after the videos were made is still to be made
         if (state.get("simple", True) and "a" not in exports) or (state.get("explainer") and "xa" not in exports):
+            return False
+        # version B was made and its render was taken away since (its opening text was changed): it is to be made again
+        if (state.get("simple", True) and "b" in exports and not (d / "final_b.mp4").exists()) or \
+                (state.get("explainer") and "xb" in exports and not (d / "explained_b.mp4").exists()):
             return False
     return not state.get("explainer") or (d / "explained.mp4").exists()
 

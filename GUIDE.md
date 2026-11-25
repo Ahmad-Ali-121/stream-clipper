@@ -88,6 +88,8 @@ The caption look (four styles) is chosen in *Make the videos*. So is the **campa
 
 **Tracker.** After you post a clip by hand, open the clip, use *Posted it? Log it*, and paste the link. The **Tracker** tab (above the clip list) then keeps your posts, views, payouts and rejections together, adds them up per campaign, and warns you before the same clip goes to the same campaign twice.
 
+**The green button only makes what is under Approved.** A clip under **Done** is finished and the green button leaves it alone, even if you have since moved its file out of the videos folder, changed the caption look or the opening effects, or switched A and B versions on. To make one finished clip once more (its file is gone, or you want it with the new look), press **Make its videos again** on that clip's card. A clip whose making was stopped or failed half-way is not Done: it stays under Approved and the green button completes it.
+
 Once a clip's videos are made it moves to the **Done** list. If you change it afterwards, it goes back to Approved until you press the green button again. That includes its title, description and hashtags: the finished file is named after the title and its text file holds all of them, so the green button copies the video again under the new name (nothing is rendered again, it takes a moment).
 
 **The buttons on a clip** are in two rows. The top row decides about the clip and only shows what fits where the clip is now: a clip to review has **Approve** and **Reject**; an approved clip has **Make this clip's videos now**, **Move to Pending**, **Back to review** and **Reject**; a finished clip has **Move to Pending**, **Back to review** and **Reject**; a rejected clip has **Approve** and **Back to review**. The second row holds the tools: **Save changes**, **Write text with AI** and **Delete**.
@@ -489,6 +491,34 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | Captions miss words | Normal on very noisy moments. The larger model is already the default |
 | Too many clips with nothing in them in mode B, C or D | Raise `audio_level` or `video_level` under `watch:` in `config.yaml` |
 | Anything else | Open an issue on the project's GitHub page, or open Claude Code in this folder and describe it |
+
+## When something goes wrong: how errors are shown
+
+Every error is shown in plain words, in three parts:
+
+1. **What happened**, in one or two ordinary sentences.
+2. **What to do**, as a concrete next step.
+3. **Technical details**, folded shut. Click it to see the original text from the tool that failed. You never need to understand it; it is there to copy and send to whoever set the program up, or to paste into the Ask chat. The terminal window and the Activity log always carry the original text too.
+
+Where errors appear: in a red box on the clip's own card ("This clip has a problem"), in the red box at the top of the page ("A job in the background hit a problem", which is also in the Activity log in red), and in the small message at the bottom of the page after a press. An explained message at the bottom stays until you close it.
+
+The most common ones and what they mean:
+
+- **"This live stream sends its video in a newer format..."**: some Twitch streams are sent in a newer video format. Older copies of the program could not put its pieces together, so every clip of that stream failed (the technical text says "trun track id unknown, no tfhd was found"). Update and restart the program; the clips that failed cannot be rescued, new ones work.
+- **"This moment happened too long ago..."**: for a stream the site is not recording, only the last few minutes of live video are kept, and this moment had already been dropped. Reject the clip.
+- **"A piece of this moment is missing..."**: an advert break or a short internet drop cut a hole in the live video. Reject the clip.
+- **"The internet connection dropped, or the site did not answer"**: check the internet; most steps try again by themselves.
+- **"The video site is refusing for a while..."**: too many requests from this connection. Wait 15 to 30 minutes.
+- **"The video site refused to hand over the video..."**: the site wants a signed-in viewer or suspects a robot. Wait an hour or try another video.
+- **"The video is not available..."**: deleted, private or for subscribers only.
+- **"The disk is full"**: free space on the drive with the data folder.
+- **"A file could not be changed because another program has it open"**: close the video player or folder window showing it and press again.
+- **"The AI service refused: the limit of your plan is reached..."**: wait for the limit to reset or choose another AI under Setup check.
+- **"The AI program on this computer is not signed in any more"**: Setup check shows the one line to type.
+- **"The graphics card could not do this step"** or **"The computer ran out of memory"**: close games and other heavy programs and try again.
+- **"The video file for this step is damaged or was only half downloaded"**: make the draft again from Fine-tune.
+- **"This step took far longer than it should and was stopped"**: check the internet and try again.
+- **"This step did not work, and the program does not have a plain explanation..."**: a fault the program has not met before. Try once more; if it repeats, send the Technical details to whoever set the program up.
 
 ## Where everything is
 

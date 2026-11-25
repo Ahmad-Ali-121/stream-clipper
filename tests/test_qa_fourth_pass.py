@@ -184,6 +184,43 @@ def test_a_codex_that_never_ends_still_gives_its_picture(tmp_path, monkeypatch):
     thumbs._status.update(at=0.0, value=None)
 
 
+def test_the_green_button_leaves_done_clips_alone(tmp_path, quiet):
+    """Reported by a tester: clips under Done were made again by "Make videos". They are not; their own button does it."""
+    from clipper.review import videos_made
+
+    d = _clip(tmp_path)
+    cfg = _cfg(tmp_path)
+    first = pipeline.stage_finish(cfg)[0][0]
+    assert videos_made(d, read_json(d / "clip.json")) and "made_all" not in read_json(d / "clip.json")
+    first.unlink()  # the person moved the finished video out of the ready folder (uploaded it, tidied up)
+    cfg.render.opening = True  # ... and switched the opening effects on since
+    assert pipeline.stage_finish(cfg) == [] and not first.exists()
+    again = pipeline.stage_finish(cfg, only=("twitch_1", "0h01m00s"))  # "Make its videos again" on the clip's card
+    assert [v.name for v, _ in again] == [first.name] and first.exists()
+
+
+def test_a_clip_stopped_half_way_is_not_done(tmp_path, quiet, monkeypatch):
+    from clipper import post
+    from clipper.review import videos_made
+
+    d = _clip(tmp_path, title_b="Other title")
+    cfg = _cfg(tmp_path, ab=True)
+    real = post.export_clip
+
+    def breaks_on_b(d, ready, brief, video_name="final.mp4", suffix="", main=True):
+        if video_name == "final_b.mp4":
+            raise OSError("the disk is full")
+        return real(d, ready, brief, video_name=video_name, suffix=suffix, main=main)
+
+    monkeypatch.setattr(post, "export_clip", breaks_on_b)
+    problems: list[str] = []
+    pipeline.stage_finish(cfg, problems=problems)
+    state = read_json(d / "clip.json")
+    assert problems and state.get("exported") and not videos_made(d, state)  # version A is out, B is not: still to do
+    monkeypatch.setattr(post, "export_clip", real)
+    assert [v.name for v, _ in pipeline.stage_finish(cfg)][-1] == "Other title.mp4" and videos_made(d, read_json(d / "clip.json"))
+
+
 def test_a_step_with_an_older_copy_cannot_put_a_clip_back_into_pending(tmp_path):
     d = _clip(tmp_path, status="candidate", held=True)
     stale = read_json(d / "clip.json")  # an automatic step read the clip while it was in Pending

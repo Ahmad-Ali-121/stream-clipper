@@ -162,6 +162,11 @@ details.sec>summary small{font-weight:400;color:var(--muted)}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(640px,92vw);padding:10px 16px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.35);display:none;z-index:40;white-space:pre-wrap;padding-right:44px}
 .btn.quiet{background:none;border-color:transparent;color:var(--muted);margin-left:auto}.btn.quiet:hover{color:var(--bad);border-color:var(--bad)}
 #toast.err{border-color:var(--bad);background:var(--bad-soft)}
+.errtech{margin-top:6px;font-size:12px;color:var(--muted)}
+.errtech summary{cursor:pointer;user-select:none}
+.errtech div{margin-top:4px;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,monospace}
+.errstep{color:var(--muted);font-size:12px}
+.errline+.errline{margin-top:10px;padding-top:10px;border-top:1px solid var(--bad)}
 .modal{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.62);display:grid;place-items:center;padding:16px;overflow:auto}
 .modal>.card{width:min(1080px,100%);padding:16px}
 .modal h2{font-size:17px;margin-bottom:4px}
@@ -645,6 +650,22 @@ const NL=String.fromCharCode(10);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clock=s=>{s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0')};
 const HAS_PANEL=__HAS_PANEL__, PAGE_STAMP=__STAMP__;
+/* Errors in plain words. The tools report faults in their own technical language; this table (kept in clipper/plain.py)
+   says for each kind what happened and what to do. The original text is never dropped: it sits under "Technical details". */
+const PLAIN=__PLAIN__, PLAIN_RX=PLAIN.rules.map(r=>new RegExp(r[0],'i')), TECH_RX=new RegExp(PLAIN.technical,'i');
+function plainOf(msg,onlyTechnical){
+  msg=String(msg||''); const i=PLAIN_RX.findIndex(rx=>rx.test(msg)), tech=TECH_RX.test(msg);
+  if(!(tech||(i>=0&&!onlyTechnical)))return null;   /* a sentence the program wrote for a person is left as it is */
+  const body=msg.replace(/^\s*(\d\d:\d\d:\d\d\s+)?((ERROR|WARNING)\s+[\w.]+:\s*)?((draft|finish|render) failed:\s*)?/i,''), m=/^(.{3,80}?) failed: /i.exec(body);
+  return {what:i>=0?PLAIN.rules[i][1]:PLAIN.unknown[0], todo:i>=0?PLAIN.rules[i][2]:PLAIN.unknown[1], step:m?m[1].trim():''};
+}
+function plainHtml(msg,lead){
+  const p=plainOf(msg), head=lead?'<b>'+esc(lead)+'</b> ':'';
+  if(!p)return head+esc(msg);
+  return head+esc(p.what)+'<br><b>What to do:</b> '+esc(p.todo)+(p.step?'<br><span class="errstep">It happened during: '+esc(p.step)+'</span>':'')
+    +'<details class="errtech"><summary>Technical details (for whoever set this up)</summary><div>'+esc(msg)+'</div></details>';
+}
+const LOG_LEAD='A background job reported a problem. ';
 const MODES={chat:['A','Chat only','Clips when chat suddenly erupts. Uses almost no internet.'],
   audio:['B','Chat + sound','Also catches loud moments chat missed. About 70 MB an hour per channel.'],
   video:['C','Chat + picture','Also catches fast action on screen. About 100 MB an hour per channel.'],
@@ -654,14 +675,21 @@ let drawn=false, toastTimer=0, last={};
 let errShown=[]; const errClosed=new Set();
 /* The red banner can be closed. Each message is remembered once closed, so it stays closed;
    only a message that was not there before brings the banner back. */
+let errHtml='';
 function setErr(lines){if(typeof lines==='string')lines=lines?[lines]:[];errShown=lines;
   const open=lines.filter(l=>!errClosed.has(l));
-  $('errtext').textContent=open.join(NL);$('errbox').style.display=open.length?'block':'none';
+  const html=open.map(l=>'<div class="errline">'+(l.startsWith(LOG_LEAD)?plainHtml(l.slice(LOG_LEAD.length),'A job in the background hit a problem (it is also in the Activity log, in red):'):plainHtml(l))+'</div>').join('');
+  if(html!==errHtml){errHtml=html;$('errtext').innerHTML=html}   /* only when it changed: an opened "Technical details" must not snap shut every second */
+  $('errbox').style.display=open.length?'block':'none';
   $('b-restart').hidden=!(open.some(l=>l.startsWith('THE PROGRAM NEEDS A RESTART'))&&last.health&&last.health.launcher)}
 function closeErr(){for(const l of errShown)errClosed.add(l);$('errbox').style.display='none'}
 async function restartNow(){const r=await send('/api/restart');if(r.error){toast(r.error,true);return}
   toast('Restarting… this page reconnects by itself.');setTimeout(()=>location.reload(),6000)}
-function toast(msg,err){if(err&&typeof HELP!=='undefined')HELP.said=String(msg);const t=$('toast');$('toasttext').textContent=msg;t.className=err?'err':'';t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',err?9000:2500)}
+function toast(msg,err){if(err&&typeof HELP!=='undefined')HELP.said=String(msg);const t=$('toast'), p=err?plainOf(msg,true):null;
+  if(p)$('toasttext').innerHTML=plainHtml(msg);else $('toasttext').textContent=msg;
+  t.className=err?'err':'';t.style.display='block';clearTimeout(toastTimer);
+  /* an explained error stays until it is closed: there is more to read, and its technical details can be opened */
+  if(!p)toastTimer=setTimeout(()=>t.style.display='none',err?9000:2500)}
 let curTab='live', tabRunning=false;
 function tab(name){curTab=name;for(const n of ['live','vod','own']){$('tab-'+n).hidden=n!==name;$('t-'+n).className=n===name?'on':''}}
 function mode(){return (document.querySelector('[name=o-mode]:checked')||{}).value}
@@ -766,7 +794,7 @@ function show(s){
   if(s.stamp&&s.stamp!==PAGE_STAMP)probs.unshift('THE PROGRAM NEEDS A RESTART. Its files were updated, but the copy that is running is still the old one, so some buttons will not work. '
     +(s.health&&s.health.launcher?'Press Restart now.':'Close its window (or press Ctrl+C in it), then double-click Stream-Clipper.cmd to start it again.'));
   /* One banner line per distinct error, without counts, so closing it once keeps it closed. */
-  setErr(probs.concat(bad.length?['An activity log has an error, shown in red there. Latest: '+bad[bad.length-1]]:[]));
+  setErr(probs.concat(bad.length?[LOG_LEAD+bad[bad.length-1]]:[]));
   if(s.running&&!tabRunning&&curTab==='live')tab('vod');
   tabRunning=s.running;
   $('b-own').disabled=s.running; $('b-ownstop').disabled=!s.running;
@@ -909,7 +937,7 @@ function cardHtml(c){
      :(c.ai_judged&&c.ai_reason?'<div class="ai">'+esc(c.ai_reason)+'</div>':''))
    +(c.campaign?'<div class="issues"><b>'+esc(c.campaign)+':</b> '+((c.campaign_issues||[]).some(i=>i.level==='fail')?'<span style="color:var(--bad)">does not meet the rules yet</span>':'meets the rules that can be checked')
       +((c.campaign_issues||[]).length?'<ul>'+c.campaign_issues.map(i=>'<li class="'+(i.level==='fail'?'fail':'')+'">'+(i.level==='fail'?'Fix: ':'Check by hand: ')+esc(i.message)+'</li>').join('')+'</ul>':'')+'</div>':'')
-   +(c.error?'<div class="cliperr"><b>This clip has an error:</b> '+esc(c.error)+'<button class="x" title="Close this message" aria-label="Close this message" onclick="clearErr(\''+k+'\')">×</button></div>':'')
+   +(c.error?'<div class="cliperr">'+plainHtml(c.error,'This clip has a problem'+(/^\d\d:\d\d:\d\d /.test(c.error)?' (at '+c.error.slice(0,5)+')':'')+':')+'<button class="x" title="Close this message" aria-label="Close this message" onclick="clearErr(\''+k+'\')">×</button></div>':'')
    +(c.notes?'<div class="ai"><b>Note:</b> '+esc(c.notes)+'</div>':'')
    +((c.files||[]).length?'<div class="ai"><b>Finished file'+(c.files.length>1?'s':'')+' in the ready folder:</b> '+c.files.map(esc).join(' · ')+'</div>':'')
    +'<div class="said">'+(c.transcript?'“'+esc(c.transcript)+'”':'<span style="color:var(--muted)">No transcript yet.</span>')+'</div>'
@@ -960,6 +988,7 @@ function cardHtml(c){
    +'<div class="acts">'
    +(c.status!=='approved'?'<button class="btn ok" onclick="save(\''+k+'\',{status:\'approved\'})">Approve</button>':'')
    +(c.status==='approved'&&!c.made?'<button class="btn ok" title="Make the videos of this one clip now, and leave the other approved clips for later" onclick="makeOne(\''+k+'\')">Make this clip\'s videos now</button>':'')
+   +(c.status==='approved'&&c.made?'<button class="btn" title="The green button leaves finished clips alone. Press this if its file is gone from the videos folder, or you changed the caption look and want this clip made with the new one" onclick="makeOne(\''+k+'\',true)">Make its videos again</button>':'')
    +(c.status==='approved'?'<button class="btn" title="Takes it out of Approved without mixing it into To review: it waits in the Pending list" onclick="save(\''+k+'\',{status:\'candidate\',held:true})">Move to Pending</button>':'')
    +(c.status!=='candidate'||c.held?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\',held:false})">Back to review</button>':'')
    +(c.status!=='rejected'?'<button class="btn bad" onclick="save(\''+k+'\',{status:\'rejected\'})">Reject</button>':'')
@@ -1132,8 +1161,9 @@ async function holdApproved(n){
   toast(r.moved+' clip'+(r.moved===1?'':'s')+' moved to Pending'+(stuck.length?'. '+stuck.length+' could not be moved: '+stuck[0]:''),stuck.length>0); loadClips();
 }
 /* The videos of one approved clip, without the others. */
-async function makeOne(key){
+async function makeOne(key,again){
   const el=$(domId(key));
+  if(again&&!confirm('Make this finished clip\'s videos again?'+NL+NL+'Its files in the videos folder are replaced. If you changed the caption look or the opening effects since, it is rendered again with the new ones.'))return;
   if(el&&el.dataset.dirty==='1'){toast('This clip has unsaved changes. Press Save changes first, then make its videos.',true);return}
   if(document.activeElement)document.activeElement.blur();   /* a focused button would keep the card from being redrawn when it is done */
   await act('/api/finish',{only:key});

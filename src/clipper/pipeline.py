@@ -646,9 +646,22 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
     works = [open_work(url, cfg)[1]] if url else all_works(cfg)
     brief = load_brief(brief_path) if brief_path else None
     results: list[tuple[Path, bool]] = []
+    from .review import videos_made
+
     todo = [(work, d) for work in works for d in select_clips(work, status="approved")]
+    for _work, d in todo:
+        st = read_json(d / "clip.json", {})
+        if not isinstance(st.get("exports"), dict) and (known := known_exports(st, cfg.render.ab_versions)):
+            update_clip(d / "clip.json", {"exports": known})  # exported by an older version: note where its files are
     if only:
         todo = [(work, d) for work, d in todo if (work.name, d.name) == tuple(only)]
+    else:
+        # The green button makes what is waiting under Approved. A clip the page shows under Done is finished and is
+        # left alone: it used to be made again whenever its file had been moved out of the ready folder, the caption
+        # look or the opening effects had been changed since, or version B was switched on later (reported by a
+        # tester on 2026-11-25). To make a Done clip once more there is a button on its own card.
+        todo = [(work, d) for work, d in todo if not videos_made(d, read_json(d / "clip.json", {}))]
+    redo = {d for _work, d in todo if only and videos_made(d, read_json(d / "clip.json", {}))}  # asked for again, by its own button
     # What there is to do, counted before anything is made, so the bar on the page moves by real work:
     # one step per video to render, two per explainer (the narrator's card, then joining it to the clip).
     # A clip whose videos are all there already is not counted and not mentioned.
@@ -658,7 +671,7 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
             st = read_json(d / "clip.json")
             if not isinstance(st.get("exports"), dict) and (known := known_exports(st, cfg.render.ab_versions)):
                 update_clip(d / "clip.json", {"exports": known})  # exported by an older version: note where its files are
-            jobs = plan_clip(d, st, cfg, brief)[1]
+            jobs = plan_clip(d, st, cfg, brief, again=d in redo)[1]
             # copying a finished video to the ready folder takes a moment, so only the real work is counted;
             # a clip that only needs copying still counts as one step
             sizes.append(max(1, sum(1 for job in jobs if job[0] != "copy")) if jobs else 0)
@@ -696,7 +709,7 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
             from .watch import note_error
 
             try:
-                _finish_clip(work, d, cfg, brief, results, step, problems)
+                _finish_clip(work, d, cfg, brief, results, step, problems, again=d in redo)
                 note_error(d, None)
                 steps["done"] = max(steps["done"], before + sizes[n])
             except Stopped:  # Stop now: this clip is left unfinished, with the ones after it
@@ -738,7 +751,7 @@ def _look_changed(state: dict, cfg: Config) -> bool:
 VERSION_TEXT = {"a": "the video", "b": "version B", "xa": "the explainer", "xb": "explainer B"}
 
 
-def plan_clip(d: Path, state: dict, cfg: Config, brief) -> tuple[bool, list[tuple[str, str, str, str]]]:
+def plan_clip(d: Path, state: dict, cfg: Config, brief, again: bool = False) -> tuple[bool, list[tuple[str, str, str, str]]]:
     """What "Make videos" has to do for one approved clip, worked out without making anything.
 
     Returns whether the main video must be rendered again, and the steps in order as (work, version, file, name ending):
@@ -767,7 +780,7 @@ def plan_clip(d: Path, state: dict, cfg: Config, brief) -> tuple[bool, list[tupl
     if not wanted:
         raise ToolError("neither the normal video nor the explainer is ticked for this clip; tick one under 'Versions to make' on the review page")
     known = known_exports(state, ab)
-    again = bool(brief) or not state.get("exported") or not known
+    again = again or bool(brief) or not state.get("exported") or not known  # ``again``: the person asked for this clip once more
     jobs: list[tuple[str, str, str, str]] = []
     b_planned = False
     for key, name, suffix in wanted:
@@ -792,7 +805,8 @@ def plan_clip(d: Path, state: dict, cfg: Config, brief) -> tuple[bool, list[tupl
     return fresh, jobs
 
 
-def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Path, bool]], step=None, problems: list[str] | None = None) -> None:
+def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Path, bool]], step=None, problems: list[str] | None = None,
+                 again: bool = False) -> None:
     from .compose import explained
     from .post import export_clip
     from .render import render_clip
@@ -810,12 +824,16 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
         state = prepare_clip(d, state, cfg)
     state = write_clip_copy(d, state, cfg)  # no-op unless its text was written without AI and AI is reachable now
     ab = cfg.render.ab_versions
-    fresh, jobs = plan_clip(d, state, cfg, brief)
+    fresh, jobs = plan_clip(d, state, cfg, brief, again=again)
     known = known_exports(state, ab)
     if not isinstance(state.get("exports"), dict) and known:
         update_clip(d / "clip.json", {"exports": known})  # a clip exported by an older version: note where its files are
     ready = cfg.data_dir / "ready"
     first = "a" if state.get("simple", True) else "xa"  # the version the clip's own record and post sheet describe
+    if jobs:
+        # Until every step below has ended the clip is not finished, whatever has been exported of it so far:
+        # stopped or failed part-way, it stays under Approved and the green button completes it.
+        update_clip(d / "clip.json", {"made_all": False})
     narrated: set[str] = set()
     if jobs and all(job[0] == "copy" for job in jobs):
         step("putting it in the ready folder")
@@ -855,7 +873,7 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
                 update_clip(d / "clip.json", {"cover_error": f"{e}", "cover_error_mode": cfg.render.thumbnail})
                 if problems is not None:
                     problems.append(f"the thumbnail of {clip_label(state, d.name)}: {e}")
-    now = read_json(d / "clip.json", {})
+    now = update_clip(d / "clip.json", {}, drop=("made_all",)) if jobs else read_json(d / "clip.json", {})
     if now.get("exported") and done(d / "cover.jpg"):
         from .thumbs import export_cover
 

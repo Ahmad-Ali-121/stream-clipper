@@ -43,16 +43,23 @@ class Piece:
     at: float  # epoch seconds when this piece was broadcast
     duration: float
     advert: bool
+    init: str = ""  # address of the feed's header piece, when the feed is the newer kind (see parse_playlist)
 
 
 def parse_playlist(text: str, base_url: str = "") -> list[Piece]:
     """The pieces listed in a Twitch live playlist, with broadcast time and whether each is an advert."""
     out: list[Piece] = []
     at: float | None = None
-    duration, title = 0.0, ""
+    duration, title, init = 0.0, "", ""
     for raw in text.splitlines():
         line = raw.strip()
-        if line.startswith("#EXT-X-PROGRAM-DATE-TIME:"):
+        if line.startswith("#EXT-X-MAP:"):
+            # The newer kind of feed (fragmented MP4; Twitch uses it for streams sent in HEVC or AV1): its pieces
+            # cannot be played without this one header piece, which the playlist names once. Seen for real on
+            # 2026-11-25: without it every clip of such a stream failed with "trun track id unknown, no tfhd was found".
+            m = re.search(r'URI="([^"]+)"', line)
+            init = urljoin(base_url, m.group(1)) if m else ""
+        elif line.startswith("#EXT-X-PROGRAM-DATE-TIME:"):
             try:
                 at = datetime.fromisoformat(line.split(":", 1)[1].replace("Z", "+00:00")).timestamp()
             except ValueError:
@@ -66,7 +73,7 @@ def parse_playlist(text: str, base_url: str = "") -> list[Piece]:
         elif line and not line.startswith("#"):
             if at is not None and duration > 0:
                 # Twitch titles real pieces "live" and advert pieces after the advertiser ("Amazon|...").
-                out.append(Piece(urljoin(base_url, line), at, duration, bool(title.strip()) and title.strip() != "live"))
+                out.append(Piece(urljoin(base_url, line), at, duration, bool(title.strip()) and title.strip() != "live", init))
                 at += duration  # in case the next piece carries no time of its own
             duration, title = 0.0, ""
     return out
@@ -150,6 +157,7 @@ class LiveBuffer(threading.Thread):
         self.adverts = 0
         self.bytes = 0
         self._seen: dict[str, float] = {}
+        self._inits: dict[str, str] = {}  # header piece address -> its file (kept as long as the buffer runs; a few KB each)
         self._lock = threading.Lock()
         shutil.rmtree(folder, ignore_errors=True)  # pieces from an earlier run are stale
         folder.mkdir(parents=True, exist_ok=True)
@@ -165,13 +173,25 @@ class LiveBuffer(threading.Thread):
                     log.warning("%s: a piece of the live feed could not be fetched (%s)", self.channel, e)
                     return
                 time.sleep(1.0)
+        head = ""
+        if piece.init:
+            head = self._inits.get(piece.init, "")
+            if not head:
+                try:
+                    blob = _get(piece.init, agent=self.agent)
+                except Exception as e:
+                    log.warning("%s: the header piece of the live feed could not be fetched (%s); this piece is left out", self.channel, e)
+                    return
+                file = self.folder / f"init{len(self._inits)}.mp4"
+                file.write_bytes(blob)
+                head = self._inits[piece.init] = str(file)
         t = piece.at - self.stream_start
         path = self.folder / f"{int(piece.at * 1000)}.ts"
         part = path.with_suffix(".part")
         part.write_bytes(data)
         os.replace(part, path)
         with self._lock:
-            self.pieces.append({"t": round(t, 3), "d": piece.duration, "file": str(path)})
+            self.pieces.append({"t": round(t, 3), "d": piece.duration, "file": str(path), "init": head})
             self.bytes += len(data)
 
     def _trim(self) -> None:
@@ -237,8 +257,12 @@ class LiveBuffer(threading.Thread):
         part = out.with_name(out.stem + ".part.mp4")
         try:
             with joined.open("wb") as fh:
+                head = None
                 for p in picked:
                     try:
+                        if p.get("init") and p["init"] != head:  # the newer kind of feed: its header piece goes first
+                            head = p["init"]
+                            fh.write(Path(head).read_bytes())
                         fh.write(Path(p["file"]).read_bytes())
                     except FileNotFoundError:
                         raise ToolError("this moment is no longer in the live buffer (it only keeps the last few minutes)") from None
