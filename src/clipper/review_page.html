@@ -1727,7 +1727,7 @@ twInit();
 let HELP={turns:[],map:new Map(),busy:false,tour:null,at:0,el:null,chat:0,said:''};
 const HELP_STARTERS=['What does this program do?','How do I make my first clip?','How do I clip a live stream?','What do the scores and chips on a clip mean?','How do I change how the captions look?','Why is it not working?','What can you do for me?'];
 function helpToggle(){const b=$('helpbox');b.hidden=!b.hidden;if(!b.hidden){if(!$('helpmsgs').children.length)helpClear();$('helpq').focus()}}
-function helpClear(){HELP.turns=[];HELP.chat++;HELP.busy=false;$('helpsend').disabled=false;$('helpmsgs').innerHTML='<div class="ha">Ask me anything about this program, in English or Roman Urdu. I answer in simple words and can show you where things are. You can also tell me to do something, like "start watching lacy" or "make the captions yellow", and I do it on the page while you watch. Approving, rejecting and deleting clips stay yours.</div>'
+function helpClear(){HELP.turns=[];HELP.chat++;HELP.busy=false;$('helpsend').disabled=false;$('helpmsgs').innerHTML='<div class="ha">Ask me anything about this program, in English or Roman Urdu. I answer in simple words and can show you where things are. You can also tell me to do something, like "start watching lacy" or "make the captions yellow": I list the steps, and one press on Do it for me does them on the page while you watch. Approving, rejecting and deleting clips stay yours.</div>'
   +'<div class="hsug">'+HELP_STARTERS.map(q=>'<button type="button" data-q="'+esc(q)+'">'+esc(q)+'</button>').join('')+'</div>'}
 /* Where a thing sits, in words: the view, the step-1 tab, the box and any fold-out it is inside. */
 function helpWhere(el){

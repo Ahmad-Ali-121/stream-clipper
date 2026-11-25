@@ -50,7 +50,7 @@ The clipper works with none of these. Create a file named `.env` in the `Clippin
 **Claude without an API key.** If you pay for a Claude plan (Pro or Max), the clipper can use it instead of an API key:
 
 1. Install Claude Code from https://claude.com/claude-code, open a terminal, run `claude` once and sign in with your own account.
-2. Open the review page. The **Claude** box finds it by itself: it tries each connection for real and shows a green dot and "Works", or a red dot with the reason. With "Automatic" it uses your plan first and, if you allow it, your API key when the plan fails (it tells you when that happens). You can also fix the choice to one of the two.
+2. Open the page and go to **Settings**. Under **AI for titles and ratings** it finds it by itself: it tries each connection for real and shows a green dot and "Works", or a red dot with the reason. With "Automatic" it uses your plan first and, if you allow it, your API key when the plan fails (it tells you when that happens). You can also fix the choice to one of the two.
 
 Nothing is billed per use, but each request counts towards your plan's usage limits, the same limits as your normal Claude chats. Reading a whole stream with a large model uses a lot of them. Every person does this on their own PC with their own account; the clipper only runs the `claude` command and never sees your sign-in. The same box chooses the model for clip text and for reading streams.
 
@@ -80,6 +80,23 @@ Open http://127.0.0.1:8765/ in your browser. The page has a menu on the left and
 
 At the bottom of the menu are the status lines (setup, watching, how many clips) and the **Activity log**.
 
+**Where is it? A quick map.**
+
+| You want to | Go to |
+|---|---|
+| Make clips from a finished stream or a video | **New clips**, tab **Find the best moments** |
+| Cut a part you choose yourself | **New clips**, tab **Pick the part myself** (then the **Cutting board** tab) |
+| Find a moment by what was said | **New clips**, tab **Search what was said** |
+| Watch channels while they are live | **Live channels** |
+| Watch, approve, reject or edit clips | **My clips** |
+| Make the finished videos | **My clips**, button **Make videos** (top right) |
+| Change a clip's text, captions, start and end, framing, thumbnail or versions | **My clips**, press **Edit** on the clip, then the tab with that name |
+| Caption style, template, logo, music, thumbnails for every clip, A and B versions | **Look and branding** |
+| Log a post, see views and earnings, choose a campaign | **Posted and earnings** (log a post from the clip's **Posted** tab) |
+| Setup check, repair, update, the AI connection, the language | **Settings** |
+| See what the program is doing, or read an error in full | **Activity log**, at the bottom of the menu |
+| Stop something | The **Stop** button beside the button that started it; it is only there while that job runs |
+
 **Setup check** (on the Settings page) shows whether this computer is ready: a green dot per item, or what is wrong and what to do. **Repair** downloads anything missing. **Update** appears when a newer version exists and installs it.
 
 **Reviewing on My clips.** Each tile has **Approve**, a red cross to **Reject**, and **Edit**. Click the video to play it. The tabs above the tiles switch between the lists: To review, Approved, Pending, Done, Rejected and All. **Sort and filter** opens the order, streamer, found-by and date filters. New drafts appear by themselves. When you have approved what you want, press **Make videos** at the top right: it makes the videos for every approved clip. **Stop** appears next to it while videos are being made (see below), and **Open the videos folder** shows the finished files.
@@ -108,7 +125,7 @@ Once a clip's videos are made it moves to the **Done** list. If you change it af
 
 #### Which versions a clip gets
 
-Open **Versions to make** on a clip. It has two tick boxes:
+Open a clip with **Edit** and go to its **Versions** tab. It has two tick boxes:
 
 - **Make the normal video**: the clip as it is, without a narrator. Ticked on every clip to begin with.
 - **Make an explainer version**: a narrator sets up the moment, then the clip plays.
@@ -145,7 +162,7 @@ A thumbnail is a cover picture for a clip: one 1080 x 1920 picture, for YouTube 
 
 With one of the two chosen, the thumbnail is made when you press **Make videos**, as one more step for each clip whose videos are being made. It is saved in the ready folder beside the video, with the same name and `.jpg` at the end. Only a clip whose videos are made for the first time gets one this way. A clip that was finished before (even if it is made again for a new title, a new caption look or a campaign) is left alone; make its thumbnail with the buttons on the clip. That way ChatGPT never draws for a pile of old clips by surprise.
 
-**For one clip, by hand.** Open **Thumbnail** on a clip's card:
+**For one clip, by hand.** Open the clip with **Edit** and go to its **Thumbnail** tab:
 
 - **Make it from the clip (free)** and **Let ChatGPT make it** do the same two things for this one clip.
 - **Or describe the picture yourself**: type what you want in your own words and press **Make it from my description**. ChatGPT draws that; it still sees the clip's frames, so "the streamer" or "the car" mean the ones in the video.
@@ -159,7 +176,7 @@ With one of the two chosen, the thumbnail is made when you press **Make videos**
 
 **Setting up ChatGPT (once).** It works through Codex, OpenAI's command-line tool, signed in with your own ChatGPT account, the same way Claude works through Claude Code. In a terminal run `npm install -g @openai/codex`, then `codex login`, and sign in. The line under the choice on the Look and branding page says **ChatGPT: Ready** when it is linked, or what is missing. Pictures need a paid ChatGPT plan; they use the plan's allowance several times faster than text. Frames of the clip, its title and its words are sent to OpenAI when ChatGPT is used. Each use is written to `usage.jsonl` in the data folder. The program never reads Codex's sign-in files.
 
-**If a thumbnail cannot be made** (not signed in, the plan's limit is reached, no internet), the clip's videos are still made. The reason is shown in red in the Activity log and on the clip under Thumbnail, and it is not tried again by itself: press the button on the clip when the problem is solved.
+**If a thumbnail cannot be made** (not signed in, the plan's limit is reached, no internet), the clip's videos are still made. The reason is shown in red in the Activity log and in the clip's editor under Thumbnail (the tab gets a red dot), and it is not tried again by itself: press the button there when the problem is solved.
 
 **Where to use it.** Instagram Reels: choose it as the cover when you post. YouTube Shorts: in YouTube Studio on a computer, under the Short's thumbnail (not every channel has this yet). TikTok: you can only pick a frame of the video as the cover.
 
@@ -200,7 +217,7 @@ Your cuts are remembered if you leave the page. The downloaded part stays until 
 
 Keys on the cutting board: Space plays or pauses, the arrow keys move one second (five with Shift), comma and full stop move a tenth of a second.
 
-The drafts appear at the top of the list, in order. Review, approve and make the videos as usual; the titles get "(Part 1)", "(Part 2)" added.
+The drafts appear at the top of My clips, in order. Review, approve and make the videos as usual; the titles get "(Part 1)", "(Part 2)" added.
 
 A part can be between 8 seconds and 5 minutes long. A video file can also be searched automatically: under **Find the best moments** paste its path and choose sound, picture or AI reading (a file has no chat).
 
@@ -226,11 +243,11 @@ It needs Claude (your Claude Code plan or an API key). Without Claude it still a
 
 ### Order, filters and the New tag
 
-Above the clip list:
+On My clips, press **Sort and filter** above the tiles (the search box beside it is always there):
 
 - **Order:** newest first (the default, so a clip just made is at the top), best score first, or oldest first.
 - **Streamer**, **Found by** (chat, loud moment, fast action, excited words, AI, chosen by you) and **Made** (last hour, 24 hours, 7 days) narrow the list. **Search** looks in the words, the opening text and the titles. **Clear filters** shows everything again.
-- Each card says when it was made ("made 12 min ago", "made today 20:57"). A clip made in the last hour that you have not reviewed carries a **NEW** tag.
+- Each tile says when it was made ("made 12 min ago", "made today 20:57"). A clip made in the last hour that you have not reviewed carries a **NEW** tag.
 
 A clip you approved, rejected or deleted stays that way, through every update and restart. Each decision is also written to a separate record (`decisions.json` in the data folder); every time the program starts it checks the clips against that record and puts back any decision a clip has lost. Only your own **Back to review** button brings a clip back.
 
@@ -259,7 +276,7 @@ Clips already drafted get a new template when you press Make videos, or at once 
 
 ### Safe zones, moment mix, music that rises
 
-- **Show where an app covers the video** (above the clip list): pick TikTok, Reels or Shorts and red bands show where that app's own buttons and text sit. Only on the previews, never in the video.
+- **Show where an app covers the video** (under **Sort and filter** on My clips): pick TikTok, Reels or Shorts and red bands show where that app's own buttons and text sit. Only on the previews, never in the video.
 - **What kind of moments** (under Find the best moments): Balanced, Action (loud, fast, shouted) or Dialogue (stories, jokes, what is said). It leans the scores and what AI is asked to look for.
 - **Music grows louder over the last … seconds** (Branding): the music stays level, then rises to the end.
 - Two more caption movements: each line pops in, and plain lines with no highlight.
@@ -277,7 +294,7 @@ The fourth button at the top, **Transcript**.
 
 ### Subtitle files
 
-On a clip's card, open **Captions**. **Download .srt** and **Download .vtt** give the clip's captions as a subtitle file, timed from the start of the clip. **Use a subtitle file** replaces the captions with your own file (its times must also count from the start of the clip).
+Open a clip with **Edit** and go to its **Captions** tab. **Download .srt** and **Download .vtt** give the clip's captions as a subtitle file, timed from the start of the clip. **Use a subtitle file** replaces the captions with your own file (its times must also count from the start of the clip).
 
 ### Live: who is live, and how hot the chat is
 
@@ -326,7 +343,7 @@ For a YouTube video the program now asks YouTube for the words it has already wr
 - A clip's captions are ready in seconds. Before, a two-minute clip could take ten minutes on a laptop without a graphics card.
 - **Let AI read the whole stream** no longer needs up to an hour of listening first.
 - A YouTube video with **no chat** (an upload, not a stream) can now be searched: moments are found from what is said.
-- The card shows **Captions from YouTube**. If a word is wrong, fix it under **Captions** as usual.
+- The clip's editor shows **Captions from YouTube**. If a word is wrong, fix it under **Captions** as usual.
 - If the captions of some video are poor, open **Settings**, **Language**, and set *Words of YouTube videos come from* to *Listening on this PC*.
 
 Twitch, live streams and video files are still listened to on this PC, because nobody has written their words down.
@@ -337,7 +354,7 @@ Twitch, live streams and video files are still listened to on this PC, because n
 
 ### Clip the last 30 seconds (live)
 
-While watching live, the Live channels page has **Clip the last** with a length next to it. Saw something chat did not react to? Press it right after the moment. A draft of that stretch appears at the top of the list in two or three minutes; trim it in its editor under Trim and framing. It needs a stream being watched.
+While watching live, the Live channels page has **Clip the last** with a length next to it. Saw something chat did not react to? Press it right after the moment. A draft of that stretch appears at the top of My clips in two or three minutes; trim it in its editor under Trim and framing. It needs a stream being watched.
 
 ### Free local AI (optional)
 
@@ -369,7 +386,7 @@ Works on every clip: live Twitch, Kick and YouTube drafts, finished streams and 
 2. You see the stream as it was, with two boxes: orange **Face** and blue **Video**. Drag a box to move it; drag its round corner to make it bigger or smaller. The boxes keep the shape they are shown in, so what is inside a box is exactly what the viewer sees. The small picture on the right is the result. Use the slider or **Play** to check other moments of the clip.
 3. Under **What the clip shows** choose *Face on top, video below* (two boxes) or *Video only* (one tall box).
 4. Tick **Use the same boxes for the other clips of this video** to apply them to the other unfinished clips of the same video (handy for parts), and **Remember these boxes for new clips of this streamer** so the next drafts of that streamer start with them.
-5. Press **Save and make the draft again**. It takes up to a minute; then the card shows the new draft.
+5. Press **Save and make the draft again**. It takes up to a minute; then the clip shows the new draft.
 
 **Back to automatic** forgets your boxes (and the ones remembered for the streamer) and lets the program choose again.
 
@@ -492,9 +509,9 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | "less than 2 GB free" | Run `uv run clipper clean`, or delete old folders in `D:\clipper-data\work` |
 | "live ... but Twitch is not recording this broadcast" | Not an error. The streamer has recordings (VODs) switched off, so the watcher keeps the last 10 minutes of the live stream on disk and cuts clips from that. It uses about 3 GB of internet an hour for that channel, the first minute is lost to Twitch's opening advert, and moments during advert breaks are lost. To skip such streams instead, set `buffer_when_no_vod: false` under `watch:` in `config.yaml` |
 | "no chat replay" | That video cannot be scored from chat. Use a live watch instead |
-| A clip is framed wrong | On the review page, change Layout and save; then run `finish` again |
+| A clip is framed wrong | Open the clip with Edit, go to Trim and framing, change Framing (or set the boxes) and save; then press Make videos again |
 | "an NVIDIA card was found but speech-to-text cannot run on it" | Not an error: speech-to-text runs on the processor instead (slower, same result). To use the card, run the setup command again with `-Gpu` added at the end. It downloads NVIDIA's libraries (about 1 GB) and then says whether the card works. If it still cannot, update the NVIDIA driver and run `uv run clipper hardware --refresh` |
-| A red box at the top of the page | The watcher stopped by itself, or the program is not answering. The red and yellow lines in the log under it, and the terminal window, say why. A clip that could not be made shows its own reason in red on its card |
+| A red box at the top of the page | The watcher stopped by itself, or the program is not answering. The red and yellow lines in the log under it, and the terminal window, say why. A clip that could not be made says so on its tile and shows its own reason in red in its editor |
 | The program closes or says "access violation" when captions are made | The computer's Microsoft Visual C++ runtime is too old. Install the x64 version from https://aka.ms/vs/17/release/vc_redist.x64.exe, restart, and try again. `uv run clipper doctor` shows the installed version |
 | Captions miss words | Normal on very noisy moments. The larger model is already the default |
 | Too many clips with nothing in them in mode B, C or D | Raise `audio_level` or `video_level` under `watch:` in `config.yaml` |
@@ -510,7 +527,7 @@ Every error is shown in plain words, in three parts:
 
 Where errors appear: on the clip itself (its tile says it has a problem; open it with Edit to read the red box "This clip has a problem"), in the red box at the top of the page ("A job in the background hit a problem", which is also in the Activity log in red), and in the small message at the bottom of the page after a press. An explained message at the bottom stays until you close it. When two jobs have each hit a problem (say the watcher and Make videos), the red box at the top shows both, one under the other.
 
-A clip whose own record on disk is damaged (the computer was switched off at the wrong moment) is shown as a card that says so; **Delete** on that card removes it. The other clips of that video are not affected.
+A clip whose own record on disk is damaged (the computer was switched off at the wrong moment) is shown as a tile that says so; **Delete** on that tile removes it. The other clips of that video are not affected.
 
 Two things the program now handles by itself and only mentions in the Activity log: a video with **no sound** gets a silent sound track so that it can still be made into a clip (it has no captions), and when the **graphics card cannot make a video** (a game is using it, or its driver changed) that video is made with the processor instead, which is slower.
 
