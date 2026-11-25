@@ -667,7 +667,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
           <div id="h-items"></div>
           <div class="btns">
             <button class="btn" id="b-hcheck" onclick="hAct('/api/health/check')">Run the full check</button>
-            <button class="btn" id="b-hrepair" data-yours onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. Continue?')">Repair</button>
+            <button class="btn" id="b-hrepair" data-yours onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. If the Microsoft Visual C++ runtime is missing, Windows will ask you to allow the installer from Microsoft for it: press Yes. Continue?')">Repair</button>
             <button class="btn primary" id="b-hupdate" hidden onclick="hAct('/api/health/update','Update takes the newest version from GitHub. Your clips, settings and keys are not touched. Continue?')">Update</button>
           </div>
           <div class="bar indet" id="h-bar" hidden><i></i></div><div class="pct" id="h-pct" hidden></div>

@@ -73,20 +73,22 @@ function Get-Tool($name, $urls, $folder) {
 }
 
 Write-Host '== External tools =='
-# Speech-to-text crashes ("access violation") on a Windows C++ runtime older than 14.40. Say so now rather than later.
-$vc = Join-Path $env:SystemRoot 'System32\msvcp140.dll'
-$vcOld = $true
-if (Test-Path $vc) { $v = (Get-Item $vc).VersionInfo; $vcOld = ($v.FileMajorPart -lt 14) -or ($v.FileMajorPart -eq 14 -and $v.FileMinorPart -lt 40) }
+# Captions (speech-to-text) need the Microsoft Visual C++ runtime, 14.40 or newer; a new PC often has none.
+# install-vc-runtime.ps1 checks it and, when it is missing, fetches Microsoft's installer and runs it (Windows asks to allow it, once).
+try {
+    & (Join-Path $PSScriptRoot 'install-vc-runtime.ps1') -Downloads $dl
+    $vcOld = ($LASTEXITCODE -ne 0)
+} catch {
+    Write-Host "  MISSING  Microsoft Visual C++ runtime: checking or installing it failed ($($_.Exception.Message))" -ForegroundColor Yellow
+    $vcOld = $true
+}
 function Write-RuntimeNote {
     Write-Host ""
-    Write-Host "IMPORTANT: this computer's Microsoft Visual C++ runtime is missing or too old." -ForegroundColor Red
-    Write-Host "Captions (speech-to-text) cannot work until it is installed. It is Microsoft's own free file (about 25 MB):" -ForegroundColor Red
+    Write-Host "IMPORTANT: this computer's Microsoft Visual C++ runtime is missing or too old, and it could not be installed just now." -ForegroundColor Red
+    Write-Host "Captions (speech-to-text) cannot work until it is there. Run this setup again and press Yes when Windows asks," -ForegroundColor Red
+    Write-Host "or install Microsoft's own free file (about 25 MB) yourself, then restart the computer:" -ForegroundColor Red
     Write-Host "  https://aka.ms/vs/17/release/vc_redist.x64.exe" -ForegroundColor Red
-    Write-Host "Download it, run it, restart the computer, then run this setup again." -ForegroundColor Red
-    Write-Host "(Or run:  winget install Microsoft.VCRedist.2015+.x64 )" -ForegroundColor Red
 }
-if ($vcOld) { Write-Host '  MISSING  Microsoft Visual C++ runtime: captions need it (how to get it is at the end)' -ForegroundColor Yellow }
-else { Write-Host '  OK       Microsoft Visual C++ runtime' }
 
 Get-Tool 'ffmpeg' $FfmpegUrl 'ffmpeg'
 Get-Tool 'TwitchDownloaderCLI' $TdUrl 'twitchdownloader'
@@ -128,7 +130,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ''
 Write-Host '== Tests =='
-uv run pytest -q
+# "python -m pytest", not "pytest": the pytest launcher in .venv stops working when the program's folder is moved or renamed
+uv run python -m pytest -q
 if ($LASTEXITCODE -ne 0) {
     $code = $LASTEXITCODE
     Write-Host 'Tests failed. Fix before using the pipeline.' -ForegroundColor Red

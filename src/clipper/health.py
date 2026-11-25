@@ -98,7 +98,8 @@ def quick_checks(cfg: Config) -> list[dict]:
     v = hw.vc_runtime_version()
     out.append(_item("runtime", "Windows C++ runtime (captions need it)", "bad" if problem else "ok",
                      problem or (".".join(map(str, v)) if v else ""),
-                     "Install it from https://aka.ms/vs/17/release/vc_redist.x64.exe (or run: winget install Microsoft.VCRedist.2015+.x64), then restart the computer."))
+                     "Press Repair below: it fetches Microsoft's own installer, and Windows asks you to allow it, once (press Yes). "
+                     "Or install it yourself from https://aka.ms/vs/17/release/vc_redist.x64.exe and restart the computer."))
     try:
         gb = free_gb(cfg.data_dir)
         state = "bad" if gb < 2 else ("warn" if gb < 8 else "ok")

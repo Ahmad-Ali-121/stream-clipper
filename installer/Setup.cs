@@ -1,6 +1,7 @@
 // Stream-Clipper-Setup.exe: installs Stream Clipper on a Windows PC that has nothing on it yet.
 //
-// It needs no Python, no Git and no administrator rights. Everything goes into two folders the person chooses:
+// It needs no Python and no Git, and asks for no administrator rights (one exception: on a PC without Microsoft's Visual C++
+// runtime, setup.ps1 runs Microsoft's installer for it and Windows asks to allow that). Everything else goes into two folders the person chooses:
 //   <program folder>\tools\uv     the small tool that installs Python and the program's parts (from its maker, Astral)
 //   <program folder>\tools\git    portable Git, so that the program's own Update button works (only if this PC has no Git)
 //   <program folder>\app          the program itself, taken from its public page on GitHub
@@ -106,14 +107,15 @@ namespace StreamClipperSetup
             choose.Controls.Add(Caption("Where your clips, downloads and models go (pick the drive with the most free space; 5 GB or more)", 26, 76));
             dataBox = Box(dataDir, 26, 100); choose.Controls.Add(dataBox);
             browse2 = Btn("Choose...", 520, 99, 94); browse2.Click += delegate { Pick(dataBox); }; choose.Controls.Add(browse2);
-            Label what = new Label { Location = new Point(26, 150), Size = new Size(590, 170), ForeColor = Color.FromArgb(144, 150, 160),
+            Label what = new Label { Location = new Point(26, 150), Size = new Size(590, 190), ForeColor = Color.FromArgb(144, 150, 160),
                 Text = "What happens when you press Install:\r\n\r\n" +
                        "  1.  A small tool called uv is fetched; it installs Python for this program only.\r\n" +
                        "  2.  The program is fetched from its page on GitHub.\r\n" +
                        "  3.  Python and the program's parts are installed (the longest step).\r\n" +
                        "  4.  The video tools and models are downloaded (about 300 MB).\r\n" +
                        "  5.  A shortcut is put on your desktop.\r\n\r\n" +
-                       "Nothing is installed outside these two folders, and no administrator rights are needed. It needs the internet and takes 5 to 20 minutes." };
+                       "Nothing else is installed outside these two folders. If Windows lacks Microsoft's Visual C++ runtime (captions need it), " +
+                       "Windows asks once to let Microsoft's own installer add it. It needs the internet and takes 5 to 20 minutes." };
             choose.Controls.Add(what);
             Controls.Add(choose);
 

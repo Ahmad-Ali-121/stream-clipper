@@ -157,7 +157,8 @@ def runtime_problem(version: tuple[int, ...] | None = None, check: bool = True) 
     if check:
         version = vc_runtime_version()
     fix = (f"Install the current 'Microsoft Visual C++ Redistributable (x64)' from {VC_DOWNLOAD} "
-           "(or run: winget install Microsoft.VCRedist.2015+.x64), restart the computer, then try again.")
+           "(or run: winget install Microsoft.VCRedist.2015+.x64), restart the computer, then try again. "
+           "Or let the program do it: Repair (Settings, Setup check) or Install the video tools (Set up page) fetches Microsoft's installer, and Windows asks you to allow it.")
     if version is None:
         return "Windows' C++ runtime (msvcp140.dll) is missing, and the speech-to-text library needs it. " + fix
     if version[:2] < VC_NEEDED:

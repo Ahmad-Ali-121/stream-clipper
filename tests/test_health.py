@@ -69,7 +69,33 @@ def test_setup_names_the_missing_windows_runtime_even_when_it_stops_early():
     text = (PROJECT_ROOT / "setup.ps1").read_text(encoding="utf-8")
     stop = text.index("Tests failed. Fix before using the pipeline.")
     assert "Write-RuntimeNote" in text[stop:text.index("exit $code", stop)]
-    assert text.index("MISSING  Microsoft Visual C++ runtime") < text.index("== Tests ==")
+    assert text.index("install-vc-runtime.ps1') -Downloads $dl") < text.index("== Tests ==")
+
+
+def test_the_windows_runtime_is_only_run_when_microsoft_signed_it():
+    """setup installs Microsoft's Visual C++ runtime by itself (Ahmad, 2026-11-26). A downloaded program is run with
+    administrator rights there, so the order matters: signature first, and Microsoft's address is the only one fetched."""
+    from clipper import hw
+    from clipper.config import PROJECT_ROOT
+
+    text = (PROJECT_ROOT / "install-vc-runtime.ps1").read_text(encoding="utf-8")
+    check, run = text.index("Get-AuthenticodeSignature"), text.index("Start-Process")
+    assert check < text.index("O=Microsoft Corporation") < text.index("if ($DryRun) {") < run
+    assert text.count("Start-Process") == 1 and "-Verb RunAs" in text[run:run + 200]
+    refused = text[check:text.index("if ($DryRun) {")]
+    assert "Remove-Item $exe" in refused and "exit 1" in refused   # a file somebody else signed is deleted, not run
+    assert text.count(hw.VC_DOWNLOAD) == 2 and "http://" not in text
+    assert "Get-RuntimeProblem" in text[run:]                      # afterwards it looks again instead of trusting the exit code
+
+
+def test_the_set_up_page_offers_to_install_the_windows_runtime():
+    from clipper import setupguide
+
+    items = [{"id": k, "name": k, "state": "ok"} for k in ("ffmpeg", "TwitchDownloaderCLI", "face", "voice")]
+    items.append({"id": "runtime", "name": "Windows C++ runtime (captions need it)", "state": "bad", "fix": "x"})
+    tools = setupguide.status(__import__("clipper.config", fromlist=["load_config"]).load_config(), items, {})["steps"][0]
+    assert tools["state"] == "todo" and tools["actions"][0]["what"] == "tools"   # the button runs setup, which installs it
+    assert "Windows then asks" in tools["detail"] and "Press Yes" in tools["detail"]
 
 
 def test_restart_warning_follows_the_code_not_file_dates(tmp_path, monkeypatch):

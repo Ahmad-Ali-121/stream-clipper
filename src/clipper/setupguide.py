@@ -191,7 +191,9 @@ def status(cfg: Config, health_items: list[dict], local_ai: dict, fresh: bool = 
                   "what": "FFmpeg and TwitchDownloader cut and download the video; two small models find the face and speak the explainer's lines.",
                   "state": "done" if tools_ok else "todo",
                   "detail": "All there." if tools_ok else unchecked or ("Missing: " + ", ".join(missing) + "."
-                            + (" The Windows C++ runtime needs its own installer: " + by["runtime"].get("fix", "") if runtime_bad else "")),
+                            + (" The Windows C++ runtime is Microsoft's: the button below fetches Microsoft's own installer, and Windows then asks "
+                               "\"Do you want to allow this app to make changes?\" once. Press Yes. Or install it yourself from "
+                               "https://aka.ms/vs/17/release/vc_redist.x64.exe and restart the computer." if runtime_bad else "")),
                   "actions": [] if tools_ok or unchecked else [{"do": "install", "what": "tools", "label": "Install the video tools"}]})
     speech_ok = speech.get("state") == "ok"
     steps.append({"id": "speech", "title": "Captions", "optional": False, "size": "about 1.6 GB the first time",

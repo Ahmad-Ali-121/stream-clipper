@@ -52,7 +52,7 @@ Everything in the core works with no paid service. Optional keys add nicer text 
 
 ## Quick start (Windows)
 
-**The easy way:** download [Stream-Clipper-Setup.exe](https://github.com/Ahmad-Ali-121/stream-clipper/releases/latest/download/Stream-Clipper-Setup.exe) and double-click it. It needs no Python, Git or administrator rights: it fetches [uv](https://docs.astral.sh/uv/) (which installs Python for this program only), portable Git if the PC has none, the program, and the video tools, and puts a shortcut on the desktop. On first start the program's **Set up** page takes you through the rest (the speech model, and signing in to Claude or ChatGPT if you want them). The installer is built from `installer/Setup.cs` with `installer/build.cmd` (the C# compiler that is part of Windows); it is not code-signed, so Windows shows a warning the first time.
+**The easy way:** download [Stream-Clipper-Setup.exe](https://github.com/Ahmad-Ali-121/stream-clipper/releases/latest/download/Stream-Clipper-Setup.exe) and double-click it. It needs no Python or Git, and no administrator rights (one exception: on a PC without Microsoft's Visual C++ runtime, which captions need, Windows asks once to let Microsoft's own installer add it): it fetches [uv](https://docs.astral.sh/uv/) (which installs Python for this program only), portable Git if the PC has none, the program, and the video tools, and puts a shortcut on the desktop. On first start the program's **Set up** page takes you through the rest (the speech model, and signing in to Claude or ChatGPT if you want them). The installer is built from `installer/Setup.cs` with `installer/build.cmd` (the C# compiler that is part of Windows); it is not code-signed, so Windows shows a warning the first time.
 
 **By hand:** needs [Git](https://git-scm.com/download/win) and [uv](https://docs.astral.sh/uv/getting-started/installation/), and about 5 GB of free disk.
 
@@ -134,7 +134,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           398 unit tests (uv run python -m pytest -q)
+tests/           400 unit tests (uv run python -m pytest -q)
 ```
 
 ## Limits you should know about
