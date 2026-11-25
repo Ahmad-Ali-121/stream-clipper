@@ -229,6 +229,31 @@ def fetch_range(source: Source, start_s: float, end_s: float, out: Path, cfg: Co
     return out
 
 
+def ensure_sound(path: Path, cfg: Config) -> bool:
+    """Give a video that has no sound track a silent one (True when it had none). A screen recording without sound is
+    a perfectly good video, but every later step (loudness, captions, joining) expects a sound track to be there."""
+    proc = run([find_tool("ffprobe", cfg.data_dir), "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+               timeout_s=60, what="ffprobe")
+    if proc.stdout.strip():
+        return False
+    part = path.with_name(path.stem + ".sound.part.mp4")
+    try:
+        run([find_tool("ffmpeg", cfg.data_dir), "-y", "-hide_banner", "-v", "error", "-i", str(path), "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+             "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-shortest", "-movflags", "+faststart", str(part)],
+            timeout_s=600, what="adding a silent sound track")
+        from .work import _replace
+
+        try:
+            _replace(part, path)  # tried again for two seconds: the file may be open for an instant
+        except PermissionError:
+            raise ToolError(f"the video of clip {path.parent.name} has no sound and needs a silent sound track added, but the file is in use "
+                            "right now (it is probably playing on the review page). Pause it and try again") from None
+    finally:
+        part.unlink(missing_ok=True)
+    log.warning("%s has no sound; a silent sound track was added so that it can be made into a clip (it will have no captions)", path.parent.name)
+    return True
+
+
 def probe(path: Path, cfg: Config) -> dict:
     """Width, height, duration and frame rate of a video file."""
     proc = run(

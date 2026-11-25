@@ -139,7 +139,7 @@ def parse_answers(text: str, duration_s: float = 0.0) -> dict:
             skipped.append(f"{label}: shorter than {MIN_CLIP_S:g} seconds")
         elif b - a > MAX_CLIP_S:
             skipped.append(f"{label}: longer than {MAX_CLIP_S / 60:g} minutes")
-        elif duration_s and b > duration_s + 2:
+        elif duration_s and b > duration_s + 1:  # the same second of slack as the job that cuts it (pipeline.split_range)
             skipped.append(f"{label}: after the end of the video")
         elif moments and a < moments[-1]["end_s"]:
             skipped.append(f"{label}: overlaps the moment before it")

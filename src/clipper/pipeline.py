@@ -35,6 +35,20 @@ def open_work(url: str, cfg: Config) -> tuple[Source, Path]:
     return source, work_dir(cfg.data_dir, source)
 
 
+def _clip_state(d: Path) -> dict | None:
+    """A clip's record, or None when it really is damaged. A file that only cannot be opened this instant (another
+    program is putting its copy in place) is tried again: a good clip must never be called damaged."""
+    for attempt in range(10):
+        try:
+            state = read_json(d / "clip.json")
+            return state if isinstance(state, dict) and state else None
+        except OSError:
+            time.sleep(0.1)
+        except ValueError:
+            return None
+    return None
+
+
 def select_clips(work: Path, only: list[str] | None = None, status: str | None = None) -> list[Path]:
     """Clip folders ordered best-first, optionally limited to given ids and/or a status."""
     dirs = clip_dirs(work)
@@ -102,12 +116,17 @@ def stage_find(
                                         "or use \"Your own clip\" to pick the range yourself") from e
                 log.warning("%s. Moments are found from what you chose instead.", e)
                 messages = []
-            elif source.platform != "youtube" or meta.get("is_live") or not ytcaptions.video_words(source.url, work, cfg):
-                raise
-            else:
+            elif source.platform == "youtube" and not meta.get("is_live") and ytcaptions.video_words(source.url, work, cfg):
                 log.warning("%s Moments are found from what is said instead%s.", e,
                             ", plus what you chose" if ai or (signals or cfg.moments.signals) not in ("chat", "A") else "")
                 messages, no_chat = [], True
+            elif ai or any(_MODES[_parse_mode(signals or cfg.moments.signals)]):
+                # No chat to count (an empty one, or a video that never had any), but the person chose sound, picture
+                # or AI reading: those do not need chat.
+                log.warning("%s. Moments are found from what you chose instead.", e)
+                messages = []
+            else:
+                raise
     overrides = {k: v for k, v in (("top", top), ("mode", mode)) if v is not None}
     settings = replace(cfg.moments, **overrides)
     settings.validate()
@@ -435,6 +454,8 @@ def _own_drafts(source: Source, work: Path, meta: dict, segments: list[tuple[flo
             # A rejection is a decision about this very stretch: it stays, and the log says why nothing is made.
             log.warning("clip %s (%s to %s) was rejected before, so it is left rejected. Press \"Back to review\" on it in the Rejected list if you want it again.",
                         d.name, format_time(a), format_time(b))
+        # The very same piece asked for again: a trim the person made on it since is kept (its video is cut that way).
+        trim = {} if reopen else {k: state[k] for k in ("cut_start_s", "cut_end_s", "cut_auto") if k in state}
         state.update({
             "id": d.name, "rank": n, "score": 0, "activity": 0, "messages": 0, "trigger": "manual", "signals": {},
             "peak_s": a, "start_s": a, "end_s": b, "cut_start_s": a, "cut_end_s": b, "cut_auto": False, "source_range": [a, b],
@@ -444,6 +465,7 @@ def _own_drafts(source: Source, work: Path, meta: dict, segments: list[tuple[flo
             "source_url": meta.get("channel_url") or source.url, "stream_title": meta.get("title", ""),
             "range_id": None, **(extra or {}),
         })
+        state.update(trim)
         state.setdefault("status", "candidate")
         state.setdefault("made_at", time.strftime("%Y-%m-%d %H:%M:%S"))
         write_json(d / "clip.json", state, reopen=reopen or state.get("source_range") != before_range)
@@ -512,10 +534,9 @@ def _fetch_one(source: Source, d: Path, cfg: Config) -> Path | None:
             fetch_range(local_source(part), fetch_start - base, fetch_end - base, out, cfg)
         else:
             fetch_range(source, fetch_start, fetch_end, out, cfg)
-        state["fetch_start_s"] = fetch_start
-        state["fetch_end_s"] = fetch_end
-        state["fetch_seconds"] = round(time.monotonic() - t0, 1)
-        state = save_clip(d / "clip.json", state)  # now: a stop during the next steps must not leave a video with no start time
+        # Now: a stop during the next steps must not leave a video with no start time. Only these three are written,
+        # onto the clip as it is on disk now: the download took a while and the person may have edited the clip meanwhile.
+        state = update_clip(d / "clip.json", {"fetch_start_s": fetch_start, "fetch_end_s": fetch_end, "fetch_seconds": round(time.monotonic() - t0, 1)})
         log.info("clip %s: fetched %.0fs of video in %.0fs (%.1f MB)", d.name, fetch_end - fetch_start, state["fetch_seconds"], out.stat().st_size / 1e6)
     info = probe(out, cfg)
     state.update({"source_width": info["width"], "source_height": info["height"], "source_duration_s": round(info["duration_s"], 2), "source_fps": round(info["fps"], 2)})
@@ -536,7 +557,10 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
     progress.stage("captions")
     for n, d in enumerate(dirs):
         progress.item(n, len(dirs), f"clip {n + 1} of {len(dirs)}")
-        state = read_json(d / "clip.json")
+        state = _clip_state(d)
+        if not state:
+            log.error("clip %s: its own record is damaged, so it is left out; delete it on the review page", d.name)
+            continue
         if state.get("status") in ("rejected", "deleted") or not done(d / "source.mp4"):
             continue
         out = d / "words.json"
@@ -558,6 +582,9 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
                     if here:  # none in this stretch (often only "[Music]" over loud gameplay): the speech model listens instead
                         words, where = caption_script(here, cfg), "YouTube's captions"
             if words is None:
+                from .fetch import ensure_sound
+
+                ensure_sound(d / "source.mp4", cfg)  # a video with no sound track cannot be listened to at all
                 words = transcribe_file(d / "source.mp4", cfg)
             state = read_json(d / "clip.json")  # as it is now: a person may have edited the clip while it was transcribed
             state["words_from"] = where
@@ -592,7 +619,10 @@ def stage_render(url: str, cfg: Config, only: list[str] | None = None, force: bo
     progress.stage("draft")
     for n, d in enumerate(dirs):
         progress.item(n, len(dirs), f"clip {n + 1} of {len(dirs)}")
-        state = read_json(d / "clip.json")
+        state = _clip_state(d)
+        if not state:
+            log.error("clip %s: its own record is damaged, so it is left out; delete it on the review page", d.name)
+            continue
         if state.get("status") in ("rejected", "deleted") or not done(d / "source.mp4"):
             continue
         try:
@@ -672,6 +702,10 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
             if not isinstance(st.get("exports"), dict) and (known := known_exports(st, cfg.render.ab_versions)):
                 update_clip(d / "clip.json", {"exports": known})  # exported by an older version: note where its files are
             jobs = plan_clip(d, st, cfg, brief, again=d in redo)[1]
+            if not jobs and st.get("made_all") is False:
+                # Marked "stopped half-way", yet nothing of it is left to make: it is finished. Without this it would
+                # sit under Approved for ever, with the green button finding nothing to do for it.
+                update_clip(d / "clip.json", {}, drop=("made_all",))
             # copying a finished video to the ready folder takes a moment, so only the real work is counted;
             # a clip that only needs copying still counts as one step
             sizes.append(max(1, sum(1 for job in jobs if job[0] != "copy")) if jobs else 0)
@@ -861,6 +895,9 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
             from . import thumbs
             from .tools import Stopped
 
+            # The videos are all made at this point; the thumbnail is an extra. A stop or a crash while it is being
+            # drawn must not leave the clip marked as half-made.
+            update_clip(d / "clip.json", {}, drop=("made_all",))
             step("making the thumbnail" + (" with ChatGPT (one to three minutes)" if cfg.render.thumbnail == "chatgpt" else ""))
             try:
                 thumbs.make_cover(d, cfg, cfg.render.thumbnail)
@@ -987,7 +1024,10 @@ def stage_write(cfg: Config, url: str | None = None, only: list[str] | None = No
     for n, d in enumerate(todo):
         if True:
             progress.item(n, len(todo), f"clip {n + 1} of {len(todo)}")
-            state = read_json(d / "clip.json")
+            state = _clip_state(d)
+            if not state:
+                log.error("clip %s: its own record is damaged, so it is left out; delete it on the review page", d.name)
+                continue
             if state.get("status") in ("rejected", "deleted") or "transcript" not in state:
                 continue
             if state.get("copy_at") and not force:

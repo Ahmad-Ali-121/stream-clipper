@@ -693,8 +693,14 @@ function toast(msg,err){if(err&&typeof HELP!=='undefined')HELP.said=String(msg);
 let curTab='live', tabRunning=false;
 function tab(name){curTab=name;for(const n of ['live','vod','own']){$('tab-'+n).hidden=n!==name;$('t-'+n).className=n===name?'on':''}}
 function mode(){return (document.querySelector('[name=o-mode]:checked')||{}).value}
-function isBad(l){return /ERROR|FAILED|NOT MADE|Traceback|Error:|fatal exception|STOPPED BY ITSELF/.test(l)}
-function logTo(id,lines){const el=$(id);const stick=el.scrollTop+el.clientHeight>=el.scrollHeight-30;el.textContent='';
+/* A finished file's line ("READY ...He FAILED the jump.mp4") and ordinary INFO lines are not errors, whatever words a clip's title holds. */
+function isBad(l){return !/^(\d\d:\d\d:\d\d )?(READY|INFO) /.test(l)&&/ERROR|FAILED|NOT MADE|Traceback|Error:|fatal exception|STOPPED BY ITSELF/.test(l)}
+function logTo(id,lines){const el=$(id), key=lines.join(NL), sel=window.getSelection&&getSelection();
+  if(el._shown===key)return;   /* nothing new: leave it alone */
+  /* lines are being selected to copy: redrawing would drop the selection. For half a minute; a selection forgotten there must not freeze the log */
+  if(sel&&!sel.isCollapsed&&el.contains(sel.anchorNode)){el._held=el._held||Date.now();if(Date.now()-el._held<30000)return}
+  el._held=0;
+  el._shown=key;const stick=el.scrollTop+el.clientHeight>=el.scrollHeight-30;el.textContent='';
   for(const l of lines){const d=document.createElement('div');d.textContent=l||' ';if(isBad(l))d.className='lerr';else if(/WARNING/.test(l))d.className='lwarn';el.appendChild(d)}
   if(stick)el.scrollTop=el.scrollHeight}
 /* A bar with a real percentage once the job reports one; the moving stripe only until then. */
@@ -790,11 +796,13 @@ function show(s){
   if(!$('stopbox').hidden){if(!s.finishing)stopAsk(false);else stopText(s)}
   logTo('flog',s.finish_log);
   if(s.health)drawHealth(s.health);
-  const bad=s.watch_log.concat(s.finish_log,s.run_log,(s.health&&s.health.maint.lines)||[]).filter(isBad), probs=[s.watch_problem,s.run_problem].filter(Boolean);
+  /* The newest red line of EACH log: one log's old error must not hide another log's new one. */
+  const lastBad=a=>{a=(a||[]).filter(isBad);return a.length?[a[a.length-1]]:[]};
+  const bad=[...new Set([...lastBad(s.watch_log),...lastBad(s.finish_log),...lastBad(s.run_log),...lastBad(s.health&&s.health.maint.lines)])], probs=[s.watch_problem,s.run_problem].filter(Boolean);
   if(s.stamp&&s.stamp!==PAGE_STAMP)probs.unshift('THE PROGRAM NEEDS A RESTART. Its files were updated, but the copy that is running is still the old one, so some buttons will not work. '
     +(s.health&&s.health.launcher?'Press Restart now.':'Close its window (or press Ctrl+C in it), then double-click Stream-Clipper.cmd to start it again.'));
   /* One banner line per distinct error, without counts, so closing it once keeps it closed. */
-  setErr(probs.concat(bad.length?[LOG_LEAD+bad[bad.length-1]]:[]));
+  setErr(probs.concat(bad.map(l=>LOG_LEAD+l)));
   if(s.running&&!tabRunning&&curTab==='live')tab('vod');
   tabRunning=s.running;
   $('b-own').disabled=s.running; $('b-ownstop').disabled=!s.running;
@@ -908,6 +916,8 @@ function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
 const coverText=new Map();   /* a thumbnail description being typed, kept through redraws and failures */
 const coverOpen=new Set(), COVER_BY={frame:'Made from the clip',chatgpt:'Drawn by ChatGPT',prompt:'Drawn by ChatGPT from your description'};
 function cardHtml(c){
+  /* a clip whose own record cannot be read: say so, and offer the one thing that can be done about it */
+  if(c.broken)return '<div style="grid-column:1/-1"><div class="cliperr"><b>This clip is damaged.</b> '+esc(c.error||'')+'</div><div style="margin-top:10px"><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+c.key+'\')">Delete</button></div></div>';
   const cv=c.cover||{}, k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
   const VN={'final.mp4':'A','final_b.mp4':'B','explained.mp4':'Explained A','explained_b.mp4':'Explained B','source.mp4':'Raw'};
   const tabs=(c.videos||[]).length>1||(c.videos||[]).includes('final.mp4')?'<div class="vtabs">'+(c.videos||[]).map(n=>'<button class="'+(n===c.video?'on':'')+'" onclick="showVid(\''+k+'\',\''+n+'\',this)">'+VN[n]+'</button>').join('')
@@ -1236,10 +1246,17 @@ async function initWords(key){
 async function subFile(inp,key){
   const f=inp.files[0];inp.value='';if(!f)return;
   if(!confirm('Replace this clip\'s captions with the subtitles in '+f.name+'?'))return;
-  let r;try{r=await fetch('/api/clip/'+key+'/captions-import',{method:'POST',body:await f.text()})}catch(e){toast('The program is not answering: '+e,true);return}
+  let r;try{r=await fetch('/api/clip/'+key+'/captions-import',{method:'POST',body:await subText(f)})}catch(e){toast('The program is not answering: '+e,true);return}
   if(!r.ok){toast('The subtitle file was not used: '+await r.text(),true);return}
   const d=await r.json(), el=$(domId(key));if(document.activeElement)document.activeElement.blur();if(el){el.dataset.dirty='';el.dataset.wdirty='';el.dataset.m='';el._words=null}
   toast(d.lines+' subtitle lines are now this clip\'s captions. The draft is made again when you press Make videos.');loadClips();
+}
+/* A subtitle file's text, whatever it was saved as: "Unicode" (UTF-16) from older Notepad, UTF-8, or the old Windows letters. */
+async function subText(f){
+  const b=new Uint8Array(await f.arrayBuffer());
+  if(b[0]===0xFF&&b[1]===0xFE)return new TextDecoder('utf-16le').decode(b.subarray(2));
+  if(b[0]===0xFE&&b[1]===0xFF)return new TextDecoder('utf-16be').decode(b.subarray(2));
+  try{return new TextDecoder('utf-8',{fatal:true}).decode(b)}catch(e){return new TextDecoder('windows-1252').decode(b)}
 }
 async function sendWords(key){
   const el=$(domId(key)); if(!el||!el._words)return true;
@@ -1403,10 +1420,12 @@ function closeBoxes(){const v=$('bx-video');v.pause();v.removeAttribute('src');v
 async function saveBoxes(auto){
   const key=BX.key,body=auto?{auto:true}:{layout:BX.layout,game:BX.video,facecam:BX.face,face_corner:BX.corner,face_size:BX.size,others:$('bx-others').checked,streamer:$('bx-streamer').checked};
   for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=true;
-  const card=$(domId(key)); if(card&&card.dataset.dirty==='1')await save(key);
+  const card=$(domId(key));
+  /* what was typed on the card is saved first; if that is refused the boxes are not saved either, so nothing typed is thrown away */
+  if(card&&card.dataset.dirty==='1'&&!(await save(key))){for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=false;$('bx-note').textContent='';return}
   $('bx-note').className='saved';$('bx-note').textContent='Making the draft again… this takes up to a minute.';
   const r=await send('/api/clip/'+key+'/framing',body);
-  if(r.error){for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=false;$('bx-note').textContent='';toast('The boxes were not saved: '+r.error,true);return}
+  if(r.error){for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=false;$('bx-note').textContent='';toast((/^the boxes are saved/i.test(r.error)?'':'The boxes were not saved: ')+r.error,true);if(/^the boxes are saved/i.test(r.error)){closeBoxes();loadClips()}return}
   closeBoxes();const el=$(domId(key));if(el){el.dataset.dirty='';el.dataset.m=''}
   toast(auto?'Back to automatic framing. The draft is made again.':'Boxes saved. The draft is made again'+(r.others?'; '+r.others+' other clip'+(r.others>1?'s are':' is')+' being made again too.':'.')
     +((r.skipped||[]).length?' Not applied to '+r.skipped.length+' clip(s) that could not take them: '+r.skipped.join(', ')+'.':''),(r.skipped||[]).length>0);loadClips();
@@ -1839,7 +1858,15 @@ async function loadTracker(){
 document.addEventListener('change',async e=>{
   const f=e.target.dataset&&e.target.dataset.f, tr=e.target.closest&&e.target.closest('#t-rows tr'); if(!f||!tr)return;
   const r=await send('/api/tracker/update',{id:tr.dataset.id,changes:{[f]:e.target.value}});
-  if(r.error){toast('Not saved: '+r.error,true);loadTracker();return} toast('Saved'); loadTracker();
+  if(r.error){toast('Not saved: '+r.error,true);loadTracker();return} toast('Saved');
+  /* Redrawing the table drops whatever is being typed in the next box (Tab from Views to Paid): wait until the table is left. */
+  const at=document.activeElement;
+  if(at&&at!==e.target&&at.closest&&at.closest('#t-rows'))trackerLater=true;else loadTracker();
+});
+let trackerLater=false;
+document.addEventListener('focusout',e=>{
+  if(!trackerLater||!e.target.closest||!e.target.closest('#t-rows'))return;
+  setTimeout(()=>{const at=document.activeElement;if(trackerLater&&!(at&&at.closest&&at.closest('#t-rows'))){trackerLater=false;loadTracker()}},400);
 });
 document.addEventListener('click',async e=>{
   const b=e.target.closest&&e.target.closest('[data-act]'); if(!b)return;
@@ -1870,6 +1897,7 @@ document.addEventListener('keydown',e=>{
   else if(k==='k'||k==='arrowup'){setCur(cards[Math.max(0,i<0?0:i-1)]);e.preventDefault()}
   else if(cur&&(k==='a'||k==='r')){if(e.repeat){e.preventDefault();return}   /* a key held down decides one clip, not every clip after it */
     const key=(cur._c&&cur._c.key)||cur.id.slice(2).replace('--','/'), next=cards[i+1]||cards[i-1]||null;
+    if(cur._c&&cur._c.broken){toast('This clip is damaged and cannot be approved or rejected. Press Delete on its card to remove it.',true);e.preventDefault();return}
     save(key,{status:k==='a'?'approved':'rejected'});setCur(next);e.preventDefault()}
   else if(cur&&k===' '){const v=cur.querySelector('.vid video');if(v){v.paused?v.play().catch(()=>{}):v.pause()}e.preventDefault()}
 });

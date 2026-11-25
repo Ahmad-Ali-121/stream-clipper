@@ -57,6 +57,28 @@ def load_brief(path: str | Path) -> Brief:
     unknown = set(data) - known
     if unknown:
         raise ValueError(f"{p.name}: unknown brief keys: {', '.join(sorted(unknown))}")
+    # One value written where a list belongs ("required_tags: '#ad'") is that one entry, not its letters; and a
+    # number written in quotes is a number. Anything else of the wrong kind is said plainly instead of misjudging clips.
+    for key in ("allowed_sources", "required_tags", "required_text", "manual_checks"):
+        if isinstance(data.get(key), str):
+            data[key] = [data[key]]
+        elif key in data and data[key] is None:
+            data[key] = []
+        elif key in data and not (isinstance(data[key], list) and all(isinstance(x, (str, int, float)) for x in data[key])):
+            raise ValueError(f"{p.name}: '{key}' must be a list of texts")
+        elif key in data:
+            data[key] = [str(x) for x in data[key]]
+    for key in ("min_duration_s", "max_duration_s"):
+        if data.get(key) is not None:
+            try:
+                data[key] = float(data[key])
+            except (TypeError, ValueError):
+                raise ValueError(f"{p.name}: '{key}' must be a number of seconds, not {data[key]!r}") from None
+    for key in ("require_disclosure_overlay", "forbid_watermark"):
+        if key in data and not isinstance(data[key], bool):
+            raise ValueError(f"{p.name}: '{key}' must be true or false, not {data[key]!r}")
+    if data.get("aspect") is not None and not re.fullmatch(r"\d+(\.\d+)?:\d+(\.\d+)?", str(data["aspect"])):
+        raise ValueError(f"{p.name}: 'aspect' must look like 9:16, not {data['aspect']!r}")
     return Brief(**data)
 
 
@@ -90,7 +112,10 @@ def source_allowed(source_url: str, allowed: list[str]) -> bool:
             if entry_id == src_id:
                 return True
             continue
-        if _normalise(entry) in src:
+        want = _normalise(entry)
+        at = src.find(want) if want else -1
+        # the whole name, not its beginning: "twitch.tv/lacy" must not allow "twitch.tv/lacyfan"
+        if at >= 0 and (at + len(want) == len(src) or not (src[at + len(want)].isalnum() or src[at + len(want)] in "_-")):
             return True
     return False
 

@@ -118,9 +118,16 @@ def test_run_is_only_true_when_there_is_something_left_to_do(monkeypatch):
     answers = {"steps": _steps(("Type", "o-channels", "type", "lacy"), ("Start", "b-watch", "press", "")), "run": True}
     monkeypatch.setattr(llm, "ask", lambda *a, **k: {"answer": "I am starting it.", "follow_ups": [], **answers})
     r = help_mod.answer(load_config(), "start watching lacy", [], DOABLE, {})
+    # as installed, nothing is done without the person's press: the steps come with the "Do it for me" button
+    assert r["run"] is False and [s["act"] for s in r["steps"]] == ["type", "press"]
+    at_once = load_config()
+    at_once.llm.help_act_at_once = True  # the switch in config.yaml
+    r = help_mod.answer(at_once, "start watching lacy", [], DOABLE, {})
     assert r["run"] is True and [s["act"] for s in r["steps"]] == ["type", "press"]
+    r = help_mod.answer(at_once, "what does the hype meter mean?", [], DOABLE, {})
+    assert r["run"] is False  # even switched on: not for steps the person's own words did not ask for
     answers["steps"] = _steps(("Approve it", "k7", "press", ""))
-    r = help_mod.answer(load_config(), "approve the first clip", [], DOABLE, {})
+    r = help_mod.answer(at_once, "approve the first clip", [], DOABLE, {})
     assert r["run"] is False and r["steps"][0]["yours"]  # told to do it, but it is the user's own press
 
 

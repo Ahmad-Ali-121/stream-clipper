@@ -200,9 +200,17 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
         write_json(d / "clip.json", state)
         if body.get("streamer") and channel:
             layout_mod.save_framing(channel, {**state, "source": [state.get("source_width"), state.get("source_height")]}, cfg)
-    for name in RENDERS:
-        remove(d / name)
-    render_clip(d, cfg)
+    try:
+        for name in RENDERS:
+            remove(d / name)
+        render_clip(d, cfg)
+    except Exception as e:
+        if not edit:
+            raise
+        # The boxes are on the clip already; saying "not saved" would be untrue and the person would set them again.
+        log.error("clip %s: its boxes were saved, but its draft could not be made again: %s", d.name, e, exc_info=not isinstance(e, ValueError))
+        raise ValueError(f"the boxes are saved, but the draft could not be made again with them: {e}. "
+                         "Press \"Make this video's drafts again\" on the clip once that is sorted out") from e
     others: list[Path] = []
     skipped: list[str] = []
     if edit and body.get("others"):
@@ -228,9 +236,10 @@ def apply_edit(work: Path, cid: str, edit: dict) -> dict:
     Done under the same lock as ``work.update_clip``: a step that finishes this clip's export at the same moment
     (and records where the file went) and an edit made on the page can then never overwrite each other.
     """
-    from .work import _update_lock
+    from .work import _update_lock, clip_lock
 
-    with _update_lock:
+    # (the path is put together here: asking for the clip's folder would create one for a clip that does not exist)
+    with _update_lock, clip_lock(work / "clips" / cid / "clip.json"):  # the second one also holds off the watcher, a separate program
         return _apply_edit(work, cid, edit)
 
 
@@ -264,10 +273,24 @@ def _apply_edit(work: Path, cid: str, edit: dict) -> dict:
             edit[name] = None
     if isinstance(edit.get("tags"), str):  # the page sends hashtags as one line of text
         edit["tags"] = ["#" + t.lstrip("#") for t in re.split(r"[\s,]+", edit["tags"]) if t.strip("#")]
-    start = float(edit.get("cut_start_s", state.get("cut_start_s", state["start_s"])))
-    end = float(edit.get("cut_end_s", state.get("cut_end_s", state["end_s"])))
+    try:
+        start = float(edit.get("cut_start_s", state.get("cut_start_s", state["start_s"])))
+        end = float(edit.get("cut_end_s", state.get("cut_end_s", state["end_s"])))
+        if start != start or end != end:
+            raise ValueError
+    except (TypeError, ValueError):  # a box left empty arrives as nothing at all
+        raise ValueError("type a number of seconds in both the Start and the End box") from None
     lo = float(state.get("fetch_start_s", state["start_s"]))
     hi = float(state.get("fetch_end_s", state["end_s"]))
+    # The trimmer's handles move in half seconds; one pulled all the way to an edge can land a fraction outside the
+    # video that was downloaded. That is the edge itself, not a mistake.
+    if lo - 0.6 <= start < lo:
+        start = lo
+    if hi < end <= hi + 0.6:
+        end = hi
+    for name, value in (("cut_start_s", start), ("cut_end_s", end)):
+        if name in edit:
+            edit[name] = value
     if not (lo <= start < end <= hi):
         raise ValueError(f"cut must stay inside the fetched range {lo:g}-{hi:g} seconds and start before it ends")
     def shown(st: dict) -> tuple:
@@ -428,22 +451,48 @@ def delete_clip(d: Path) -> float:
     Finished videos already exported to the ready folder are yours and are not touched.
     """
     path = d / "clip.json"
-    state = read_json(path)
+    # A clip whose own record is damaged can still be deleted: that is the one thing a person can do about it on the page.
+    state = read_json(path, {})
+    state.setdefault("id", d.name)
     freed = 0
     busy: list[str] = []
-    # The big video files first: if one of them is in use, nothing has been removed yet and the clip is left whole.
+    # All or nothing. Every file is first set aside under another name, which Windows refuses for a file that is open
+    # (a job is still working on this clip, or its video is playing). If one refuses, the others get their names back
+    # and the clip is left whole; only when all could be set aside are they removed.
+    aside: list[tuple[Path, Path]] = []
     for f in sorted((f for f in d.iterdir() if f.is_file() and f.name != "clip.json"), key=lambda f: f.suffix != ".mp4"):
+        if f.name.endswith(".lock"):
+            continue  # another program is writing this clip's record this instant; its lock is not the clip's
+        if f.name.endswith(".deleting"):  # left by a deletion that was interrupted
+            aside.append((f, f))
+            continue
         try:
-            size = f.stat().st_size
-            remove(f, wait_s=0.5)
-            freed += size
+            f.rename(f.with_name(f.name + ".deleting"))
+            aside.append((f, f.with_name(f.name + ".deleting")))
         except FileNotFoundError:
             continue  # a job renamed it away this instant
-        except FileInUse:
-            # Windows refuses to delete a file that is open: a job is still working on this clip, or its video is playing.
+        except FileExistsError:
+            aside.append((f, f))
+        except PermissionError:
             busy.append(f.name)
-            if not freed:
-                break
+            break
+    if busy:
+        for f, moved in aside:
+            if moved != f:
+                try:
+                    moved.rename(f)
+                except OSError as e:
+                    log.error("clip %s: %s could not get its name back after a refused delete: %s", d.name, f.name, e)
+    else:
+        for _f, moved in aside:
+            try:
+                size = moved.stat().st_size
+                remove(moved, wait_s=0.5)
+                freed += size
+            except FileNotFoundError:
+                continue
+            except FileInUse:
+                log.warning("clip %s: %s could not be removed yet; it goes the next time this clip is deleted or cleaned up", d.name, moved.name)
     if busy:
         raise ClipInUse(f"this clip cannot be deleted right now: its file {busy[0]} is in use. A job is still working on it "
                         "(press Stop in step 1, or wait for it to end), or its video is playing. Then delete it again.")
@@ -491,6 +540,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
     watcher starts while the page is open show up.
     """
     by_name = {w.name: w for w in works}
+    broken_said: set[str] = set()  # damaged clips already reported in the terminal
     control = None
     if cfg is not None:
         from .control import Control
@@ -501,8 +551,11 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
         if every_stream and cfg is not None:
             from .pipeline import all_works
 
-            by_name.clear()
-            by_name.update({w.name: w for w in all_works(cfg)})
+            # Add first, then take away what is gone: the list is never empty for another request in between.
+            now = {w.name: w for w in all_works(cfg)}
+            by_name.update(now)
+            for gone in [name for name in list(by_name) if name not in now]:
+                by_name.pop(gone, None)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args) -> None:  # keep the terminal quiet
@@ -516,7 +569,20 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             self.end_headers()
             self.wfile.write(body)
 
+        def _foreign(self) -> bool:
+            """Was this request sent to another name than this computer's own? A web page elsewhere can point its own
+            name at 127.0.0.1 and then read this page's answers (its browser thinks it is still talking to that site).
+            Such a request names that site as Host; ours names 127.0.0.1 or localhost."""
+            host = (self.headers.get("Host") or "").strip().lower()
+            name = host.rsplit(":", 1)[0] if host.count(":") == 1 or host.startswith("[") else host
+            if name in ("127.0.0.1", "localhost", "[::1]"):
+                return False
+            self._send(403, b"this page only answers on this computer's own address (127.0.0.1)", "text/plain")
+            return True
+
         def do_GET(self) -> None:
+            if self._foreign():
+                return
             if self.path == "/api/options" and control:
                 return self._send(200, json.dumps({**control.status(), "stamp": RUNNING_STAMP}).encode(), "application/json")
             refresh()
@@ -532,8 +598,16 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 for d in list_clips(list(by_name.values()), weights):
                     try:
                         views.append(clip_view(d, weights, brief, control.cfg if control else cfg))
+                        broken_said.discard(str(d))  # it reads again: a later fault on it is said anew
                     except Exception as e:  # one unreadable clip must not blank the whole page
-                        log.error("clip %s could not be shown: %s", d, e, exc_info=True)
+                        if str(d) not in broken_said:  # once, not on every look of the page
+                            broken_said.add(str(d))
+                            log.error("clip %s could not be shown: %s", d, e, exc_info=not isinstance(e, ValueError))
+                        # ...and it must not vanish without a word either: it is shown as a card that says what is wrong.
+                        views.append({"key": f"{d.parent.parent.name}/{d.name}", "status": "candidate", "broken": True, "channel": "", "title": "",
+                                      "error": "This clip's own record is damaged and cannot be read, most likely because the computer was switched off while "
+                                               "it was being written. The clip cannot be shown or changed. Press Delete to remove it. "
+                                               f"(Its folder is {d})"})
                 return self._send(200, json.dumps(views).encode("utf-8"), "application/json")
             if self.path.split("?")[0] in ("/api/tracker", "/api/tracker.csv") and cfg is not None:
                 from . import tracker
@@ -652,6 +726,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
 
         def do_POST(self) -> None:
             # Only this page may give orders: a request sent by some other website carries its own Origin.
+            if self._foreign():
+                return
             origin = self.headers.get("Origin")
             if origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
                 return self._send(403, b"not allowed from another site", "text/plain")
@@ -660,6 +736,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     raise ValueError
             except ValueError:
                 return self._send(400, b"the request's length is not a valid number", "text/plain")
+            if int(self.headers.get("Content-Length", "0") or 0) > 30_000_000 and not self.path.startswith(("/api/upload", "/api/brand/upload")):
+                return self._send(400, b"that is far more than this page ever sends; refused", "text/plain")
             actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch", "/api/watch/clip-now": "clip_now",
                        "/api/finish": "start_finish", "/api/finish/stop": "stop_finish", "/api/ready/open": "open_ready", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check", "/api/ai/local-setup": "start_local_ai",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
@@ -704,6 +782,13 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 target, left = folder / name, int(self.headers.get("Content-Length", "0"))
                 if left <= 0:
                     return self._send(400, b"the file arrived empty", "text/plain")
+                # Another video under a name used before gets a name of its own: a video is known by its path, so it
+                # would otherwise be taken for the earlier one (its length, its clips, its downloaded parts).
+                # The same file sent again (same size) keeps its name, so its clips stay with it.
+                n = 1
+                while target.exists() and target.stat().st_size != left:
+                    n += 1
+                    target = folder / f"{Path(name).stem} ({n}){Path(name).suffix}"
                 from .work import free_gb
 
                 if free_gb(cfg.data_dir) < left / 1e9 + 2:
@@ -888,8 +973,10 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 import threading
 
                 use = control.cfg if control else cfg
+                # Not the finished ones (Done): rendering those again would take their videos back to Approved.
                 todo = [d for d in clip_dirs(by_name[m.group(1)])
-                        if read_json(d / "clip.json", {}).get("status") in ("candidate", "approved") and (d / "source.mp4").exists()]
+                        if (st := read_json(d / "clip.json", {})).get("status") in ("candidate", "approved") and (d / "source.mp4").exists()
+                        and not videos_made(d, st)]
                 if not todo:
                     return self._send(400, b"this video has no downloaded clips to make again", "text/plain")
 

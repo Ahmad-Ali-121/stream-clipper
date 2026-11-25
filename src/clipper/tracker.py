@@ -17,6 +17,7 @@ from pathlib import Path
 from .work import read_json, write_json
 
 log = logging.getLogger(__name__)
+_lock = __import__("threading").RLock()  # one change to the file at a time: the page's requests run side by side
 
 PLATFORMS = ("YouTube Shorts", "TikTok", "Instagram Reels", "Facebook Reels", "Other")
 STATUSES = ("posted", "submitted", "accepted", "rejected", "paid")
@@ -36,14 +37,20 @@ def _clean(field: str, value):
     if field in ("views",):
         if value in ("", None):
             return None
-        n = int(float(value))
+        n = float(value)
+        if n != n or n in (float("inf"), float("-inf")):
+            raise ValueError("views must be an ordinary number")
+        n = int(n)
         if n < 0:
             raise ValueError("views cannot be negative")
         return n
     if field == "payout":
         if value in ("", None):
             return None
-        n = round(float(value), 2)
+        n = float(value)
+        if n != n or n in (float("inf"), float("-inf")):
+            raise ValueError("a payout must be an ordinary number")
+        n = round(n, 2)
         if n < 0:
             raise ValueError("a payout cannot be negative")
         return n
@@ -67,6 +74,11 @@ def duplicate(rows: list[dict], clip: str, campaign: str, skip_id: str = "") -> 
 
 
 def add(data_dir: Path, entry: dict, allow_duplicate: bool = False) -> dict:
+    with _lock:
+        return _add(data_dir, entry, allow_duplicate)
+
+
+def _add(data_dir: Path, entry: dict, allow_duplicate: bool = False) -> dict:
     rows = load(data_dir)
     row = {"id": uuid.uuid4().hex[:10], "clip": str(entry.get("clip") or ""), "channel": str(entry.get("channel") or ""), "version": "A",
            "campaign": "", "platform": "YouTube Shorts", "url": "", "posted_at": time.strftime("%Y-%m-%d %H:%M"), "status": "posted",
@@ -85,6 +97,11 @@ def add(data_dir: Path, entry: dict, allow_duplicate: bool = False) -> dict:
 
 
 def update(data_dir: Path, row_id: str, changes: dict) -> dict:
+    with _lock:
+        return _update(data_dir, row_id, changes)
+
+
+def _update(data_dir: Path, row_id: str, changes: dict) -> dict:
     rows = load(data_dir)
     row = next((r for r in rows if r["id"] == row_id), None)
     if row is None:
@@ -100,10 +117,11 @@ def update(data_dir: Path, row_id: str, changes: dict) -> dict:
 
 
 def delete(data_dir: Path, row_id: str) -> int:
-    rows = load(data_dir)
-    kept = [r for r in rows if r["id"] != row_id]
-    write_json(_path(data_dir), kept)
-    return len(rows) - len(kept)
+    with _lock:
+        rows = load(data_dir)
+        kept = [r for r in rows if r["id"] != row_id]
+        write_json(_path(data_dir), kept)
+        return len(rows) - len(kept)
 
 
 def totals(rows: list[dict]) -> dict:
@@ -136,9 +154,8 @@ def refresh_views(data_dir: Path, cfg) -> dict:
     from .fetch import _ytdlp
     from .tools import ToolError, run
 
-    rows = load(data_dir)
     updated, problems = 0, []
-    for r in rows:
+    for r in load(data_dir):
         if not r.get("url"):
             continue
         try:
@@ -146,10 +163,16 @@ def refresh_views(data_dir: Path, cfg) -> dict:
             value = (proc.stdout.strip().splitlines() or [""])[-1]
             if not value.isdigit():
                 raise ToolError(f"the page gave no view count ({value or 'empty'})")
-            r["views"], r["updated_at"] = int(value), time.strftime("%Y-%m-%d %H:%M")
-            updated += 1
+            # Reading takes up to a minute and a half a link. Each count is written onto the list as it is on disk at
+            # that moment, so a post logged or a payout typed while this runs is not overwritten by an old copy.
+            with _lock:
+                rows = load(data_dir)
+                row = next((x for x in rows if x.get("id") == r.get("id") and x.get("url") == r["url"]), None)
+                if row is not None:
+                    row["views"], row["updated_at"] = int(value), time.strftime("%Y-%m-%d %H:%M")
+                    write_json(_path(data_dir), rows)
+                    updated += 1
         except ToolError as e:
             problems.append(f"{r.get('platform')} {r['url']}: {str(e)[:160]}")
             log.warning("tracker: views not read for %s (%s)", r["url"], e)
-    write_json(_path(data_dir), rows)
     return {"updated": updated, "problems": problems}

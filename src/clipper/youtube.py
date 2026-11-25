@@ -108,6 +108,8 @@ class YouTubeChatReader(threading.Thread):
         self.messages = 0
         self.connected_at: float | None = None
         self.proc: subprocess.Popen | None = None
+        self.gaps: list[tuple[float, float]] = []  # stretches (stream seconds) in which chat could not be read
+        self._lost_at: float | None = None
 
     def run(self) -> None:
         from .fetch import _ytdlp
@@ -122,13 +124,22 @@ class YouTubeChatReader(threading.Thread):
             folder = base / time.strftime("%H%M%S")
             try:
                 folder.mkdir(parents=True, exist_ok=True)
-                self.proc = subprocess.Popen(
-                    _ytdlp(self.cfg) + ["--skip-download", "--write-subs", "--sub-langs", "live_chat", "-o", str(folder / "chat"), self.url],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, errors="replace")
+                # What it complains about goes to a file, not a pipe: a pipe nobody reads fills up after a few
+                # thousand letters of warnings and the reader then stands still without a word.
+                errors = folder / "errors.txt"
+                with errors.open("w", encoding="utf-8", errors="replace") as sink:
+                    self.proc = subprocess.Popen(
+                        _ytdlp(self.cfg) + ["--skip-download", "--write-subs", "--sub-langs", "live_chat", "-o", str(folder / "chat"), self.url],
+                        stdout=subprocess.DEVNULL, stderr=sink, stdin=subprocess.DEVNULL)
                 self.connected_at = time.time()
+                if self._lost_at is not None and self.connected_at - self._lost_at >= 20:
+                    self.gaps.append((self._lost_at - self.stream_start, self.connected_at - self.stream_start))
+                self._lost_at = None
                 started = time.time()
                 self._follow(folder)
-                err = (self.proc.stderr.read() or "").strip()[-300:] if self.proc.poll() is not None else ""
+                if not self.stop_event.is_set():
+                    self._lost_at = time.time()  # the reader ended by itself: chat is not being read until it runs again
+                err = errors.read_text(encoding="utf-8", errors="replace").strip()[-300:] if self.proc.poll() is not None else ""
                 if not self.stop_event.is_set():
                     log.warning("%s: the chat reader stopped (%s); starting it again in %.0fs", self.channel, err or "no reason given", wait)
                 if time.time() - started > 120:

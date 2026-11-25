@@ -53,7 +53,7 @@ def test_the_table_works_the_same_in_the_browser():
         re.compile(pattern, re.I)
         assert "(?" not in pattern and what.endswith(".") and do.endswith("."), pattern  # nothing a browser reads differently
     page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
-    for piece in ("const PLAIN=__PLAIN__", "function plainOf(", "Technical details", "plainHtml(c.error", "LOG_LEAD+bad[bad.length-1]", "plainOf(msg,true)"):
+    for piece in ("const PLAIN=__PLAIN__", "function plainOf(", "Technical details", "plainHtml(c.error", "bad.map(l=>LOG_LEAD+l)", "plainOf(msg,true)"):
         assert piece in page, piece
     made = page_html("Test", True)
     assert "__PLAIN__" not in made and "trun track id unknown" in made

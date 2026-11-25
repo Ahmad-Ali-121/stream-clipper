@@ -125,6 +125,8 @@ class ChatReader(threading.Thread):
         self.stop_event = threading.Event()
         self.messages = 0
         self.connected_at: float | None = None
+        self.gaps: list[tuple[float, float]] = []  # stretches (stream seconds) in which chat could not be read
+        self._lost_at: float | None = None
 
     def run(self) -> None:
         from websockets.sync.client import connect
@@ -136,6 +138,9 @@ class ChatReader(threading.Thread):
                     ws.send("NICK justinfan73512")  # Twitch's anonymous read-only login
                     ws.send(f"JOIN #{self.channel}")
                     self.connected_at = time.time()
+                    if self._lost_at is not None and self.connected_at - self._lost_at >= 20:
+                        self.gaps.append((self._lost_at - self.stream_start, self.connected_at - self.stream_start))
+                    self._lost_at = None
                     wait = 2.0
                     with self.out.open("a", encoding="utf-8") as fh:
                         while not self.stop_event.is_set():
@@ -156,6 +161,8 @@ class ChatReader(threading.Thread):
             except Exception as e:  # a dropped connection is normal here; reconnect and carry on
                 if self.stop_event.is_set():
                     break
+                if self._lost_at is None:
+                    self._lost_at = time.time()
                 log.warning("%s: chat connection lost (%s); reconnecting in %.0fs", self.channel, e, wait)
                 self.stop_event.wait(wait)
                 wait = min(wait * 2, 60.0)
@@ -170,6 +177,8 @@ class Watched:
         self.feed = feed  # SignalReader when audio or video is being analysed, else None
         self.buffer = buffer  # LiveBuffer when Twitch is not recording this broadcast, else None
         self.last_live_check = time.time()
+        self.not_live = 0  # how many checks in a row said the broadcast is over
+        self.ending = 0.0  # set when the broadcast is over and only its drafts in progress are waited for: until when at most
         self.asked: list[dict] = []  # "clip the last N seconds" requests, waiting for the recording to reach them
         self.samples: list[tuple[float, int]] = []  # (time, chat messages read so far), for the hype meter
 
@@ -313,7 +322,10 @@ def still_live(w: Watched, cfg: Config) -> bool:
 
         found = find_live(w.channel, cfg)
         return bool(found) and found[0].video_id == w.source.video_id
-    return bool(channel_is_live(w.channel, cfg) if w.buffer else find_live_vod(w.channel, cfg))
+    if w.buffer:
+        return bool(channel_is_live(w.channel, cfg))
+    found = find_live_vod(w.channel, cfg)
+    return bool(found) and found[0].video_id == w.source.video_id  # a new broadcast has a new recording: not this one
 
 
 def start_channel(channel: str, cfg: Config) -> Watched | None:
@@ -378,6 +390,12 @@ def new_moments(w: Watched, cfg: Config) -> list[dict]:
     # Bucket indexes start at stream time 0. Drop everything before the watch began,
     # or that empty stretch would count as a silent baseline and make ordinary chat look like a spike.
     buckets = buckets[int(w.watch_from // s.bucket_s) + 1 :]
+    # While chat could not be read its buckets are empty, which is not silence. Those buckets are taken out before
+    # anything is scored: chat after the break is then measured against the real chat before it, so ordinary chat
+    # coming back is not a spike, and a real spike soon after the break is still found.
+    gaps = list(getattr(getattr(w, "reader", None), "gaps", []) or [])
+    if gaps:
+        buckets = [b for b in buckets if not any(b.start_s < end and b.start_s + s.bucket_s > start for start, end in gaps)]
     scores = score_buckets(buckets, s)
     live_now = time.time() - float(w.meta["started_at"])
     found = [m.to_dict() for m in pick_moments(buckets, scores, s)] if messages else []
@@ -422,6 +440,9 @@ def prepare_clip(d: Path, state: dict, cfg: Config) -> dict:
     info = probe(d / "source.mp4", cfg)
     state.update({"source_width": info["width"], "source_height": info["height"], "source_duration_s": round(info["duration_s"], 2)})
     state = auto_layout(d, state, cfg)
+    from .fetch import ensure_sound
+
+    ensure_sound(d / "source.mp4", cfg)  # a video with no sound track cannot be listened to at all
     words = transcribe_file(d / "source.mp4", cfg)
     write_json(d / "words.json", words)
     state["transcript"] = " ".join(x["word"] for x in words)
@@ -542,6 +563,19 @@ def asked_moment(w: Watched, request: dict, cfg: Config) -> dict:
     pressed = float(request["at"]) - float(w.meta["started_at"])
     end = max(10.0, pressed - cfg.watch.feed_delay_s)
     start = max(0.0, end - float(request["seconds"]) - 5.0)
+    held = None
+    try:
+        from .buffer import LiveBuffer
+
+        if isinstance(getattr(w, "buffer", None), LiveBuffer):  # only this kind is held from the moment the watch began
+            held = w.buffer.span()
+    except Exception as e:  # asking must never lose the request itself
+        log.debug("%s: the copy of the live feed could not be asked what it holds: %s", w.channel, e)
+    if held and start < held[0] < end - 3:
+        # An unrecorded stream is only held from the moment the watch began: the clip is what is held of the stretch
+        # asked for, not a refusal that says it is "no longer" there.
+        log.info("%s: the watch began after the start of the stretch you asked for; the clip starts where the copy of the live feed starts", w.channel)
+        start = held[0] + 0.1
     return {"score": 0, "activity": 0, "messages": 0, "trigger": "manual", "signals": {}, "peak_s": round(start, 1),
             "start_s": round(start, 1), "end_s": round(end, 1), "asked": True}
 
@@ -577,6 +611,22 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
         "made_at": earlier.get("made_at") or time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     state["fetch_start_s"] = max(0.0, state["start_s"] - cfg.fetch.pad_s)
+    if moment.get("asked"):
+        # A clip asked for right after the watch began starts where the copy of the live feed starts: there is nothing
+        # before it to take the usual few seconds of lead from.
+        from .buffer import LiveBuffer
+
+        first = getattr(w.buffer, "first_t", None) if isinstance(getattr(w, "buffer", None), LiveBuffer) else None
+        if isinstance(getattr(w, "buffer", None), LiveBuffer) and first is None:
+            raise ToolError("the watch has only just begun and nothing of the live feed is kept yet; this is tried again in a moment")
+        if first is not None and state["fetch_start_s"] < first:
+            # Asked for in the first moments of the watch: part (or all) of the stretch was before anything was kept.
+            if first >= state["end_s"] - 3:
+                raise ToolError("the watch began after the stretch you asked for, so nothing of it was kept and there is nothing to cut. "
+                                "Clips can be asked for from a few seconds after the watch begins")
+            state["fetch_start_s"] = round(first, 2)
+            state["start_s"] = round(max(state["start_s"], first + 0.05), 2)
+            state["peak_s"] = max(state["peak_s"], state["start_s"])
     state["fetch_end_s"] = state["end_s"] + cfg.fetch.pad_s
     if earlier.get("from_live_buffer") and done(d / "source.mp4"):
         # Cut from the live buffer on an earlier try: keep where that file really starts.
@@ -638,6 +688,13 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
             for name in names:
                 try:
                     w = watched.get(name)
+                    if w is not None and getattr(w, "ending", 0):
+                        # Its broadcast is over; only its drafts that are being made still need the copy of the live feed.
+                        if time.time() > w.ending or not any(k[0] == name and not f.done() for k, f in making.items()):
+                            log.info("%s: stream ended", name)
+                            w.stop()
+                            watched.pop(name, None)
+                        continue
                     if w is None:
                         w = start_channel(name, cfg)
                         if w is None:
@@ -668,10 +725,28 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                         making[key] = pool.submit(draft_job, w, moment, cfg)
                     if time.time() - w.last_live_check > cfg.watch.live_check_s:
                         w.last_live_check = time.time()
-                        if not still_live(w, cfg):
-                            log.info("%s: stream ended", name)
-                            w.stop()
-                            watched.pop(name, None)
+                        if still_live(w, cfg):
+                            w.not_live = 0
+                        elif w.not_live < 1:
+                            # One "no" is not proof: the question itself can fail (a timeout, the site refusing for a
+                            # moment), and ending the watch throws away the live copy and the clips waiting for it.
+                            w.not_live += 1
+                            w.last_live_check = time.time() - cfg.watch.live_check_s + 60
+                            log.info("%s: the site says this broadcast is not live; asking once more in a minute before stopping", name)
+                        else:
+                            mine = [f for k, f in making.items() if k[0] == name and not f.done()]
+                            if w.asked:
+                                log.warning("%s: the stream ended before %d clip(s) you asked for could be cut; they are not made", name, len(w.asked))
+                                w.asked.clear()
+                            if mine and w.buffer:
+                                # Their video comes out of the live copy, which is removed when the watch stops: the watch
+                                # is kept for up to five minutes, without holding up the other channels meanwhile.
+                                log.info("%s: stream ended; finishing %d draft(s) that are being made first", name, len(mine))
+                                w.ending = time.time() + 300
+                            else:
+                                log.info("%s: stream ended", name)
+                                w.stop()
+                                watched.pop(name, None)
                 except Exception as e:  # one channel's failure must not stop the others
                     # A ToolError's message is the whole story; anything else is a bug and gets its full traceback.
                     log.error("%s: %s", name, e, exc_info=not isinstance(e, ToolError))

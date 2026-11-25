@@ -48,34 +48,44 @@ RULES: list[tuple[str, str, str]] = [
      "A helper program that this step needs is not installed on this computer.",
      "Open Setup check at the top of the left side: it says which one is missing and has a button to install it."),
     # ---- the internet and the video sites ----
+    (r"(codex|chatgpt|claude|anthropic|openai)[\s\S]{0,300}(\b429\b|too many requests)",
+     "The AI service refused: the limit of your plan is reached for now, or the service is overloaded.",
+     "Wait until the limit resets (often a few hours) and try again, or choose another AI under Setup check. The clip itself is fine."),
     (r"http error 429|too many requests|rate.?limit(ed)? by (youtube|twitch|kick)",
      "The video site is refusing for a while because too many requests came from this internet connection in a short time.",
      "Wait 15 to 30 minutes, then try again. Watching fewer channels at once makes this rarer."),
-    (r"sign in to confirm|not a bot|confirm your age|login required|cookies",
-     "The video site refused to hand over the video: it wants a signed-in viewer, or it suspects an automatic program.",
-     "Wait an hour and try again, or try another video. This comes from the site, not from your computer."),
-    (r"private video|video unavailable|has been removed|no longer available|members-only|subscriber-only|subscribers only|http error 404|does not exist",
+    (r"local ai is installed but not answering|local ai did not give a usable answer|:11434|"
+     r"ollama.{0,80}(refused|not running|not reachable|unreachable|did not answer|timed out)|could not reach ollama",
+     "The free AI on this computer (Ollama) is not running or did not answer.",
+     "Start Ollama from the Start menu, wait half a minute, then try again. Setup check shows whether it is running."),
+    (r"private video|video unavailable|has been removed|no longer available|members-only|subscriber-only|subscribers only|http error 404|"
+     r"(video|channel|account|user)\b.{0,40}does not exist|\[(twitch|youtube|kick)[^\]]{0,30}\].{0,80}does not exist",
      "The video is not available: it was deleted, made private, or is only for paying subscribers.",
      "Nothing can be done for this video. Check the link in your browser; if it plays there for everyone, try again later."),
+    (r"sign in to confirm|not a bot|confirm your age|login required|only available for registered users|cookies-from-browser",
+     "The video site refused to hand over the video: it wants a signed-in viewer, or it suspects an automatic program.",
+     "Wait an hour and try again, or try another video. This comes from the site, not from your computer."),
     (r"http error 403|forbidden",
      "The video site refused the request.",
      "Wait a few minutes and try again. If it keeps happening for every video, update the program: the site may have changed something."),
     (r"getaddrinfo failed|name resolution|name or service not known|network is unreachable|connection refused|connection reset|connection aborted|connectionreseterror|"
      r"winerror 10060|winerror 10054|winerror 10061|urlopen error|read timed out|connection timed out|remote end closed|incomplete read|unable to download|"
-     r"http error 50\d|bad gateway|service unavailable|ssl|eof occurred",
+     r"http error 50\d|bad gateway|service unavailable|\bssl|certificate verify failed|eof occurred|could not reach the claude api",
      "The internet connection dropped, or the site did not answer.",
      "Check that your internet works (open any website). Most steps are tried again by themselves; if this one was not, press the button again."),
     # ---- AI services ----
-    (r"usage limit|plan's limit|quota|credit balance|insufficient_quota|rate_limit_error|overloaded",
-     "The AI service refused: the limit of your plan is reached for now, or the service is overloaded.",
-     "Wait until the limit resets (often a few hours) and try again, or choose another AI under Setup check. The clip itself is fine."),
-    (r"codex login|not signed in|claude login|logged out|please run /login",
+    (r"not signed in|not logged in|logged out|please run /login|please log in|run codex login",
      "The AI program on this computer is not signed in any more.",
      "Open Setup check: it shows which one is signed out and the one line to type to sign in again."),
-    (r"invalid x-api-key|invalid api key|incorrect api key|api key|http error 401|unauthorized|authentication",
+    (r"usage limit reached|hit your usage limit|reached your usage limit|usage_limit|hit your limit|\blimit reached|limit will reset|"
+     r"exceeded your current quota|quota exceeded|credit balance|"
+     r"insufficient_quota|rate_limit_error|rate limit reached|overloaded",
+     "The AI service refused: the limit of your plan is reached for now, or the service is overloaded.",
+     "Wait until the limit resets (often a few hours) and try again, or choose another AI under Setup check. The clip itself is fine."),
+    (r"invalid x-api-key|invalid api key|incorrect api key|http error 401|unauthorized|authentication_error|authentication failed",
      "The AI service did not accept the key or the sign-in.",
      "Open Setup check and press Check again under AI. If it stays red, the key in the .env file is wrong or has been cancelled."),
-    (r"11434|ollama",
+    (r"11434|ollama.{0,80}(refused|not running|not reachable|unreachable|did not answer|timed out)|could not reach ollama",
      "The free AI on this computer (Ollama) is not running or did not answer.",
      "Start Ollama from the Start menu, wait half a minute, then try again. Setup check shows whether it is running."),
     # ---- the computer itself ----
@@ -94,10 +104,15 @@ RULES: list[tuple[str, str, str]] = [
      "This step took far longer than it should and was stopped, so the program would not hang forever.",
      "Check your internet and try again. If the computer was busy with something heavy, wait for that to end first."),
     # ---- damaged program files ----
-    (r"jsondecodeerror|expecting value|cannot be read \(",
+    (r"\.json cannot be read \(|\.json is damaged",
      "One of the program's own small files is damaged, most likely because the computer was switched off while it was being written.",
      "Restart the program. If the message comes back, send the technical details to the person who set this up."),
 ]
+
+RULES.append(
+    (r"jsondecodeerror|expecting value: line|expecting property name|unterminated string starting",
+     "A small file or an answer the program needed was incomplete or damaged.",
+     "Try once more. If it keeps happening on the same clip, delete that clip and make it again; otherwise send the technical details to the person who set this up."))
 
 UNKNOWN = ("This step did not work, and the program does not have a plain explanation for this particular fault.",
            "Try once more. If it fails the same way, open Technical details and send that text to the person who set this up (or paste it into the Ask chat).")

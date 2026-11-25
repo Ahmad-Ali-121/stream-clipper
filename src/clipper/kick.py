@@ -355,22 +355,30 @@ class KickChatReader(threading.Thread):
         self.messages = 0
         self.connected_at: float | None = None
         self._seen: dict[str, None] = {}
+        self.gaps: list[tuple[float, float]] = []  # stretches (stream seconds) of which chat is missing
+        self._missed = False
+        self._last_ok: float | None = None
 
     def fresh(self) -> list[dict]:
         """Messages not seen before, oldest first."""
         new: list[dict] = []
+        taken: set[str] = set()
         before = None
         caught_up = False
         for _ in range(self.MAX_PAGES):
             page, older = chat_page(self.channel_id, before)
-            unseen = [m for m in page if m["id"] not in self._seen]
-            new += unseen
+            # also not twice within this one look: two pages can overlap by a message where one ends and the next begins
+            unseen = [m for m in page if m["id"] not in self._seen]   # not read in an earlier look
+            mine = [m for m in unseen if m["id"] not in taken]
+            taken.update(m["id"] for m in mine)
+            new += mine
             # Reached messages already read, or the start of the chat, or this is the first look (what was said before
             # is not ours). A short or empty page is not a reason to stop: Kick's pages can hold entries that are not chat.
             if len(unseen) < len(page) or older is None or (before is not None and older >= before) or self.connected_at is None or not self._seen:
                 caught_up = True
                 break
             before = older
+        self._missed = not caught_up
         if not caught_up:
             log.warning("%s: chat is arriving faster than it can be read, or nothing was read for a while; about %d messages were "
                         "taken and older ones in between are missing, so a moment in that stretch may be scored too low",
@@ -387,6 +395,11 @@ class KickChatReader(threading.Thread):
             try:
                 first = self.connected_at is None
                 new = self.fresh()
+                if self._missed and self._last_ok is not None:
+                    # Messages between the last good look and this one are missing: that stretch is not quiet chat,
+                    # and chat after it must not be taken for a spike against it.
+                    self.gaps.append((self._last_ok - self.stream_start, time.time() - self.stream_start))
+                self._last_ok = time.time()
                 if first:
                     self.connected_at = time.time()
                     new = [m for m in new if m["at"] >= self.connected_at - 5]

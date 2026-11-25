@@ -317,3 +317,21 @@ def test_a_finished_kick_stream_credits_the_channels_address(tmp_path):
     code = (Path(clipper.__file__).parent / "pipeline.py").read_text(encoding="utf-8")
     find = code[code.index("def stage_find"): code.index("def stage_find") + 9000]
     assert '"channel_handle": meta.get("channel_id", "") if source.platform in ("youtube", "kick") else ""' in find
+
+
+def test_pages_that_overlap_do_not_count_a_message_twice_or_stop_the_catching_up(tmp_path, monkeypatch):
+    """Kick pages are cut at a time, so the message on the cut can come on both pages. It is one message, and the
+    reader must still go on to the older pages behind it."""
+    r = kick.KickChatReader("name", 1, tmp_path / "chat.json", 0.0)
+    r.connected_at = 1.0
+    r._seen = {"m0": None}
+    ids = [f"m{i}" for i in range(60, 0, -1)]  # newest first; m0 was read before
+    pages = {None: ids[:25], 200: ids[24:49], 100: ids[48:] + ["m0"]}  # each page starts with the last one of the page before
+
+    def page(cid, before=None):
+        nxt = {None: 200, 200: 100, 100: None}[before]  # cursors go back in time
+        return [{"id": i, "at": float(i[1:]), "author": "a", "text": "x"} for i in pages[before]], nxt
+
+    monkeypatch.setattr(kick, "chat_page", page)
+    new = r.fresh()
+    assert [m["id"] for m in new] == [f"m{i}" for i in range(1, 61)]

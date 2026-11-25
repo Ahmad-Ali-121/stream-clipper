@@ -184,6 +184,8 @@ class SignalReader(threading.Thread):
         while not self.stop_event.is_set():
             try:
                 url = live_url(self.channel, self.cfg, self.video)
+                if self.stop_event.is_set():
+                    break  # stopped while the address was being asked for: do not start a reader nobody will end
                 self.proc = subprocess.Popen(
                     feed_command(ffmpeg, url, self.audio, self.video),
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, errors="replace",
@@ -196,9 +198,16 @@ class SignalReader(threading.Thread):
                 for p in pumps:
                     p.start()
                 started = time.time()
+                if self.stop_event.is_set():
+                    self.proc.kill()  # stop() came between the check above and the start
                 self.proc.wait()
                 if time.time() - started > 120:
                     wait = 5.0  # it ran fine for a while; reconnect quickly
+                elif not self.stop_event.is_set():
+                    log.warning("%s: the reader of the live feed's %s ended after %.0f seconds (exit code %s); moments are found from chat "
+                                "alone until it runs again. Trying again in %.0fs", self.channel,
+                                " and ".join(x for x, on in (("sound", self.audio), ("picture", self.video)) if on), time.time() - started,
+                                self.proc.returncode, wait)
             except Exception as e:  # the feed dropping is normal (ads, hiccups, stream end)
                 log.warning("%s: live feed problem (%s)", self.channel, e)
             if self.stop_event.is_set():

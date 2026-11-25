@@ -190,7 +190,9 @@ def export_clip(clip_dir: Path, ready_root: Path, brief: Brief | None = None, vi
     stem, titled = export_stem(state, clip_dir.name, suffix)
     video, n = day / f"{stem}.mp4", 2
     same = lambda a, b: b is not None and os.path.normcase(str(a)) == os.path.normcase(str(b))  # noqa: E731
-    while titled and video.exists() and not same(video, before):  # another clip has this title today: keep both
+    # Another clip has this name today: keep both. That also holds for clips without a title, which are named after
+    # their channel and their place in their own video: two videos can each have a clip at the same second.
+    while video.exists() and not same(video, before):
         video, n = day / f"{stem} ({n}).mp4", n + 1
     tmp = video.with_name(video.name + ".part")
     try:

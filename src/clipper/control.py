@@ -271,6 +271,7 @@ class Control:
         self.cfg = cfg
         self.proc: subprocess.Popen | None = None
         self.log_path = cfg.data_dir / "watch.log"
+        self._sweep_live_copies()  # left by a watcher that ended with a crash, a closed window or a power cut
         self.finish_lines: list[str] = []
         self.finishing = False
         self.finish_progress = {"done": 0, "total": 0, "now": ""}
@@ -634,11 +635,27 @@ class Control:
             code = self.proc.returncode
             self.proc = None
             self.watch_problem = f"THE WATCHER STOPPED BY ITSELF at {time.strftime('%H:%M:%S')}: {describe_exit(code)}. The lines above it say why."
+            self._sweep_live_copies()  # it may have died without the chance to remove the copy of the live feed it kept
             with self.log_path.open("a", encoding="utf-8") as fh:
                 fh.write(self.watch_problem + "\n")
             log.error(self.watch_problem)
 
+    def _sweep_live_copies(self) -> None:
+        """Remove copies of a live feed whose watcher is no longer running (see ``buffer.sweep``)."""
+        from . import buffer
+
+        try:
+            buffer.sweep(self.cfg.data_dir)
+        except Exception as e:  # tidying up must never take the page down
+            log.warning("leftover copies of a live feed could not be removed: %s", e)
+
+    def _not_updating(self) -> None:
+        """An update replaces the program's files and then restarts it; work started meanwhile would be cut off."""
+        if self.maint["running"] and self.maint.get("name") == "Update":
+            raise ValueError("the program is being updated right now and restarts when that is done. Wait for it, then press this again")
+
     def start_watch(self, raw: dict) -> dict:
+        self._not_updating()
         opts = clean_options({k: raw[k] for k in ("mode", "channels") if k in raw})
         names = opts.get("watch", {}).get("channels") or list(self.cfg.watch.channels)
         if not names:
@@ -682,6 +699,15 @@ class Control:
                 except subprocess.TimeoutExpired:
                     self.proc.kill()
                 self.proc = None  # stopped on purpose: not a death to report
+                # Ended at once, the watcher had no chance to tidy up: the copy of the live feed it kept for an
+                # unrecorded stream, and its note of what is live, are removed here.
+                from . import watch
+
+                self._sweep_live_copies()
+                try:
+                    (self.cfg.data_dir / watch.LIVE_FILE).unlink(missing_ok=True)
+                except OSError as e:
+                    log.warning("tidying up after the watcher: %s", e)
                 with self.log_path.open("a", encoding="utf-8") as fh:
                     fh.write(f"{time.strftime('%H:%M:%S')} stopped\n")
         return self.status()
@@ -721,6 +747,8 @@ class Control:
     def start_run(self, raw: dict) -> dict:
         from .sources import parse_source
 
+        self._not_updating()
+
         source = parse_source(str(raw.get("url") or ""))  # a clear ValueError for anything that is not a video link
         top = int(raw.get("top") or 8)
         signals = parse_mode(str(raw.get("signals") or "chat"))
@@ -743,6 +771,7 @@ class Control:
         return self.status()
 
     def _start_job(self, cmd: list[str], first_line: str) -> dict:
+        self._not_updating()
         with self._lock:
             if self.running():
                 raise ValueError("another job is still running in this box; wait for it to end or press Stop")
@@ -800,6 +829,7 @@ class Control:
         from .pipeline import parse_clock, split_range
         from .sources import parse_source
 
+        self._not_updating()
         source = parse_source(str(raw.get("source") or ""))
         if raw.get("ranges"):
             # Several separate stretches picked from the transcript or from a chatbot's answers: each its own clip.
@@ -860,6 +890,7 @@ class Control:
 
     def start_finish(self, raw: dict | None = None) -> dict:
         """Make the videos of every approved clip, or of one (``only``: "work folder/clip id", from that clip's own button)."""
+        self._not_updating()
         only = None
         if (raw or {}).get("only"):
             m = re.fullmatch(r"([A-Za-z0-9_-]+)/([0-9a-z]+)", str(raw["only"]))

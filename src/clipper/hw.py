@@ -353,6 +353,44 @@ def encoder(cfg: Config) -> str:
     return detect(cfg)["encoder"] if cfg.render.encoder == "auto" else cfg.render.encoder
 
 
+ENCODER_FAULT = __import__("re").compile(
+    r"nvenc|qsv|\bamf\b|h264_|open(ing)? encoder|encoder (setup|initiali[sz]ation)|no capable devices|mfx|d3d11|dxva|cuda|nvidia|"
+    r"hwaccel|hardware|device (creation|setup) failed|driver|incompatible client key|session", __import__("re").IGNORECASE)
+
+
+def run_encode(cfg: Config, crf: int, preset: str, make_cmd, part: Path | None = None, **run_args) -> str:
+    """Run one FFmpeg encode with this computer's video encoder; returns the encoder that made the file.
+
+    ``make_cmd(encoder arguments)`` gives the whole command. The graphics card's encoder was tried once, long ago, and
+    can fail later (a driver update, a game or a recorder using all its sessions, another card after docking): the
+    video is then made with the processor instead, slower, instead of every clip failing. ``part`` is the unfinished
+    file, removed if the encode fails."""
+    from .tools import ToolError, run
+
+    enc = encoder(cfg)
+    try:
+        try:
+            run(make_cmd(encoder_args(enc, crf, preset)), **run_args)
+            return enc
+        except ToolError as e:
+            # Only when the failure is the encoder's own. A missing logo, a full disk or a broken filter would fail the
+            # same way on the processor, after a second wait and with advice about drivers that has nothing to do with it.
+            if enc == "libx264" or "timed out after" in str(e) or not ENCODER_FAULT.search(str(e)):
+                raise
+            log.warning("the graphics card's video encoder (%s) failed, so this video is made with the processor instead (slower). "
+                        "If this happens every time, close games and recording programs, or update the graphics driver. What it said: %s",
+                        enc, str(e)[:300])
+            run(make_cmd(encoder_args("libx264", crf, preset)), **run_args)
+            return "libx264"
+    except BaseException:
+        if part is not None:
+            try:
+                Path(part).unlink(missing_ok=True)  # a half-made file is of no use to anyone
+            except OSError:
+                pass
+        raise
+
+
 def whisper_device(cfg: Config) -> tuple[str, str]:
     """(device, compute_type) for the speech model."""
     t = cfg.transcribe

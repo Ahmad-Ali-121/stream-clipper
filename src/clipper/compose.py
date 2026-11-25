@@ -108,7 +108,18 @@ def narration_words(text: str, voice: Path, duration: float, cfg: Config) -> lis
     from .transcribe import transcribe_file
 
     try:
-        return align_words(text, transcribe_file(voice, cfg), duration)
+        # The narrator's voice is an English one whatever is spoken on the stream. Listening to it as Urdu or Hindi
+        # gives words that match nothing, and the captions then fall back to guessed timing without a word.
+        listen = replace(cfg, transcribe=replace(cfg.transcribe, language="en"))
+        heard = transcribe_file(voice, listen)
+        words = align_words(text, heard, duration)
+        if heard and len(text.split()) >= 4:
+            ours = [re.sub(r"[^\w]", "", w).lower() for w in text.split()]
+            theirs = {re.sub(r"[^\w]", "", str(h.get("word") or "")).lower() for h in heard}
+            if sum(1 for w in ours if w and w in theirs) * 2 < len(ours):
+                log.warning("the narration's words could not be matched to its sound (%d of %d heard as written); its captions are "
+                            "timed by estimate, so they may run a little ahead of or behind the voice", sum(1 for w in ours if w and w in theirs), len(ours))
+        return words
     except Exception as e:  # captions slightly off beat a failed video
         log.warning("could not time the narration from its audio (%s); estimating instead", e)
         return spread_words(text, duration)
@@ -229,12 +240,13 @@ def make_card(still_from: Path, text: str, out: Path, cfg: Config, big: str = ""
     )
     ffmpeg = find_tool("ffmpeg", cfg.data_dir)
     part = f"{out.stem}.part.mp4"
-    run(
-        [ffmpeg, "-y", "-hide_banner", "-v", "error", "-i", str(still_from), "-i", voice.name,
-         "-filter_complex", graph, "-map", "[v]", "-map", "[a]", "-t", f"{duration:.3f}"]
-        + hw.encoder_args(hw.encoder(cfg), r.crf, r.preset)
+    hw.run_encode(
+        cfg, r.crf, r.preset,
+        lambda video: [ffmpeg, "-y", "-hide_banner", "-v", "error", "-i", str(still_from), "-i", voice.name,
+                       "-filter_complex", graph, "-map", "[v]", "-map", "[a]", "-t", f"{duration:.3f}"]
+        + video
         + ["-pix_fmt", "yuv420p", "-r", str(r.fps), "-c:a", "aac", "-b:a", r.audio_bitrate, "-ar", "48000", "-ac", "2", part],
-        timeout_s=600, what="narration card", cwd=folder,
+        part=folder / part, timeout_s=600, what="narration card", cwd=folder,
     )
     os.replace(folder / part, out)
     return out
@@ -255,11 +267,12 @@ def concat(parts: list[Path], out: Path, cfg: Config) -> Path:
     graph = ";".join(chains) + f";{labels}concat=n={len(parts)}:v=1:a=1[v][a]"
     out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(out.stem + ".part.mp4")
-    run(
-        [ffmpeg, "-y", "-hide_banner", "-v", "error"] + inputs + ["-filter_complex", graph, "-map", "[v]", "-map", "[a]"]
-        + hw.encoder_args(hw.encoder(cfg), r.crf, r.preset)
+    hw.run_encode(
+        cfg, r.crf, r.preset,
+        lambda video: [ffmpeg, "-y", "-hide_banner", "-v", "error"] + inputs + ["-filter_complex", graph, "-map", "[v]", "-map", "[a]"]
+        + video
         + ["-pix_fmt", "yuv420p", "-r", str(r.fps), "-c:a", "aac", "-b:a", r.audio_bitrate, "-ar", "48000", "-movflags", "+faststart", str(part)],
-        timeout_s=1800, what="joining segments",
+        part=part, timeout_s=1800, what="joining segments",
     )
     os.replace(part, out)
     return out
@@ -275,6 +288,19 @@ def explained(clip_dir: Path, cfg: Config, force: bool = False, variant: str = "
     out = clip_dir / ("explained_b.mp4" if b else "explained.mp4")
     if done(out) and not force:
         return out
+    line = lambda: ((lambda s: ((s.get("intro_b") if b else "") or s.get("intro") or "").strip())(read_json(clip_dir / "clip.json", {})))  # noqa: E731
+    before = line()
+    made = _explained(clip_dir, cfg, variant, on_step)
+    if line() != before and line():
+        # The narrator's line was changed while this was being made: the file just made speaks the old one.
+        log.info("clip %s: the narrator's line was changed while its explained version was being made; making it again", clip_dir.name)
+        made = _explained(clip_dir, cfg, variant, None)
+    return made
+
+
+def _explained(clip_dir: Path, cfg: Config, variant: str, on_step) -> Path:
+    b = variant == "b"
+    out = clip_dir / ("explained_b.mp4" if b else "explained.mp4")
     state = read_json(clip_dir / "clip.json")
     intro = ((state.get("intro_b") if b else "") or state.get("intro") or "").strip()
     if not intro:

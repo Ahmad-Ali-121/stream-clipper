@@ -56,6 +56,9 @@ def clip_dirs(work: Path) -> list[Path]:
     return sorted(p for p in root.iterdir() if p.is_dir() and (p / "clip.json").exists()) if root.is_dir() else []
 
 
+_unreadable: set[tuple] = set()
+
+
 def read_json(path: Path, default: Any = None) -> Any:
     """The file's contents. With a ``default``, a file that is missing, empty or damaged gives the default (and a
     line in the log) instead of an error, so one bad file cannot blank a whole list on the review page."""
@@ -66,7 +69,14 @@ def read_json(path: Path, default: Any = None) -> Any:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
-        logging.getLogger(__name__).warning("%s cannot be read (%s); it is treated as empty", path, e)
+        # Said once for each state of the file, not on every look: the page looks every few seconds.
+        try:
+            mark = (str(path), path.stat().st_mtime_ns, str(e)[:80])
+        except OSError:
+            mark = (str(path), 0, str(e)[:80])
+        if mark not in _unreadable:
+            _unreadable.add(mark)
+            logging.getLogger(__name__).warning("%s cannot be read (%s); it is treated as empty", path, e)
         return default
     return default if data is None or type(data) is not type(default) else data
 
@@ -114,6 +124,65 @@ def _tmp(path: Path) -> Path:
 
 
 _update_lock = __import__("threading").Lock()
+_held = __import__("threading").local()
+
+
+class clip_lock:
+    """One writer at a time for a clip's file, across programs: the page, the watcher and a run are separate programs,
+    and each reads the file, changes a few keys and writes it back. Two doing that within the same instant would lose
+    one of the changes. The lock is a small file beside the clip's own (clip.json.lock), there only for that instant.
+
+    It never blocks for long: a lock left by a program that was ended is taken over after three seconds, and after
+    three seconds of waiting the write goes ahead anyway (said in the log) rather than fail.
+    """
+
+    def __init__(self, path: Path, wait_s: float = 3.0) -> None:
+        self.path, self.lock, self.wait_s, self.fd, self.outer = path, path.with_name(path.name + ".lock"), wait_s, None, False
+
+    def __enter__(self):
+        import time
+
+        mine = getattr(_held, "paths", None)
+        if mine is None:
+            mine = _held.paths = set()
+        if str(self.path) in mine or not self.path.parent.is_dir():
+            return self  # held by this very thread already, or a clip that is only now being started
+        end = time.monotonic() + self.wait_s
+        while True:
+            try:
+                self.fd = os.open(self.lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                break
+            except (FileExistsError, PermissionError):
+                try:
+                    if time.time() - self.lock.stat().st_mtime > 3:
+                        self.lock.unlink(missing_ok=True)  # left behind by a program that was ended mid-write (a write takes milliseconds)
+                        continue
+                except OSError:
+                    pass
+                if time.monotonic() > end:
+                    logging.getLogger(__name__).warning("%s: another program has held this clip's file for %.0f seconds; writing anyway", self.path, self.wait_s)
+                    try:
+                        self.lock.unlink(missing_ok=True)  # so that the next writer does not wait for it as well
+                    except OSError:
+                        pass
+                    break
+                time.sleep(0.02)
+            except OSError:
+                break  # the folder went away, or the disk refuses: the write itself will say so
+        mine.add(str(self.path))
+        self.outer = True
+        return self
+
+    def __exit__(self, *exc) -> None:
+        if not self.outer:
+            return
+        _held.paths.discard(str(self.path))
+        if self.fd is not None:
+            os.close(self.fd)
+            try:
+                self.lock.unlink()
+            except OSError:
+                pass
 
 
 def update_clip(path: Path, changes: dict, drop: tuple = ()) -> dict:
@@ -122,8 +191,27 @@ def update_clip(path: Path, changes: dict, drop: tuple = ()) -> dict:
     For a step that took a while (a render, an export): writing back the copy it read at the start would undo
     whatever a person edited in the meantime, so only what the step produced is written.
     """
-    with _update_lock:
-        state = read_json(path, {})
+    import time
+
+    with _update_lock, clip_lock(path):
+        state: dict = {}
+        if path.exists():
+            # The file is there: what is in it must be read before anything is written back. Treating a file that could
+            # not be read this instant as empty would replace the whole clip (its times, its text, its cut) by these few keys.
+            for attempt in range(20):
+                try:
+                    state = json.loads(path.read_text(encoding="utf-8"))
+                    break
+                except PermissionError:  # another writer is putting its copy in place this instant (Windows)
+                    if attempt == 19:
+                        raise
+                    time.sleep(0.05)
+                except ValueError as e:
+                    logging.getLogger(__name__).error("%s is damaged (%s); it is left as it is, and this change is not written: %s", path, e, sorted(changes))
+                    return {}
+            if not isinstance(state, dict):
+                logging.getLogger(__name__).error("%s does not hold a clip; it is left as it is, and this change is not written: %s", path, sorted(changes))
+                return {}
         state.update(changes)
         for key in drop:
             state.pop(key, None)
@@ -309,13 +397,14 @@ HUMAN_KEYS = ("status", "explainer", "simple", "held", "disclosure", "notes")
 
 def save_clip(path: Path, state: dict) -> dict:
     """Write a clip's state from an automatic step, keeping whatever a person decided in the meantime."""
-    disk = read_json(path, {}) or {}
-    for key in HUMAN_KEYS:
-        if key in disk:
-            state[key] = disk[key]
-        elif disk:
-            state.pop(key, None)  # taken away by the person meanwhile (a clip that left Pending): not put back
-    write_json(path, state)
+    with clip_lock(path):
+        disk = read_json(path, {}) or {}
+        for key in HUMAN_KEYS:
+            if key in disk:
+                state[key] = disk[key]
+            elif disk:
+                state.pop(key, None)  # taken away by the person meanwhile (a clip that left Pending): not put back
+        write_json(path, state)
     return state
 
 

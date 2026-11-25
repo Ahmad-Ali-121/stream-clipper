@@ -133,20 +133,23 @@ def test_a_clip_whose_file_is_in_use_says_so_instead_of_crashing(tmp_path, monke
     d.mkdir(parents=True)
     (d / "clip.json").write_text(json.dumps({"id": "0h00m10s", "status": "candidate"}), encoding="utf-8")
     (d / "source.mp4").write_bytes(b"x")
-    real = Path.unlink
+    (d / "final.mp4").write_bytes(b"y")  # comes before source.mp4: it must not be gone when source.mp4 refuses
+    (d / "words.json").write_text("[]", encoding="utf-8")
+    real = Path.rename
 
     def locked(self, *a, **k):
         if self.name == "source.mp4":
             raise PermissionError(32, "in use")
         return real(self, *a, **k)
 
-    monkeypatch.setattr(Path, "unlink", locked)
+    monkeypatch.setattr(Path, "rename", locked)
     with pytest.raises(ClipInUse, match="in use"):
         delete_clip(d)
-    assert json.loads((d / "clip.json").read_text(encoding="utf-8"))["status"] == "candidate"  # not half deleted
-    monkeypatch.setattr(Path, "unlink", real)
+    assert json.loads((d / "clip.json").read_text(encoding="utf-8"))["status"] == "candidate"
+    assert sorted(p.name for p in d.iterdir()) == ["clip.json", "final.mp4", "source.mp4", "words.json"]  # all or nothing
+    monkeypatch.setattr(Path, "rename", real)
     delete_clip(d)
-    assert json.loads((d / "clip.json").read_text(encoding="utf-8"))["status"] == "deleted" and not (d / "source.mp4").exists()
+    assert json.loads((d / "clip.json").read_text(encoding="utf-8"))["status"] == "deleted" and [p.name for p in d.iterdir()] == ["clip.json"]
 
 
 def test_every_layout_gives_a_full_size_picture():

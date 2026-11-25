@@ -261,15 +261,27 @@ def chatgpt_cover(d: Path, cfg: Config, prompt: str = "") -> Path:
             # Seen for real on 2026-11-23: the picture was saved after 3 minutes, then Codex sat idle and never ended,
             # so the page waited 15 minutes and threw the finished picture away. A picture that has not changed for
             # half a minute is finished: Codex is not waited for any longer.
-            made = [f.stat() for f in _pictures(work, frames)]
+            # Only the picture that was asked for by name (cover.png) counts: Codex may first save a cut-out of a frame
+            # to look at, or a first try, and then work on the real one for longer than half a minute.
+            try:
+                made = [f.stat() for f in _pictures(work, frames) if f.name.lower() == "cover.png"]
+            except OSError:
+                return False  # Codex renamed or removed a picture this instant: look again in a moment
             return bool(made) and all(m.st_size > 0 for m in made) and time.time() - max(m.st_mtime for m in made) > QUIET_S
 
+        out_text = ""
         try:
             proc = run(cmd, timeout_s=CODEX_LIMIT_S, what="ChatGPT (Codex) making a thumbnail", cwd=work, input_text=text, enough=picture_is_there)
+            out_text = (proc.stdout or "") + (proc.stderr or "")
         except ToolError as e:
-            _log_use(cfg, d, None, t0, f"failed: {str(e)[:200]}")  # it may have used the plan before it failed
-            raise ToolError(f"{e}. If it mentions signing in or a limit: run  codex login  in a terminal, or your ChatGPT plan's limit is reached") from e
-        tokens = re.search(r"tokens used\s*([\d,]+)", (proc.stdout or "") + (proc.stderr or ""))
+            if "timed out after" in str(e) and _pictures(work, frames):
+                # It never ended, but a picture is there (saved under another name, or in the last moments): it is taken
+                # instead of being thrown away with the whole wait.
+                log.warning("clip %s: ChatGPT did not end in time, but it had saved a picture; that picture is used", d.name)
+            else:
+                _log_use(cfg, d, None, t0, f"failed: {str(e)[:200]}")  # it may have used the plan before it failed
+                raise ToolError(f"{e}. If it mentions signing in or a limit: run  codex login  in a terminal, or your ChatGPT plan's limit is reached") from e
+        tokens = re.search(r"tokens used\s*([\d,]+)", out_text)
         used = int(tokens.group(1).replace(",", "")) if tokens else None
         made = _pictures(work, frames)
         if not made:
@@ -277,7 +289,8 @@ def chatgpt_cover(d: Path, cfg: Config, prompt: str = "") -> Path:
             said = " ".join((work / "reply.txt").read_text(encoding="utf-8", errors="replace").split())[:300] if (work / "reply.txt").exists() else ""
             raise ToolError("ChatGPT answered but saved no picture" + (f". It said: {said}" if said else "")
                             + ". Pictures need a paid ChatGPT plan with usage left; try again, or use the free thumbnail from the clip")
-        picked = next((f for f in made if f.name == "cover.png"), max(made, key=lambda f: f.stat().st_size))
+        # the one asked for by name; failing that the one saved last (a first try or a helper picture comes before the real one)
+        picked = next((f for f in made if f.name.lower() == "cover.png"), max(made, key=lambda f: f.stat().st_mtime))
         fit_cover(picked, d / COVER, cfg.render.width, cfg.render.height)
         said = (work / "reply.txt").read_text(encoding="utf-8", errors="replace").strip().splitlines() if (work / "reply.txt").exists() else []
         words = (said or [""])[-1][:120]

@@ -12,7 +12,6 @@ import subprocess
 import sys
 import threading
 import time
-from functools import lru_cache
 from pathlib import Path
 from typing import Sequence
 
@@ -69,8 +68,22 @@ def _wait(proc: subprocess.Popen, timeout_s: float | None, wait, enough=None) ->
                 raise
 
 
-@lru_cache(maxsize=None)
+_found: dict[tuple[str, str], str] = {}
+
+
 def _find(name: str, tools_dir: str) -> str | None:
+    """Where the tool is. A place found before is remembered while the file is still there; "not found" is never
+    remembered, so a tool installed by the Repair button is seen without restarting the program."""
+    known = _found.get((name, tools_dir))
+    if known and Path(known).is_file():
+        return known
+    path = _look_for(name, tools_dir)
+    if path:
+        _found[(name, tools_dir)] = path
+    return path
+
+
+def _look_for(name: str, tools_dir: str) -> str | None:
     found = shutil.which(name)
     if found:
         return found
@@ -89,9 +102,58 @@ def find_tool(name: str, data_dir: Path) -> str:
     return path
 
 
+def _own_group(proc: subprocess.Popen) -> None:
+    """Put a started program into a group of its own (a Windows job), so that everything it starts can be ended with
+    it later, even when the program itself has already gone and its helpers are no longer findable through it."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.CreateJobObjectW.restype = ctypes.c_void_p
+        k.CreateJobObjectW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
+        k.AssignProcessToJobObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        k.CloseHandle.argtypes = [ctypes.c_void_p]
+        job = k.CreateJobObjectW(None, None)
+        if not job:
+            return
+        if not k.AssignProcessToJobObject(job, int(proc._handle)):
+            k.CloseHandle(job)
+            return
+        proc._clipper_job = job
+    except Exception as e:  # without the group the older way (ending the tree by its top) still works
+        log.debug("no job group for %s: %s", proc.args[0] if proc.args else "?", e)
+
+
+def _end_group(proc: subprocess.Popen, kill: bool) -> None:
+    job = getattr(proc, "_clipper_job", None)
+    if not job:
+        return
+    proc._clipper_job = None
+    try:
+        import ctypes
+
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.TerminateJobObject.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        k.CloseHandle.argtypes = [ctypes.c_void_p]
+        if kill:
+            k.TerminateJobObject(job, 1)
+        k.CloseHandle(job)
+    except Exception as e:
+        log.debug("job group could not be ended: %s", e)
+
+
 def kill_tree(proc: subprocess.Popen) -> None:
     """Stop a program and the programs it started (yt-dlp and TwitchDownloader both run FFmpeg, which would
     otherwise keep downloading and keep the unfinished file locked)."""
+    if getattr(proc, "_clipper_job", None):
+        _end_group(proc, kill=True)  # everything it started, also when the program itself has ended already
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        return
     if proc.poll() is not None:
         return
     if sys.platform == "win32":
@@ -109,6 +171,7 @@ def _run_plain(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, in
     proc = subprocess.Popen(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             stdin=subprocess.DEVNULL if input_text is None else subprocess.PIPE,  # never wait on a prompt
                             text=True, encoding="utf-8", errors="replace", cwd=str(cwd) if cwd else None)
+    _own_group(proc)
     if input_text is not None:  # what the tool is to read (a request too long or too odd for the command line), then its input ends
         try:
             proc.stdin.write(input_text)
@@ -117,17 +180,32 @@ def _run_plain(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, in
             pass  # it ended before reading: its exit code and last words say why
         proc.stdin = None
     got: list = []
+
+    def last_words() -> tuple[str, str]:
+        # The program is ended, but a helper it started can outlive it and keep its output open; waiting for that
+        # without a limit would bring back the very hang the time limit and the Stop button exist to end.
+        try:
+            return proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            log.warning("%s was ended, but something it started is still running and holds its output; not waiting for it", Path(cmd[0]).name)
+            return "", ""
+
     try:
         _wait(proc, timeout_s, lambda t: got.extend(proc.communicate(timeout=t)), enough)
     except (subprocess.TimeoutExpired, Stopped):
         kill_tree(proc)
-        proc.communicate()
+        last_words()
         raise
     except _Enough:
         kill_tree(proc)
-        out, err = proc.communicate()
+        out, err = last_words()
         log.warning("%s had finished its work but did not end by itself; it was ended", Path(cmd[0]).name)
         return subprocess.CompletedProcess(list(cmd), 0, out, err)
+    except BaseException:  # anything else (a fault in the "is it finished?" check): never leave the program running behind us
+        kill_tree(proc)
+        last_words()
+        raise
+    _end_group(proc, kill=False)  # ended by itself: nothing is taken from it
     return subprocess.CompletedProcess(list(cmd), proc.returncode, got[0], got[1])
 
 
@@ -143,6 +221,7 @@ def _run_watched(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, 
     from .progress import is_progress_line
 
     proc = subprocess.Popen(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=str(cwd) if cwd else None)
+    _own_group(proc)
     kept: list[str] = []
 
     def pump() -> None:
@@ -176,6 +255,7 @@ def _run_watched(cmd: Sequence[str], timeout_s: float | None, cwd: Path | None, 
         reader.join(timeout=5)
         raise
     reader.join(timeout=10)
+    _end_group(proc, kill=False)
     return subprocess.CompletedProcess(list(cmd), proc.returncode, "\n".join(kept), "")
 
 

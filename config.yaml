@@ -108,6 +108,7 @@ llm:                      # writes hooks, titles, descriptions and narration. Ne
   effort: low
   text_language: English  # opening text, titles and description are written in: English, Roman Urdu, Hinglish, Urdu or Hindi
   help_model: claude-sonnet-5-5   # the built-in help assistant (the "Ask" button)
+  help_act_at_once: false         # false = the assistant always shows its steps with a "Do it for me" button first; true = it does them at once when they follow from your own words
   roman_model: claude-haiku-5-5   # the model that turns Urdu or Hindi captions into Latin letters: a simple job, so the small, fast one
   local: auto             # the free AI on this computer (Ollama), used for clip text when Claude cannot be reached. auto = use it if it is set up; off = never
   local_model: llama3.2:3b

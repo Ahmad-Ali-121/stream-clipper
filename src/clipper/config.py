@@ -204,6 +204,10 @@ class LlmSettings:
     roman_model: str = "claude-haiku-5-5"
     # The built-in help assistant. It reads the whole guide with every question, so a quick model keeps answers snappy.
     help_model: str = "claude-sonnet-5-5"
+    # May the help assistant do steps at once, without you pressing "Do it for me"? Off: it always shows the steps and
+    # the button first. That is the safe choice, because the assistant also reads text written by strangers (stream
+    # titles, chat). On: it acts at once when the steps follow from your own words (see help.asked_for).
+    help_act_at_once: bool = False
     look_at_frames: bool = True  # also show AI three small frames of each clip, so it can rate what is on screen, not only the words
 
 

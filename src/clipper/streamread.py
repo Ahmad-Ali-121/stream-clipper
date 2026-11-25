@@ -133,7 +133,10 @@ def transcribe_stream(url: str, work: Path, cfg: Config, duration_s: float | Non
     cmd += ["-vn", "-ac", "1", "-ar", str(RATE), "-f", "s16le", "-"]
     log.info("reading the stream's speech with the %s model from %s%s (only the text is kept)", name, format_time(done_s),
              f" to {format_time(target)}" if target else "")
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+    import tempfile
+
+    complaints = tempfile.TemporaryFile()  # not a pipe: one nobody reads fills up and FFmpeg then stands still
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=complaints, stdin=subprocess.DEVNULL)
     t0, at, want = time.time(), done_s, CHUNK_S * RATE * 2
     try:
         while True:
@@ -162,9 +165,18 @@ def transcribe_stream(url: str, work: Path, cfg: Config, duration_s: float | Non
     finally:
         if proc.poll() is None:
             proc.kill()
-    err = proc.stderr.read().decode(errors="replace").strip()
+    complaints.seek(0)
+    err = complaints.read().decode(errors="replace").strip()
+    complaints.close()
     if at <= done_s and not (target and done_s >= target - 1):
         raise ToolError(f"none of the stream's sound could be read: {err[-300:] or 'FFmpeg gave no sound'}")
+    # (FFmpeg ending cleanly with nothing to say means the video simply ended there: its listed length was too long,
+    # or only a limit of hours was known. That is not a fault.)
+    if target and at < target - max(120.0, 0.02 * target) and (err or proc.returncode not in (0, None)):
+        # The reading broke off (the connection dropped). Picking moments from the part that was read, without a word,
+        # would look like a finished job that simply found little.
+        raise ToolError(f"the stream's speech could only be read up to {format_time(at)} of {format_time(target)}: "
+                        f"{err[-300:] or 'the connection to the video ended early'}. Start it again: it carries on from where it stopped")
     return out
 
 

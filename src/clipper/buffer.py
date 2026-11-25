@@ -20,6 +20,7 @@ import logging
 import os
 import re
 import shutil
+import sys
 import threading
 import time
 import urllib.request
@@ -102,6 +103,67 @@ def choose_pieces(pieces: list[dict], start_s: float, end_s: float, slack: float
     return picked
 
 
+def _running(pid: int) -> bool:
+    """Is a program with this number running on this computer right now?"""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        import ctypes
+
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.OpenProcess.restype = ctypes.c_void_p
+        k.OpenProcess.argtypes = [ctypes.c_uint, ctypes.c_int, ctypes.c_uint]
+        k.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint)]
+        k.CloseHandle.argtypes = [ctypes.c_void_p]
+        handle = k.OpenProcess(0x1000, 0, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # access denied: it exists, under another account
+        code = ctypes.c_uint(0)
+        alive = bool(k.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+        k.CloseHandle(handle)
+        return alive
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+def sweep(data_dir: Path) -> int:
+    """Remove live-feed copies left on disk by a watcher that ended without the chance to tidy up (the Stop button ends
+    it at once; a crash; a closed window; a power cut). The copy is only ever meant to exist while a stream is watched.
+
+    Each buffer's folder is named after the program that owns it, so only folders whose program is no longer running
+    are removed: a watcher that is still at work (one started from a terminal, say) keeps its copy.
+    Returns how many folders were removed."""
+    removed = 0
+    for root in (data_dir / "work").glob("*/buffer"):
+        for item in list(root.iterdir()) if root.is_dir() else []:
+            owner = item.name.split("-")[0]
+            if item.is_dir() and owner.isdigit() and _running(int(owner)):
+                continue  # its watcher is running
+            if item.is_dir():
+                shutil.rmtree(item, ignore_errors=True)
+            else:
+                try:
+                    item.unlink()  # a piece kept by an older version, straight in the folder
+                except OSError:
+                    pass
+            if item.exists():
+                log.warning("a leftover copy of a live feed could not be removed (a file in it is in use): %s", item)
+            else:
+                removed += 1
+        try:
+            root.rmdir()  # only when nothing is left in it
+        except OSError:
+            pass
+    if removed:
+        log.info("%d leftover piece(s) or folder(s) of a live feed copy removed", removed)
+    return removed
+
+
 def live_info(channel: str, cfg: Config) -> dict | None:
     """What Twitch says about the channel's current broadcast, or None when it is offline."""
     from .fetch import _ytdlp
@@ -144,6 +206,9 @@ def _get(url: str, timeout: float = 20.0, agent: dict | None = None) -> bytes:
         return r.read()
 
 
+_number = __import__("itertools").count(1)
+
+
 class LiveBuffer(threading.Thread):
     """Keeps the last ``watch.buffer_minutes`` of one channel's live feed in ``folder``."""
 
@@ -155,14 +220,21 @@ class LiveBuffer(threading.Thread):
         self.stop_event = threading.Event()
         self.pieces: list[dict] = []  # {"t", "d", "file"}, oldest first
         self.adverts = 0
+        self.first_t: float | None = None  # the stream second of the first piece ever kept: nothing before it was ever held
         self.bytes = 0
         self._seen: dict[str, float] = {}
         self._inits: dict[str, str] = {}  # header piece address -> its file (kept as long as the buffer runs; a few KB each)
         self._lock = threading.Lock()
         shutil.rmtree(folder, ignore_errors=True)  # pieces from an earlier run are stale
-        folder.mkdir(parents=True, exist_ok=True)
+        # Its own folder inside: a buffer that was stopped can take a while to notice (it may be waiting for the site),
+        # and when it then tidies up it must only remove its own pieces, never those of the buffer started after it.
+        self.root = folder
+        self.folder = folder / f"{os.getpid()}-{time.time_ns()}-{next(_number)}"  # the clock alone can repeat within one instant
+        self.folder.mkdir(parents=True, exist_ok=True)
 
     def _store(self, piece: Piece) -> None:
+        if (self.folder / f"{int(piece.at * 1000)}.ts").exists():
+            return  # held already: after a reconnect the same pieces can come back under new addresses
         data = b""
         for attempt in range(3):
             try:
@@ -186,6 +258,8 @@ class LiveBuffer(threading.Thread):
                 file.write_bytes(blob)
                 head = self._inits[piece.init] = str(file)
         t = piece.at - self.stream_start
+        if self.first_t is None:
+            self.first_t = t
         path = self.folder / f"{int(piece.at * 1000)}.ts"
         part = path.with_suffix(".part")
         part.write_bytes(data)
@@ -235,6 +309,10 @@ class LiveBuffer(threading.Thread):
                 else:
                     self.stop_event.wait(2.0)
         shutil.rmtree(self.folder, ignore_errors=True)
+        try:
+            self.root.rmdir()  # only when no newer buffer has its folder in it
+        except OSError:
+            pass
 
     def stop(self) -> None:
         self.stop_event.set()

@@ -333,7 +333,25 @@ def render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str 
     with _render_locks_guard:
         lock = _render_locks.setdefault(str(clip_dir.resolve()), threading.Lock())
     with lock:
-        return _render_clip(clip_dir, cfg, force, out_name, hook, variant)
+        # A render takes a while and reads the clip's text and cut at its start. If the person changed them meanwhile,
+        # the file just made shows the old ones while the card shows the new: it is made once more, so what is
+        # exported is what the card says.
+        before = _edit_mark(clip_dir)
+        out = _render_clip(clip_dir, cfg, force, out_name, hook, variant)
+        if _edit_mark(clip_dir) != before:
+            log.info("clip %s was edited while its video was being made; making it again with the change", clip_dir.name)
+            out = _render_clip(clip_dir, cfg, True, out_name, hook, variant)
+        return out
+
+
+def _edit_mark(clip_dir: Path) -> tuple:
+    """What a person can change on a clip's card that is seen in its video: the opening texts, the cut, the layout, the words."""
+    state = read_json(clip_dir / "clip.json", {})
+    try:
+        words = (clip_dir / "words.json").stat().st_mtime_ns
+    except OSError:
+        words = 0
+    return tuple(json.dumps(state.get(k), sort_keys=True) for k in ("hook", "hook_b", "cut_start_s", "cut_end_s", "layout", "facecam", "game", "face_corner", "face_size", "crop_x", "disclosure")) + (words,)
 
 
 def _file_stamp(path: str) -> tuple:
@@ -494,6 +512,9 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
         last = "[v3]"
         extra += 1
 
+    from .fetch import ensure_sound
+
+    ensure_sound(clip_dir / "source.mp4", cfg)
     measured = _measure_loudness(ffmpeg, "source.mp4", offset, duration, r.loudness_lufs, clip_dir)
     loud = f"loudnorm=I={r.loudness_lufs}:TP=-1.0:LRA=11"
     if measured:
@@ -522,10 +543,8 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
         extra += 1
     from . import hw
 
-    enc = hw.encoder(cfg)
-    video = hw.encoder_args(enc, r.crf, r.preset)
     part = f"{stem}.part.mp4"
-    cmd = (
+    cmd = lambda video: (  # noqa: E731
         [ffmpeg, "-y", "-hide_banner", "-v", "error", "-stats"] + inputs
         + ["-filter_complex", graph, "-map", last, "-map", sound]
         + video
@@ -535,7 +554,8 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
     t0 = time.monotonic()
     from . import progress
 
-    run(cmd, timeout_s=1800, what=f"render of clip {clip_dir.name}", cwd=clip_dir, on_line=progress.from_tool(duration))
+    enc = hw.run_encode(cfg, r.crf, r.preset, cmd, part=clip_dir / part, timeout_s=1800, what=f"render of clip {clip_dir.name}", cwd=clip_dir,
+                        on_line=progress.from_tool(duration))
     if not done(clip_dir / part):
         raise ToolError(f"render of clip {clip_dir.name} produced no file")
     os.replace(clip_dir / part, out)
