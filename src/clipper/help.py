@@ -91,7 +91,7 @@ Doing things for the user:
 - A colour box takes a colour as #rrggbb (yellow is #FFD400, white #FFFFFF, red #FF3B30, green #34C759, blue #2F80ED). A number box or slider takes a plain number inside the range the list shows. A choice list takes one of its choices, written exactly.
 - Put the steps in the order a person would do them: open the tab first only if the list says the thing is inside another tab (the page opens pages, tabs, clips and fold-outs by itself when it uses a thing, so you rarely need a step for that).
 - If the user did not give something a step needs (which channel, which link, what time), do not invent it: ask for it in "answer" and give no acts.
-- Some presses always stay the user's own and the page will only point at them: Approve, Reject, Delete, Back to review, Move to Pending and everything else on a clip's card (also its "Versions to make" tick boxes), the box editor window, deleting, removing or clearing anything, restarting, repairing, installing or updating the program, and anything the list marks "YOURS". Say so in the step ("this one is yours to press").
+- Some presses always stay the user's own and the page will only point at them: Approve, Reject, Delete, Back to review, Move to Pending and everything else on a clip's tile and in its editor (also the tick boxes of its Versions tab), the box editor window, deleting, removing or clearing anything, restarting, repairing, installing or updating the program, and anything the list marks "YOURS". Say so in the step ("this one is yours to press").
 - When you are not sure whether the user is asking or telling, set "run" to false: they can press "Do it for me".
 - When "run" is true, write "answer" as what you are doing ("I am setting ... and starting ..."), not as instructions.
 
@@ -341,6 +341,14 @@ def answer(cfg: Config, question: str, history=None, targets=None, state=None) -
         out["note"] = f"Answered from the guide without AI, because Claude could not be reached: {str(e)[:300]}"
         return out
     steps = checked_steps(data.get("steps"), listed)
-    return {"answer": str(data.get("answer") or "").strip()[:1500] or "I have no answer for that.", "steps": steps,
-            "run": bool(cfg.llm.help_act_at_once) and bool(data.get("run")) and any(s["act"] for s in steps) and asked_for(steps, listed, question, history),
+    wanted = bool(data.get("run")) and any(s["act"] for s in steps)
+    run = bool(cfg.llm.help_act_at_once) and wanted and asked_for(steps, listed, question, history)
+    answer = str(data.get("answer") or "").strip()[:1500] or "I have no answer for that."
+    if bool(data.get("run")) and not run:
+        # The model wrote its answer as something it is doing. Nothing is done until the person presses the button,
+        # and the answer must not claim otherwise (it also goes into the chat's memory).
+        answer = ("Nothing has been done yet. Press \"Do it for me\" and I will do these steps in front of you, or do them yourself:" if wanted
+                  else "I have not done anything: this is yours to do. Here is where:")
+    return {"answer": answer, "steps": steps,
+            "run": run,
             "follow_ups": [" ".join(str(f).split())[:120] for f in (data.get("follow_ups") or [])[:3] if str(f).strip()], "source": "ai", "note": ""}

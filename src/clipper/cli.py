@@ -49,7 +49,13 @@ def _cmd_captions(args: argparse.Namespace) -> int:
     data = json.loads(Path(args.words).read_text(encoding="utf-8"))
     if isinstance(data, dict):  # allow {"words": [...]} as well as a bare list
         data = data.get("words", [])
-    words = words_from_json(data, offset_s=args.offset)
+    try:
+        if not isinstance(data, list):
+            raise TypeError("not a list")
+        words = words_from_json(data, offset_s=args.offset)
+    except (TypeError, AttributeError, KeyError) as e:
+        raise ValueError(f"{args.words} is not a list of words. It must be a JSON list like "
+                         f'[{{"start": 0.0, "end": 0.4, "word": "hello"}}, ...] (what was wrong: {type(e).__name__}: {e})') from None
     if not words:
         log.error("no words found in %s", args.words)
         return 2
@@ -62,8 +68,15 @@ def _cmd_captions(args: argparse.Namespace) -> int:
 
 def _cmd_check_brief(args: argparse.Namespace) -> int:
     brief = load_brief(args.brief)
-    clip = ClipInfo(**json.loads(Path(args.clip).read_text(encoding="utf-8")))
-    issues = check_clip(clip, brief)
+    raw = json.loads(Path(args.clip).read_text(encoding="utf-8"))
+    try:
+        if not isinstance(raw, dict):
+            raise TypeError("it is not a {...} object")
+        clip = ClipInfo(**raw)
+        issues = check_clip(clip, brief)
+    except TypeError as e:
+        raise ValueError(f"{args.clip} is not a clip description. It must be a JSON object with exactly these keys: source_url, duration_s, width, height, "
+                         f"caption, has_disclosure_overlay, with numbers for duration_s, width and height (what was wrong: {e})") from None
     for issue in issues:
         print(f"[{'FAIL' if issue.level == 'fail' else 'CHECK BY HAND'}] {issue.message}")
     ok = passes(issues)
@@ -495,9 +508,22 @@ def main(argv: list[str] | None = None) -> int:
         if args.verbose:
             log.exception("details")
         return 2
-    except Exception:
+    except OSError as e:
+        # A folder named where a file belongs, a file that cannot be written, a drive that is not there.
+        log.error("a file or folder could not be used: %s. Check the path you gave: a folder where a file is expected (or the other way round), "
+                  "a file open in another program, or a drive that is not connected", e)
+        if args.verbose:
+            log.exception("details")
+        return 2
+    except Exception as e:
+        import yaml
+
+        if isinstance(e, yaml.YAMLError):   # a brief or another YAML file with a writing mistake
+            log.error("a YAML file has a writing mistake: %s. Each line is 'name: value', indented with spaces, never tabs", " ".join(str(e).split()))
+            return 2
         log.exception("unexpected error; this is a bug, please report the lines below")
         return 3
+    # (anything else is reported as a bug, above)
 
 
 if __name__ == "__main__":

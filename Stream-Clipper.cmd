@@ -7,6 +7,9 @@ set CLIPPER_LAUNCHER=1
 rem A copy put in by Stream-Clipper-Setup.exe keeps its own uv and Git beside the program: use those first.
 if exist "%~dp0..\tools\uv\uv.exe" set "PATH=%~dp0..\tools\uv;%PATH%"
 if exist "%~dp0..\tools\git\cmd\git.exe" set "PATH=%~dp0..\tools\git\cmd;%PATH%"
+rem ...and its own Python and download store, inside the program folder instead of the user profile on C:.
+if exist "%~dp0..\tools\python\" set "UV_PYTHON_INSTALL_DIR=%~dp0..\tools\python"
+if exist "%~dp0..\tools\uv-cache\" set "UV_CACHE_DIR=%~dp0..\tools\uv-cache"
 where uv >nul 2>nul
 if errorlevel 1 (
   echo uv is not installed. Install it from https://docs.astral.sh/uv/ and run setup.ps1 first.

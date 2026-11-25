@@ -164,26 +164,45 @@ def summary(items: list[dict]) -> dict:
     return {"bad": bad, "warn": warn, "todo": todo, "text": text}
 
 
-def full_check(cfg: Config, step=None) -> None:
-    """The slow part: really load the speech model, and ask GitHub for the newest version. Results go to health.json."""
+def speech_model_there(cfg: Config) -> bool:
+    """Whether the speech model is on this computer already. Loading it when it is not downloads it (about 1.6 GB
+    for the default one), and a download that size is only started by the person's own press."""
+    name = str(cfg.transcribe.model)
+    try:
+        if Path(name).exists():
+            return True
+        short = name.replace("\\", "/").split("/")[-1].lower()
+        return any(d.name.lower().endswith(short) and any(d.glob("snapshots/*/model.bin")) for d in (cfg.data_dir / "models").glob("models--*"))
+    except OSError:
+        return False
+
+
+def full_check(cfg: Config, step=None, speech: bool = True) -> None:
+    """The slow part: really load the speech model, and ask GitHub for the newest version. Results go to health.json.
+
+    With ``speech`` false the model is left alone (it is not on this computer and nobody pressed to fetch it)."""
     from . import hw
 
     path = cfg.data_dir / "health.json"
     saved = read_json(path, {}) or {}
     hw.detect(cfg)  # fills hardware.json on a computer that never ran it
-    device, compute_type = hw.whisper_device(cfg)
-    models = cfg.data_dir / "models"
-    models.mkdir(parents=True, exist_ok=True)
-    if device == "cuda" and cfg.transcribe.device == "auto":
-        device, compute_type = hw.confirm_cuda(cfg, cfg.transcribe.model, compute_type, str(models))
-    log.info("full check: loading the speech model (%s, %s) in a separate process", device, compute_type)
-    ok, why = hw.trial_load(cfg.transcribe.model, device, compute_type, str(models))
-    saved["speech"] = {"ok": ok, "at": time.time(),
-                       "detail": f"works on {'the NVIDIA card' if device == 'cuda' else 'the processor'}" if ok else why.splitlines()[0][:400]}
+    ok = None
+    if speech:
+        device, compute_type = hw.whisper_device(cfg)
+        models = cfg.data_dir / "models"
+        models.mkdir(parents=True, exist_ok=True)
+        if device == "cuda" and cfg.transcribe.device == "auto":
+            device, compute_type = hw.confirm_cuda(cfg, cfg.transcribe.model, compute_type, str(models))
+        log.info("full check: loading the speech model (%s, %s) in a separate process", device, compute_type)
+        ok, why = hw.trial_load(cfg.transcribe.model, device, compute_type, str(models))
+        saved["speech"] = {"ok": ok, "at": time.time(),
+                           "detail": f"works on {'the NVIDIA card' if device == 'cuda' else 'the processor'}" if ok else why.splitlines()[0][:400]}
+    else:
+        log.info("full check: the speech model is not on this computer yet, so it was not loaded (the Captions step of Set up downloads it)")
     if step:
         step("asking GitHub for the newest version")
     saved["update"] = update_state(fetch=True)
     saved["checked_at"] = time.time()
     saved["python"] = sys.version.split()[0]
     write_json(path, saved)
-    log.info("full check done: speech %s; update %s", "works" if ok else "FAILS", saved["update"])
+    log.info("full check done: speech %s; update %s", "not tried" if ok is None else "works" if ok else "FAILS", saved["update"])

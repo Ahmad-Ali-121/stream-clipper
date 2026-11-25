@@ -77,7 +77,13 @@ def _load_locked(cfg: Config, name: str, device: str, compute_type: str, key: tu
 
         models = cfg.data_dir / "models"
         models.mkdir(parents=True, exist_ok=True)
-        log.info("loading whisper model %s (%s, %s); the first run downloads it", name, device, compute_type)
+        from .health import speech_model_there
+
+        if speech_model_there(cfg):
+            log.info("loading whisper model %s (%s, %s)", name, device, compute_type)
+        else:
+            log.warning("the speech model %s is not on this computer yet: DOWNLOADING IT NOW, once (about 1.6 GB for the default model; "
+                        "on a slow line this takes a while and the captions wait for it)", name)
         ok, why = hw.trial_load(name, device, compute_type, str(models))
         if not ok:
             raise ToolError(

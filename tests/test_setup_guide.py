@@ -131,7 +131,7 @@ def test_finishing_is_remembered_and_the_page_has_the_guide(tmp_path):
     got = setupguide.status(cfg, READY, NO_LOCAL)
     assert got["finished"] is True and got["skipped"] == ["codex", "localai"]
     page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
-    for piece in ('id="n-setup" onclick="go(\'setup\')"', 'id="page-setup"', "function suDraw(s){", "if(!g.finished){", "function suSkip(id){",
+    for piece in ('id="n-setup" onclick="go(\'setup\')"', 'id="page-setup"', "function suDraw(s){", "if(!g.finished&&(left||!seen)){", "Checking this computer", "function suSkip(id){",
                   "'/api/setup/'+(what==='signin'?'signin':'install')", "This program never sees your password", "Start using Stream Clipper"):
         assert piece in page, piece
     server = (Path(clipper.__file__).parent / "review.py").read_text(encoding="utf-8")
@@ -156,5 +156,11 @@ def test_the_big_speech_model_is_never_fetched_without_a_press(tmp_path, monkeyp
     c._health_status()
     assert started == []                                        # nothing known about speech: wait for the person
     write_json(tmp_path / "health.json", {"checked_at": 0, "speech": {"ok": True, "detail": "works on the processor"}})
+    c._health_status()
+    assert started == []                                        # tried once, but the model is not on this computer (it was deleted, or the try failed)
+    model = tmp_path / "models" / ("models--someone--faster-whisper-" + str(cfg.transcribe.model)) / "snapshots" / "abc"
+    model.mkdir(parents=True)
+    (model / "model.bin").write_bytes(b"x")
+    assert health.speech_model_there(cfg)
     c._health_status()
     assert started == [1]                                       # tried before, last check long ago: checked again by itself

@@ -258,12 +258,12 @@ class LiveBuffer(threading.Thread):
                 file.write_bytes(blob)
                 head = self._inits[piece.init] = str(file)
         t = piece.at - self.stream_start
-        if self.first_t is None:
-            self.first_t = t
         path = self.folder / f"{int(piece.at * 1000)}.ts"
         part = path.with_suffix(".part")
         part.write_bytes(data)
         os.replace(part, path)
+        if self.first_t is None:
+            self.first_t = t   # only once the piece is really kept: this is where clips can start from
         with self._lock:
             self.pieces.append({"t": round(t, 3), "d": piece.duration, "file": str(path), "init": head})
             self.bytes += len(data)

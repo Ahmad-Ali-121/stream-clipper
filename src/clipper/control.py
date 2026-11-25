@@ -461,7 +461,7 @@ class Control:
         # Once per session, when the last check is more than a day old. Never on a computer where the speech model has
         # not been tried at all: the first try downloads it (about 1.6 GB), and a download that size waits for the
         # person's own press on the Set up page.
-        if stale and saved.get("speech") and not self.health_started and not self.maint["running"]:
+        if stale and saved.get("speech") and health.speech_model_there(self.cfg) and not self.health_started and not self.maint["running"]:
             self.health_started = True
             self.start_full_check()
         # GitHub is asked at the start and then every half hour, so the Update button appears by itself soon after a
@@ -531,7 +531,7 @@ class Control:
     def setup_refresh(self) -> dict:
         from . import localai, setupguide, thumbs
 
-        setupguide.forget()
+        setupguide._tools(fresh=True)   # asked now, so what "Checked again" shows is the answer and not the one from before
         localai.status(self.cfg, fresh=True)
         thumbs.codex_status(fresh=True)
         return self.status()
@@ -574,14 +574,43 @@ class Control:
         return self.status()
 
     @staticmethod
-    def _run_logged(cmd: list[str], say, cwd: str) -> int:
-        """Run a command, passing every line it prints to ``say``. Returns its exit code."""
+    def _run_logged(cmd: list[str], say, cwd: str, quiet_s: float = 1800, limit_s: float = 4 * 3600) -> int:
+        """Run a command, passing every line it prints to ``say``. Returns its exit code.
+
+        An installer that waits for an answer nobody can give (a prompt in a window that is not shown) would hold
+        the one maintenance slot until the program is restarted. So a command that prints nothing for ``quiet_s``,
+        or runs longer than ``limit_s``, is ended with everything it started, and that is said."""
+        from . import tools
+
         proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                 text=True, errors="replace")
-        for line in proc.stdout:
-            if line.strip():
-                say(line.rstrip())
-        return proc.wait()
+        tools._own_group(proc)
+        began = heard = time.monotonic()
+        ended: list[str] = []
+        done = threading.Event()
+
+        def guard() -> None:
+            while not done.wait(5):
+                now = time.monotonic()
+                if now - heard > quiet_s or now - began > limit_s:
+                    ended.append(f"it printed nothing for {quiet_s / 60:.0f} minutes" if now - heard > quiet_s else f"it ran longer than {limit_s / 3600:.0f} hours")
+                    tools.kill_tree(proc)
+                    return
+
+        threading.Thread(target=guard, daemon=True, name="maint-guard").start()
+        try:
+            for line in proc.stdout:
+                heard = time.monotonic()
+                if line.strip():
+                    say(line.rstrip())
+            code = proc.wait()
+        finally:
+            done.set()
+        if ended:
+            say(f"ENDED BY THE PROGRAM: {ended[0]}, so it was most likely waiting for something. Nothing was left running.")
+            return code or 1
+        tools._end_group(proc, kill=False)
+        return code
 
     def start_full_check(self) -> dict:
         from . import health
@@ -618,7 +647,7 @@ class Control:
             if not state["can"]:
                 # Not a failure: there is simply nothing to do, or this copy must not be changed. Say so plainly.
                 say("No update was made: " + (state["why"] or "this copy is already the newest version") + ".")
-                health.full_check(self.reload())
+                health.full_check(self.reload(), speech=health.speech_model_there(self.cfg))
                 return
             say(f"{state['behind']} change(s) to take from GitHub")
             for n, cmd in enumerate((["git", "merge", "--ff-only", "origin/main"],
@@ -628,7 +657,11 @@ class Control:
                 if (code := self._run_logged(cmd, say, str(PROJECT_ROOT))) != 0:
                     raise ValueError(f"'{' '.join(cmd)}' ended with exit code {code}; the lines above say why")
             say.step(4, 4, "checking that everything still works")
-            health.full_check(self.reload())
+            cfg = self.reload()
+            there = health.speech_model_there(cfg)
+            if not there:
+                say("the speech model is not on this computer yet, so it was not tried. The Captions step of Set up downloads it (about 1.6 GB) when you press its button.")
+            health.full_check(cfg, speech=there)
             if os.environ.get("CLIPPER_LAUNCHER") and self.shutdown:
                 say("updated. Restarting the program now; this page reconnects by itself.")
                 self.exit_code = 42

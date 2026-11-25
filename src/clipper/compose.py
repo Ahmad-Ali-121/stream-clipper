@@ -331,7 +331,9 @@ def top_moments(clip_dirs: list[Path], out: Path, cfg: Config, opener: str = "")
     for rank, d in enumerate(clip_dirs, 1):
         state = read_json(d / "clip.json")
         line = (state.get("rank_line") or state.get("hook") or "").strip() or f"Moment number {rank}."
-        body = render_clip(d, cfg, out_name="body.mp4", hook=False)  # the card already says what this is
+        # Made fresh every time: a body kept from an earlier top video would still have the caption look and
+        # branding of that day, and the countdown would mix old and new.
+        body = render_clip(d, cfg, out_name="body.mp4", hook=False, force=True)  # the card already says what this is
         bodies.append((rank, line, body, still_frame(d, cfg)))
     for rank, line, body, still in reversed(bodies):
         if first_body is None and opener:
@@ -339,4 +341,8 @@ def top_moments(clip_dirs: list[Path], out: Path, cfg: Config, opener: str = "")
             parts.append(make_card(still, opener, work / "opener.mp4", cfg, label=f"Top {len(bodies)}"))
         parts.append(make_card(still, line, work / f"card_{rank}.mp4", cfg, big=f"#{rank}"))
         parts.append(body)
-    return concat(parts, out, cfg)
+    made = concat(parts, out, cfg)
+    import shutil
+
+    shutil.rmtree(work, ignore_errors=True)   # the cards and voice files were only steps on the way: the videos folder keeps finished videos only
+    return made

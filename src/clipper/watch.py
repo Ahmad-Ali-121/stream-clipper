@@ -563,20 +563,38 @@ def asked_moment(w: Watched, request: dict, cfg: Config) -> dict:
     pressed = float(request["at"]) - float(w.meta["started_at"])
     end = max(10.0, pressed - cfg.watch.feed_delay_s)
     start = max(0.0, end - float(request["seconds"]) - 5.0)
-    held = None
+    held = first = None
     try:
         from .buffer import LiveBuffer
 
         if isinstance(getattr(w, "buffer", None), LiveBuffer):  # only this kind is held from the moment the watch began
             held = w.buffer.span()
+            first = w.buffer.first_t
+            # The copy only keeps the last few minutes, and the clip is cut a little after it was asked for. A stretch
+            # longer than what will still be there then is shortened now, and that is said, instead of failing later.
+            room = cfg.watch.buffer_minutes * 60 - cfg.watch.feed_delay_s - 2 * cfg.fetch.pad_s - 30
+            if room >= 15 and end - start > room:
+                log.warning("%s: you asked for the last %.0f seconds, but only the last %.0f minutes of this live feed are kept (watch.buffer_minutes), "
+                            "so the clip is the last %.0f seconds", w.channel, float(request["seconds"]), cfg.watch.buffer_minutes, room)
+                start = end - room
     except Exception as e:  # asking must never lose the request itself
         log.debug("%s: the copy of the live feed could not be asked what it holds: %s", w.channel, e)
     if held and start < held[0] < end - 3:
-        # An unrecorded stream is only held from the moment the watch began: the clip is what is held of the stretch
-        # asked for, not a refusal that says it is "no longer" there.
-        log.info("%s: the watch began after the start of the stretch you asked for; the clip starts where the copy of the live feed starts", w.channel)
-        start = held[0] + 0.1
-    return {"score": 0, "activity": 0, "messages": 0, "trigger": "manual", "signals": {}, "peak_s": round(start, 1),
+        # The clip is what is held of the stretch asked for, not a refusal that says it is "no longer" there.
+        if first is None or held[0] - first < 2:
+            log.info("%s: the watch began after the start of the stretch you asked for; the clip starts where the copy of the live feed starts", w.channel)
+            start = held[0] + 0.1
+        else:   # the oldest part has aged out of the copy: leave the usual lead in front, so the cut still finds it
+            log.info("%s: the start of the stretch you asked for is no longer in the copy of the live feed; the clip starts where the copy starts", w.channel)
+            start = min(end - 3, held[0] + cfg.fetch.pad_s + 10)
+    # A clip's folder is named after its place in the stream. Two requests that begin at the same second (both
+    # reach back to where the copy starts) would share a folder, and the second would write over the first, also
+    # over one already approved. Each request gets a place of its own.
+    peak, work = round(start, 1), getattr(w, "work", None)
+    taken = {clip_id(m["peak_s"]) for m in getattr(w, "asked", [])}
+    while peak < end - 1 and (clip_id(peak) in taken or (work is not None and (work / "clips" / clip_id(peak)).exists())):
+        peak = round(peak + 1.0, 1)
+    return {"score": 0, "activity": 0, "messages": 0, "trigger": "manual", "signals": {}, "peak_s": peak,
             "start_s": round(start, 1), "end_s": round(end, 1), "asked": True}
 
 
@@ -622,8 +640,8 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
         if first is not None and state["fetch_start_s"] < first:
             # Asked for in the first moments of the watch: part (or all) of the stretch was before anything was kept.
             if first >= state["end_s"] - 3:
-                raise ToolError("the watch began after the stretch you asked for, so nothing of it was kept and there is nothing to cut. "
-                                "Clips can be asked for from a few seconds after the watch begins")
+                raise NothingKept("the watch began after the stretch you asked for, so nothing of it was kept and there is nothing to cut. "
+                                  "Clips can be asked for from a few seconds after the watch begins")
             state["fetch_start_s"] = round(first, 2)
             state["start_s"] = round(max(state["start_s"], first + 0.05), 2)
             state["peak_s"] = max(state["peak_s"], state["start_s"])
@@ -651,14 +669,24 @@ def make_draft(w: Watched, moment: dict, cfg: Config) -> Path:
     return d
 
 
+class NothingKept(ToolError):
+    """The stretch asked for was over before the watch kept anything: no later try can find it."""
+
+
 def draft_job(w: Watched, moment: dict, cfg: Config) -> None:
     """Make one draft and report it; every failure is logged and kept on the clip, never raised (it runs in a worker)."""
     try:
         try:
             d = make_draft(w, moment, cfg)
         except Exception as e:
-            note_error(clip_dir(w.work, clip_id(moment["peak_s"])), f"draft failed: {e}")
-            if moment.get("asked") and moment.get("tries", 0) < 2:
+            d = w.work / "clips" / clip_id(moment["peak_s"])
+            note_error(d, f"draft failed: {e}")
+            try:
+                if d.is_dir() and not any(d.iterdir()):
+                    d.rmdir()   # it failed before anything was written: no empty folder is left behind
+            except OSError:
+                pass
+            if moment.get("asked") and moment.get("tries", 0) < 2 and not isinstance(e, NothingKept):   # trying that one again cannot help
                 # Asked for by a person: tried again in half a minute (the recording may not have reached it yet), three times in all.
                 w.asked.append({**moment, "tries": moment.get("tries", 0) + 1, "not_before": time.time() + 30})
             raise
@@ -715,6 +743,8 @@ def watch(channels: list[str], cfg: Config, max_minutes: float | None = None) ->
                     for moment in due_asked(w, cfg) + fresh:
                         key = (name, clip_id(moment["peak_s"]))
                         if key in making:
+                            if moment.get("asked"):   # asked for by a person: it waits its turn, it is never dropped
+                                w.asked.append({**moment, "not_before": time.time() + 10})
                             continue  # already being made
                         if not moment.get("asked") and any(k[0] == name and min(moment["end_s"], b) - max(moment["start_s"], a) > 0.5 * (moment["end_s"] - moment["start_s"])
                                                            for k, (a, b) in windows.items() if k in making):

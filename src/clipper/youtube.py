@@ -276,6 +276,8 @@ class YouTubeWindow:
         try:
             head = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-TARGETDURATION:3", "#EXT-X-MEDIA-SEQUENCE:0"]
             lists = {"v": list(head), "a": list(head)}
+            inits: dict = {"v": {}, "a": {}}
+            last_init = {"v": "", "a": ""}
             for n, row in enumerate(picked):
                 if n and row["t"] - (picked[n - 1]["t"] + picked[n - 1]["d"]) > 0.5:
                     for kind in ("v", "a"):  # tell FFmpeg the clock jumps here, so picture and sound stay in step
@@ -283,15 +285,29 @@ class YouTubeWindow:
                     log.info("%s: the live feed skips %.1f s inside this clip; the clip jumps there too", self.channel,
                              row["t"] - (picked[n - 1]["t"] + picked[n - 1]["d"]))
                 for kind, piece, ext in (("v", row["piece"], "ts"), ("a", sound[row["key"]], "aac")):
-                    data = b""
-                    for attempt in range(3):
-                        try:
-                            data = _get(piece.url, timeout=30)
-                            break
-                        except Exception as e:
-                            if attempt == 2:
-                                raise ToolError(f"a piece of this moment could not be downloaded ({e})") from e
-                            time.sleep(1.0)
+                    def fetched(url: str) -> bytes:
+                        for attempt in range(3):
+                            try:
+                                return _get(url, timeout=30)
+                            except Exception as e:
+                                if attempt == 2:
+                                    raise ToolError(f"a piece of this moment could not be downloaded ({e})") from e
+                                time.sleep(1.0)
+                        return b""
+
+                    init = getattr(piece, "init", "") or ""
+                    if init:
+                        # The newer kind of feed: every piece needs the feed's header piece in front of it. It is
+                        # fetched once and named in the list, as the feed's own list does.
+                        ext = "m4s"
+                        if init not in inits[kind]:
+                            head_name = f"{kind}init{len(inits[kind])}.mp4"
+                            (folder / head_name).write_bytes(fetched(init))
+                            inits[kind][init] = head_name
+                        if last_init[kind] != init:
+                            last_init[kind] = init
+                            lists[kind].append(f'#EXT-X-MAP:URI="{inits[kind][init]}"')
+                    data = fetched(piece.url)
                     name = f"{kind}{n:04d}.{ext}"
                     (folder / name).write_bytes(data)
                     self.bytes += len(data)

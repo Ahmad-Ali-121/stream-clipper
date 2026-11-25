@@ -7,6 +7,12 @@ echo   Stream Clipper: install
 echo   ------------------------
 echo.
 
+rem A copy put in by Stream-Clipper-Setup.exe keeps its own uv, Git and Python beside the program: use those first.
+if exist "%~dp0..\tools\uv\uv.exe" set "PATH=%~dp0..\tools\uv;%PATH%"
+if exist "%~dp0..\tools\git\cmd\git.exe" set "PATH=%~dp0..\tools\git\cmd;%PATH%"
+if exist "%~dp0..\tools\python\" set "UV_PYTHON_INSTALL_DIR=%~dp0..\tools\python"
+if exist "%~dp0..\tools\uv-cache\" set "UV_CACHE_DIR=%~dp0..\tools\uv-cache"
+
 where uv >nul 2>nul
 if errorlevel 1 (
   echo   This needs a small free tool called "uv" ^(it installs Python and the program's parts^).

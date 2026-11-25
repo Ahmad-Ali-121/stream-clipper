@@ -30,7 +30,8 @@ namespace StreamClipperSetup
         [STAThread]
         static void Main(string[] args)
         {
-            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)12288;   // TLS 1.2 and 1.3
+            try { ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)12288; }   // TLS 1.2 and 1.3
+            catch { try { ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; } catch { } }             // an older .NET knows 1.2 only
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new SetupForm(args));
@@ -61,6 +62,8 @@ namespace StreamClipperSetup
         BackgroundWorker worker;
         string root, data;
         bool finished;
+        volatile bool stopping;        // the person chose Stop: end what is running and say nothing more
+        volatile Process running;      // the program a step is waiting for right now
 
         public SetupForm(string[] args)
         {
@@ -76,6 +79,10 @@ namespace StreamClipperSetup
                 else if (a == "/folder" && i + 1 < args.Length) folder = args[++i];
                 else if (a == "/data" && i + 1 < args.Length) dataDir = args[++i];
             }
+            bool dataGiven = false;
+            foreach (string a in args) if (a.ToLowerInvariant() == "/data") dataGiven = true;
+            string had = SavedData(folder);
+            if (had != null && !dataGiven) dataDir = had;
             Text = "Install Stream Clipper";
             Font = new Font("Segoe UI", 9.5f);
             ClientSize = new Size(640, 520);
@@ -93,7 +100,7 @@ namespace StreamClipperSetup
 
             // ---- screen 1: where to put it ----
             choose = new Panel { Location = new Point(0, 104), Size = new Size(640, 340) };
-            choose.Controls.Add(Caption("Where the program goes (about 1.5 GB with its parts)", 26, 4));
+            choose.Controls.Add(Caption("Where the program goes (about 2 GB with Python and its parts)", 26, 4));
             folderBox = Box(folder, 26, 28); choose.Controls.Add(folderBox);
             browse1 = Btn("Choose...", 520, 27, 94); browse1.Click += delegate { Pick(folderBox); }; choose.Controls.Add(browse1);
             choose.Controls.Add(Caption("Where your clips, downloads and models go (pick the drive with the most free space; 5 GB or more)", 26, 76));
@@ -122,9 +129,13 @@ namespace StreamClipperSetup
             AcceptButton = goBtn;
             FormClosing += delegate(object s, FormClosingEventArgs e)
             {
-                if (worker != null && worker.IsBusy &&
-                    MessageBox.Show(this, "The install is still running. Stop it?\r\n\r\nYou can run this installer again later: it carries on where it stopped.", "Install Stream Clipper",
-                                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No) e.Cancel = true;
+                if (worker == null || !worker.IsBusy) return;
+                if (MessageBox.Show(this, "The install is still running. Stop it?\r\n\r\nYou can run this installer again later: it carries on where it stopped.", "Install Stream Clipper",
+                                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No) { e.Cancel = true; return; }
+                // Stop means stop: the download or the program a step started is ended with everything it started.
+                // Left running, it would go on downloading with no window, and the next run would collide with it.
+                stopping = true;
+                KillRunning();
             };
             if (autoGo) Shown += delegate { OnGo(); };
         }
@@ -150,6 +161,41 @@ namespace StreamClipperSetup
                 if (d.ShowDialog(this) == DialogResult.OK) box.Text = d.SelectedPath;
             }
         }
+        // The data folder an installed copy already uses (from its config.local.yaml), or null.
+        static string SavedData(string programFolder)
+        {
+            try
+            {
+                string app = Path.Combine(programFolder, "app"), f = Path.Combine(app, "config.local.yaml");
+                if (!File.Exists(f)) return null;
+                foreach (string line in File.ReadAllLines(f))
+                {
+                    Match m = Regex.Match(line, "^\\s*data_dir\\s*:\\s*(.+?)\\s*$");
+                    if (!m.Success) continue;
+                    string v = m.Groups[1].Value.Trim('"', '\'');
+                    if (v.Length == 0) return null;
+                    return Path.GetFullPath(Path.IsPathRooted(v) ? v : Path.Combine(app, v));
+                }
+            }
+            catch { }
+            return null;
+        }
+        static bool SameFolder(string a, string b)
+        {
+            return string.Equals(a.TrimEnd('\\', '/'), b.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+        }
+        void KillRunning()
+        {
+            Process p = running;
+            if (p == null) return;
+            try
+            {
+                ProcessStartInfo k = new ProcessStartInfo("taskkill", "/PID " + p.Id + " /T /F") { UseShellExecute = false, CreateNoWindow = true };
+                using (Process t = Process.Start(k)) t.WaitForExit(15000);
+            }
+            catch { try { p.Kill(); } catch { } }
+        }
+
         static string DefaultData()
         {
             // the fixed drive with the most free space; on a PC with only C:, a folder beside the program
@@ -176,6 +222,12 @@ namespace StreamClipperSetup
             }
             catch (Exception e) { Say("That is not a folder name Windows accepts: " + e.Message, true); return; }
             if (root.Length < 4 || data.Length < 4) { Say("Choose a folder, not a whole drive.", true); return; }
+            string kept = SavedData(root);
+            if (kept != null && !SameFolder(kept, data))
+            {   // the installed copy reads its data folder from its own settings: a second folder would only confuse it
+                dataBox.Text = kept;
+                Say("The copy in this program folder already keeps its clips in " + kept + ". That folder is used again; press Install once more.", true); return;
+            }
             try
             {
                 Directory.CreateDirectory(root); Directory.CreateDirectory(data);
@@ -183,6 +235,11 @@ namespace StreamClipperSetup
                 if (d.AvailableFreeSpace < 5L * 1024 * 1024 * 1024)
                 {
                     Say("The drive " + d.Name + " has less than 5 GB free. Choose a folder on another drive for your clips, or free some space.", true); return;
+                }
+                DriveInfo pd = new DriveInfo(Path.GetPathRoot(root));
+                if (!string.Equals(pd.Name, d.Name, StringComparison.OrdinalIgnoreCase) && pd.AvailableFreeSpace < 3L * 1024 * 1024 * 1024)
+                {
+                    Say("The drive " + pd.Name + " has less than 3 GB free, and the program with Python needs about 2 GB there. Choose another program folder, or free some space.", true); return;
                 }
             }
             catch (Exception e) { Say("That folder cannot be used: " + e.Message, true); return; }
@@ -202,9 +259,10 @@ namespace StreamClipperSetup
 
         void BuildSteps()
         {
-            Add("Fetch uv, the tool that installs Python", delegate { return File.Exists(Uv); }, GetUv);
-            Add("Make sure Git is there (for the Update button)", delegate { return File.Exists(OwnGit) || (!portableGit && OnPath("git.exe") != null); }, GetGit);
-            Add("Fetch the program", delegate { return File.Exists(Path.Combine(App, "pyproject.toml")) && Directory.Exists(Path.Combine(App, ".git")); }, GetProgram);
+            // "Already there" must mean whole: a file left half-written by a cut-off run does not count.
+            Add("Fetch uv, the tool that installs Python", delegate { return File.Exists(Uv) && Answers(Uv, "--version"); }, GetUv);
+            Add("Make sure Git is there (for the Update button)", delegate { return (File.Exists(OwnGit) && Answers(OwnGit, "--version")) || (!portableGit && OnPath("git.exe") != null); }, GetGit);
+            Add("Fetch the program", ProgramWhole, GetProgram);
             Add("Install Python and the program's parts", delegate { return false; }, SyncParts);
             Add("Download the video tools and models", delegate { return false; }, RunSetup);
             int y = 4;
@@ -236,8 +294,44 @@ namespace StreamClipperSetup
             }
         }
 
+        bool ProgramWhole()
+        {
+            if (!Directory.Exists(Path.Combine(App, ".git"))) return false;
+            foreach (string f in new string[] { "pyproject.toml", "uv.lock", "setup.ps1", "Stream-Clipper.cmd", Path.Combine("src", "clipper", "cli.py") })
+                if (!File.Exists(Path.Combine(App, f))) return false;
+            return true;
+        }
+
+        // Whether a program starts and ends well when asked for its version (a half-unpacked one does not).
+        bool Answers(string exe, string args)
+        {
+            try
+            {
+                ProcessStartInfo si = new ProcessStartInfo(exe, args) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                using (Process p = Process.Start(si))
+                {
+                    p.StandardOutput.ReadToEnd();
+                    if (!p.WaitForExit(20000)) { try { p.Kill(); } catch { } return false; }
+                    return p.ExitCode == 0;
+                }
+            }
+            catch { return false; }
+        }
+
+        // Removes a folder with everything in it. Git marks its own files read-only, and Windows refuses to delete those until the mark is taken off.
+        static void Wipe(string dir)
+        {
+            if (!Directory.Exists(dir)) return;
+            foreach (string f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
+            {
+                try { File.SetAttributes(f, FileAttributes.Normal); } catch { }
+            }
+            Directory.Delete(dir, true);
+        }
+
         void OnEnd(Exception error)
         {
+            if (stopping || IsDisposed) return;   // the person closed the window: nothing more to show
             closeBtn.Text = "Close";
             if (error != null)
             {
@@ -252,8 +346,12 @@ namespace StreamClipperSetup
             }
             finished = true;
             head.Text = "Stream Clipper is installed";
+            bool link = false;
+            try { link = File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Stream Clipper.lnk")); } catch { }
+            string rest = "The first time it starts, its Set up page takes you through the last steps (captions, and signing in to Claude or ChatGPT if you want them).";
             sub.Text = test ? "Test run: no shortcut was made and the program is not started." :
-                "A shortcut called Stream Clipper is on your desktop. The first time it starts, its Set up page takes you through the last steps (captions, and signing in to Claude or ChatGPT if you want them).";
+                link ? "A shortcut called Stream Clipper is on your desktop. " + rest :
+                       "Windows did not let a shortcut be put on your desktop. Start the program with Stream-Clipper.cmd in " + App + ". " + rest;
             Say("", false);
             if (!test)
             {
@@ -267,51 +365,100 @@ namespace StreamClipperSetup
         // ---------- the steps ----------
         void GetUv()
         {
-            string zip = Path.Combine(root, "tools", "uv.zip"), dir = Path.Combine(root, "tools", "uv");
-            Directory.CreateDirectory(dir);
+            string zip = Path.Combine(root, "tools", "uv.zip"), dir = Path.Combine(root, "tools", "uv"), part = dir + ".part";
+            Directory.CreateDirectory(Path.Combine(root, "tools"));
             Download(UvZip, zip, "uv");
-            Unzip(zip, dir);
+            Wipe(part);
+            Unzip(zip, part);
             File.Delete(zip);
-            if (!File.Exists(Uv))
+            string got = Path.Combine(part, "uv.exe");
+            if (!File.Exists(got))
             {   // some releases keep the files in a folder of their own
-                foreach (string f in Directory.GetFiles(dir, "uv.exe", SearchOption.AllDirectories)) { File.Copy(f, Uv, true); break; }
+                foreach (string f in Directory.GetFiles(part, "uv.exe", SearchOption.AllDirectories)) { File.Copy(f, got, true); break; }
             }
-            if (!File.Exists(Uv)) throw new Exception("uv.exe was not in the download from " + UvZip);
+            if (!File.Exists(got)) throw new Exception("uv.exe was not in the download from " + UvZip);
+            Wipe(dir);
+            Directory.Move(part, dir);
         }
 
         void GetGit()
         {
             Line("Asking GitHub for the newest portable Git...");
-            string json;
-            using (WebClient c = Client()) json = c.DownloadString(GitLatest);
-            Match m = Regex.Match(json, "\"browser_download_url\"\\s*:\\s*\"(https://[^\"]*/MinGit-[0-9.]+-64-bit\\.zip)\"");
-            if (!m.Success) throw new Exception("GitHub's list of Git downloads has no 64-bit portable Git today. Install Git from https://git-scm.com and run this installer again");
-            string zip = Path.Combine(root, "tools", "git.zip"), dir = Path.Combine(root, "tools", "git");
-            Download(m.Groups[1].Value, zip, "portable Git");
-            if (Directory.Exists(dir)) Directory.Delete(dir, true);
-            Unzip(zip, dir);
+            string url = null;
+            try
+            {
+                string json;
+                using (WebClient c = Client()) json = c.DownloadString(GitLatest);
+                Match m = Regex.Match(json, "\"browser_download_url\"\\s*:\\s*\"(https://[^\"]*/MinGit-[0-9.]+-64-bit\\.zip)\"");
+                if (m.Success) url = m.Groups[1].Value;
+            }
+            catch (Exception e)
+            {   // GitHub answers this question only 60 times an hour for one internet address, and a campus or a phone network shares one
+                Line("GitHub did not answer that question (" + Deepest(e) + "); asking another way...");
+            }
+            if (url == null) url = GitByTag();
+            if (url == null) throw new Exception("GitHub would not say where the newest portable Git is (it is refusing for a while). Wait an hour and press Try again, " +
+                                                 "or install Git from https://git-scm.com first: this step is then skipped");
+            string zip = Path.Combine(root, "tools", "git.zip"), dir = Path.Combine(root, "tools", "git"), part = dir + ".part";
+            Download(url, zip, "portable Git");
+            Wipe(part);
+            Unzip(zip, part);
             File.Delete(zip);
-            if (!File.Exists(OwnGit)) throw new Exception("git.exe was not in the download " + m.Groups[1].Value);
+            if (!File.Exists(Path.Combine(part, "cmd", "git.exe"))) throw new Exception("git.exe was not in the download " + url);
+            Wipe(dir);
+            Directory.Move(part, dir);
+        }
+
+        // The newest portable Git without GitHub's question-and-answer service: the "latest" page forwards to the
+        // release's own page, whose name holds the version, and the download's name is made from that.
+        string GitByTag()
+        {
+            try
+            {
+                HttpWebRequest q = (HttpWebRequest)WebRequest.Create("https://github.com/git-for-windows/git/releases/latest");
+                q.AllowAutoRedirect = false; q.UserAgent = Agent; q.Timeout = 30000;
+                string to;
+                using (HttpWebResponse r = (HttpWebResponse)q.GetResponse()) to = r.Headers["Location"] ?? "";
+                Match m = Regex.Match(to, "/releases/tag/(v([0-9]+\\.[0-9]+\\.[0-9]+)\\.windows\\.([0-9]+))$");
+                if (!m.Success) return null;
+                string ver = m.Groups[2].Value + (m.Groups[3].Value == "1" ? "" : "." + m.Groups[3].Value);
+                return "https://github.com/git-for-windows/git/releases/download/" + m.Groups[1].Value + "/MinGit-" + ver + "-64-bit.zip";
+            }
+            catch (Exception e) { Line("That did not work either: " + Deepest(e)); return null; }
         }
 
         string Git { get { return File.Exists(OwnGit) ? OwnGit : (OnPath("git.exe") ?? "git"); } }
 
         void GetProgram()
         {
+            string[] keep = { "config.local.yaml", ".env" };   // a person's own settings and keys survive a fetch that is done again
             if (Directory.Exists(App))
             {
                 if (Directory.GetFileSystemEntries(App).Length > 0 && !Directory.Exists(Path.Combine(App, ".git")))
                     throw new Exception("The folder " + App + " already holds something that is not Stream Clipper. Choose another program folder, or empty that one");
-                if (!File.Exists(Path.Combine(App, "pyproject.toml"))) Directory.Delete(App, true);   // a fetch that was cut off
+                // a fetch that was cut off (this step only runs when the copy is not whole): it is taken again from the start
+                foreach (string k in keep)
+                {
+                    string f = Path.Combine(App, k), aside = Path.Combine(root, k + ".kept");
+                    if (File.Exists(f)) File.Copy(f, aside, true);
+                }
+                Wipe(App);
             }
             string args = "clone --progress " + (source == Repo ? "--depth 50 " : "") + Q(source) + " " + Q(App);
             Exec(Git, args, root, "fetching the program");
+            foreach (string k in keep)
+            {
+                string aside = Path.Combine(root, k + ".kept");
+                if (File.Exists(aside)) { File.Copy(aside, Path.Combine(App, k), true); File.Delete(aside); }
+            }
         }
 
         void SyncParts()
         {
             Line("This is the longest step: Python and the program's parts are downloaded (several hundred MB).");
-            Exec(Uv, "sync --frozen", App, "installing Python and the program's parts");
+            // NVIDIA's libraries (about 1 GB), once chosen, stay: a plain sync would remove them and captions would fall back to the processor
+            bool gpu = Directory.Exists(Path.Combine(App, ".venv", "Lib", "site-packages", "nvidia", "cublas"));
+            Exec(Uv, "sync --frozen" + (gpu ? " --extra gpu" : ""), App, "installing Python and the program's parts");
         }
 
         void RunSetup()
@@ -333,18 +480,28 @@ namespace StreamClipperSetup
         void Download(string url, string to, string what)
         {
             Line("Downloading " + what + " from " + new Uri(url).Host + " ...");
-            Exception fault = null; bool done = false; int last = -1;
+            Exception fault = null; bool done = false; int last = -1; bool stalled = false;
+            DateTime heard = DateTime.Now;
             using (WebClient c = Client())
             {
                 c.DownloadProgressChanged += delegate(object s, DownloadProgressChangedEventArgs e)
                 {
+                    heard = DateTime.Now;
                     int pct = e.TotalBytesToReceive > 0 ? (int)(e.BytesReceived * 100 / e.TotalBytesToReceive) : 0;
                     if (pct != last) { last = pct; Status("Downloading " + what + ": " + (e.BytesReceived / 1048576) + " MB" + (e.TotalBytesToReceive > 0 ? " of " + (e.TotalBytesToReceive / 1048576) + " MB" : "")); StepProgress(pct * 10); }
                 };
                 c.DownloadFileCompleted += delegate(object s, AsyncCompletedEventArgs e) { fault = e.Error; done = true; };
                 c.DownloadFileAsync(new Uri(url), to + ".part");
-                while (!done) { System.Threading.Thread.Sleep(120); if (worker.CancellationPending) { c.CancelAsync(); } }
+                while (!done)
+                {
+                    System.Threading.Thread.Sleep(120);
+                    if (stopping) c.CancelAsync();
+                    // a connection that goes silent would otherwise leave "12 MB of 20 MB" on the screen for ever
+                    else if (!stalled && (DateTime.Now - heard).TotalSeconds > 90) { stalled = true; c.CancelAsync(); }
+                }
             }
+            if (stopping) { try { File.Delete(to + ".part"); } catch { } throw new Exception("stopped"); }
+            if (stalled) { try { File.Delete(to + ".part"); } catch { } throw new Exception("downloading " + what + " timed out: nothing arrived for 90 seconds"); }
             if (fault != null) { try { File.Delete(to + ".part"); } catch { } throw new Exception("downloading " + what + " failed: " + Deepest(fault)); }
             if (File.Exists(to)) File.Delete(to);
             File.Move(to + ".part", to);
@@ -359,7 +516,7 @@ namespace StreamClipperSetup
                 foreach (ZipArchiveEntry e in a.Entries)
                 {
                     string target = Path.GetFullPath(Path.Combine(dir, e.FullName));
-                    if (!target.StartsWith(Path.GetFullPath(dir), StringComparison.OrdinalIgnoreCase)) continue;   // never outside the folder
+                    if (!target.StartsWith(Path.GetFullPath(dir).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) continue;   // never outside the folder (also not a neighbour whose name starts the same)
                     if (e.FullName.EndsWith("/") || e.FullName.EndsWith("\\")) { Directory.CreateDirectory(target); continue; }
                     Directory.CreateDirectory(Path.GetDirectoryName(target));
                     e.ExtractToFile(target, true);
@@ -381,6 +538,11 @@ namespace StreamClipperSetup
             string path = Path.Combine(root, "tools", "uv") + ";" + (File.Exists(OwnGit) ? Path.Combine(root, "tools", "git", "cmd") + ";" : "") + Environment.GetEnvironmentVariable("PATH");
             si.EnvironmentVariables["PATH"] = path;
             si.EnvironmentVariables["GIT_TERMINAL_PROMPT"] = "0";
+            // uv keeps Python and its download store inside the program folder, not in the user's profile on C:
+            // (Stream-Clipper.cmd sets the same two, so the program and its Update button use the same Python)
+            si.EnvironmentVariables["UV_PYTHON_INSTALL_DIR"] = Path.Combine(root, "tools", "python");
+            si.EnvironmentVariables["UV_CACHE_DIR"] = Path.Combine(root, "tools", "uv-cache");
+            Directory.CreateDirectory(Path.Combine(root, "tools", "python")); Directory.CreateDirectory(Path.Combine(root, "tools", "uv-cache"));
             Status(Cap(what) + " ...");
             List<string> tail = new List<string>();
             using (Process p = new Process { StartInfo = si })
@@ -394,6 +556,7 @@ namespace StreamClipperSetup
                 p.OutputDataReceived += take; p.ErrorDataReceived += take;
                 try { p.Start(); }
                 catch (Exception e) { throw new Exception(what + " could not be started (" + Path.GetFileName(exe) + "): " + e.Message); }
+                running = p;
                 p.BeginOutputReadLine(); p.BeginErrorReadLine();
                 DateTime began = DateTime.Now;
                 while (!p.WaitForExit(3000))
@@ -404,6 +567,8 @@ namespace StreamClipperSetup
                     Status(Cap(what) + so + " ...");
                 }
                 p.WaitForExit();   // lets the last lines arrive
+                running = null;
+                if (stopping) throw new Exception("stopped");
                 if (p.ExitCode != 0)
                 {
                     string why; lock (tail) why = string.Join(" | ", tail.ToArray());
@@ -444,8 +609,12 @@ namespace StreamClipperSetup
                 return "The disk is full. Free some space (or run the installer again and choose another drive), then press Try again.";
             if (low.Contains("access") && low.Contains("denied") || low.Contains("being used by another process"))
                 return "Windows would not let a file be written: it is open in another program, or an antivirus is holding it. Close other copies of Stream Clipper, wait a minute, then press Try again.";
-            if (low.Contains("already holds something"))
+            if (low.Contains("already holds something") || low.Contains("would not say where the newest portable git"))
                 return m + ".";
+            if (low.Contains("already says the data folder"))
+                return "This copy already keeps its clips in another folder than the one chosen here. Close this installer, start it again, and keep the folder it suggests for your clips.";
+            if (low.Contains("(403)") || low.Contains("(429)") || low.Contains("rate limit"))
+                return "GitHub is refusing for a while: too many requests came from this internet connection. Wait an hour, then press Try again.";
             return "A step did not work. The last lines in the box above say why. Press Try again; if it stops at the same place, copy those lines and send them to whoever gave you this installer.";
         }
 

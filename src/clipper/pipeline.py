@@ -94,7 +94,7 @@ def stage_find(
 
         if not ai and not any(_MODES[_parse_mode(signals or cfg.moments.signals)]):
             raise PipelineError("a video file has no chat to find moments from. Choose sound, picture or AI reading, "
-                                "or use \"Your own clip\" to pick the range yourself")
+                                "or use \"Pick the part myself\" under New clips to choose the range yourself")
         messages = []
     else:
         progress.stage("chat")
@@ -113,7 +113,7 @@ def stage_find(
                 # An old Kick video can have lost its chat. Sound, picture and AI reading still work on it.
                 if not ai and not any(_MODES[_parse_mode(signals or cfg.moments.signals)]):
                     raise PipelineError(f"{e}. Choose sound, picture or AI reading to find its moments, "
-                                        "or use \"Your own clip\" to pick the range yourself") from e
+                                        "or use \"Pick the part myself\" under New clips to choose the range yourself") from e
                 log.warning("%s. Moments are found from what you chose instead.", e)
                 messages = []
             elif source.platform == "youtube" and not meta.get("is_live") and ytcaptions.video_words(source.url, work, cfg):
@@ -181,7 +181,7 @@ def stage_find(
                      len(picks), len(picks) - (len(found) - before), len(found) - before)
     if no_chat and not found:
         raise PipelineError("this video has no chat, and no moment stood out in what is said. Run it again with sound, picture or "
-                            "\"Let AI read the whole stream\", or pick the part yourself in Your own clip or the Transcript view")
+                            "\"Let AI read the whole stream\", or pick the part yourself under New clips: Pick the part myself, or Search what was said")
     write_json(work / "moments.json", found)
 
     # Clips already reviewed keep their folder and status; ranks of the rest are refreshed.
@@ -417,7 +417,7 @@ def stage_cut_range(url: str, cfg: Config, rid: str, segments, part_label: bool 
     d = work / "ranges" / rid
     info = read_json(d / "range.json", {})
     if not info.get("ready") or not done(d / "range.mp4"):
-        raise PipelineError(f"the downloaded part {rid} is not there any more; download it again from the Your own clip tab")
+        raise PipelineError(f"the downloaded part {rid} is not there any more; download it again under New clips, Pick the part myself")
     meta = fresh_meta(source, work, cfg)
     base = float(info["start_s"])
     pieces = [(round(base + a, 2), round(base + b, 2)) for a, b in check_segments(segments, float(info["duration_s"]))]
@@ -759,7 +759,8 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
                 log.info("making the videos was stopped during clip %s/%s", work.name, d.name)
                 return results
             except Exception as e:  # one bad clip must not stop the others
-                log.exception("clip %s/%s could not be finished", work.name, d.name)
+                # an expected failure says everything in its message; only a fault of the program gets its traceback
+                log.error("clip %s/%s could not be finished: %s", work.name, d.name, e, exc_info=not isinstance(e, (ToolError, PipelineError)))
                 note_error(d, f"finish failed: {e}")
                 if problems is not None:
                     problems.append(f"{work.name}/{d.name}: {e}")
@@ -1066,11 +1067,16 @@ def stage_top(cfg: Config, url: str | None = None, count: int = 5, opener: str =
     """Build a 'top N moments' countdown from the best clips of one stream or of every stream."""
     from .compose import top_moments
 
+    if count < 2:
+        raise PipelineError(f"--count must be 2 or more (a countdown needs at least two clips); it is {count}")
     works = [open_work(url, cfg)[1]] if url else all_works(cfg)
     pool = []
     for work in works:
         for d in clip_dirs(work):
-            state = read_json(d / "clip.json")
+            state = read_json(d / "clip.json", {})
+            if not state:
+                log.warning("clip %s/%s is left out: its clip.json cannot be read", work.name, d.name)
+                continue
             ok = state.get("status") == "approved" or (include_unapproved and state.get("status") == "candidate" and state.get("ai_keep", True))
             if ok and done(d / "source.mp4"):
                 pool.append((float(state.get("score") or 0), d))

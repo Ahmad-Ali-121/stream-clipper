@@ -10,15 +10,15 @@ You give it a Twitch stream. It finds the moments where chat went wild (and, if 
 
 **The easy way: the installer.** Download **Stream-Clipper-Setup.exe** from https://github.com/Ahmad-Ali-121/stream-clipper/releases/latest/download/Stream-Clipper-Setup.exe (or get it from whoever gave you the program) and double-click it. You do not need Python, Git or anything else first, and it does not ask for administrator rights.
 
-1. It shows two folders: where the program goes, and where your clips, downloads and models go (it suggests the drive with the most free space). Change them if you want, then press **Install**.
+1. It shows two folders: where the program goes (about 2 GB with Python and its parts), and where your clips, downloads and models go (it suggests the drive with the most free space; 5 GB or more). Change them if you want, then press **Install**. Everything it installs stays inside those two folders, Python included.
 2. It works through five steps and ticks each one: fetch **uv** (the small tool that installs Python for this program only), make sure **Git** is there (for the Update button), fetch the program, install Python and the program's parts (the longest step), download the video tools and models (about 300 MB). It takes 5 to 20 minutes and needs the internet.
 3. At the end a **Stream Clipper** shortcut is on your desktop. Leave **Start Stream Clipper now** ticked and press **Finish**.
 
-If a step fails (most often the internet dropped), the window says so in plain words and has a **Try again** button; it carries on where it stopped. The full log is in `install-log.txt` in the program folder.
+If a step fails (most often the internet dropped), the window says so in plain words and has a **Try again** button; it carries on where it stopped. The full log is in `install-log.txt` in the program folder. **Stop** (or closing the window) asks first, then really stops: whatever was downloading is ended, and running the installer again later carries on. Running the installer again over a copy that is already installed keeps that copy's clips folder (it shows it and uses it again) and its settings. If Windows does not let a shortcut be put on the desktop, the last screen says so and names the file to start the program with (`Stream-Clipper.cmd` in the program's folder).
 
 Windows may show a blue box, "Windows protected your PC", the first time: the installer is not signed with a paid certificate. Press **More info**, then **Run anyway**.
 
-**Then: the Set up page.** The first time the program starts, its **Set up** page opens by itself and takes you through what is left, one step per screen:
+**Then: the Set up page.** The first time the program starts, its **Set up** page opens by itself and takes you through what is left, one step per screen. It keeps opening by itself only while a needed step (Video tools, Captions) is still missing; once you have seen it and only optional steps are left, it stays in the menu and waits for you:
 
 1. **Video tools** (done by the installer; here in case something is missing).
 2. **Captions:** downloads the speech model (about 1.6 GB) and tries it on this computer.
@@ -26,7 +26,7 @@ Windows may show a blue box, "Windows protected your PC", the first time: the in
 4. **ChatGPT, for thumbnails** (optional): **Install Node.js first** if the PC has none, then **Install the ChatGPT tool**, then **Sign in to ChatGPT**.
 5. **Free AI on this computer** (optional, about 3 GB).
 
-Each step says what it is for and how big its download is, and has one button. **Skip this** leaves an optional step out; **Next** goes on; **Back** goes back. A sign-in button opens that company's own window and then your browser: you sign in there, with your own account. Stream Clipper never sees your password; it only asks the tool afterwards whether you are signed in, and the step turns green by itself. **Check again** (top right) asks every tool again at once. On the last screen press **Start using Stream Clipper**. The page stays in the menu as **Set up**, so anything skipped can be done later.
+Each step says what it is for and how big its download is, and has one button. **Skip this** leaves an optional step out; **Next** goes on; **Back** goes back. A sign-in button opens that company's own window and then your browser: you sign in there, with your own account. Stream Clipper never sees your password; it only asks the tool afterwards whether you are signed in, and the step turns green by itself. **Check again** (top right) asks every tool again at once and shows the new answer. If a step says *Installed, but its sign-in could not be checked*, the tool did not answer in time: press **Check again**, and if it stays the same press the **Sign in** button. An install that prints nothing for half an hour is ended by the program and that is said in the step, so a hidden question can never block the page. The speech model (about 1.6 GB) is only downloaded by the **Download and try it** button of the Captions step; the **Update** button and the daily check never fetch it by themselves. On the last screen press **Start using Stream Clipper**. The page stays in the menu as **Set up**, so anything skipped can be done later.
 
 **The other way, for people who use a terminal.** Do these in order.
 
@@ -53,13 +53,13 @@ Each step says what it is for and how big its download is, and has one button. *
 
    It prints the video encoder (NVIDIA, Intel or CPU) and whether speech runs on a GPU. Nothing to configure: it uses the fastest thing that works.
 
-The speech model (1.6 GB) is downloaded when you press **Download and try it** on the Set up page's Captions step. If you skip that, it downloads the first time a clip is transcribed.
+The speech model (1.6 GB) is downloaded when you press **Download and try it** on the Set up page's Captions step. Captions is a needed step (Next stays grey until it is done); if you leave the page without doing it, the model downloads the first time a clip is transcribed instead.
 
 **On an NVIDIA laptop**, speech on the GPU also needs NVIDIA's CUDA 12 and cuDNN 9 libraries installed. Without them it still works, on the CPU. This path has not been tested yet.
 
 ## Part 2: Optional paid keys
 
-The clipper works with none of these. Create a file named `.env` in the `Clipping` folder (copy `.env.example`) and add only the lines you have keys for.
+The clipper works with none of these. Create a file named `.env` in the program's folder (copy `.env.example`; with the installer that folder is `app` inside the program folder you chose, normally `%LOCALAPPDATA%\StreamClipper\app`) and add only the lines you have keys for.
 
 | Key | What it adds | Cost | Where to get it |
 |---|---|---|---|
@@ -78,7 +78,7 @@ Every paid call is written to `D:\clipper-data\usage.jsonl` with its cost, so yo
 
 ## Part 3: Daily use
 
-All commands are typed in a terminal opened in the `Clipping` folder.
+All commands are typed in a terminal opened in the program's folder (the one that holds `Stream-Clipper.cmd`).
 
 ### The easy way: everything from the page
 
@@ -90,7 +90,7 @@ Or just double-click **Stream Clipper** on the desktop (setup puts it there): it
 
 Open http://127.0.0.1:8765/ in your browser. The page has a menu on the left and shows one page at a time:
 
-- **New clips:** make clips from a finished stream, a video link or a file on this PC. Four tabs: **Find the best moments** (paste a link, press the button, the program picks the moments), **Pick the part myself** (you give the start and the end), **Cutting board** (cut a downloaded part into pieces) and **Search what was said** (find a moment by its words). Under them, **Your videos** lists the videos you have clips of; click one to see its clips.
+- **New clips:** make clips from a finished stream, a video link or a file on this PC. Four tabs: **Find the best moments** (paste a link, press the button, the program picks the moments), **Pick the part myself** (you give the start and the end), **Cutting board** (cut a downloaded part into pieces) and **Search what was said** (find a moment by its words). Under them, **Your videos** lists the videos you have clips of, newest first; click one to see only that video's clips on My clips (a line under the filters says so, and **Clear filters** shows all clips again).
 - **Live channels:** type channel names, pick A, B, C or D, press **Start watching**. **Stop** ends it. **Clip the last** makes a clip of what just happened.
 - **My clips:** every clip as a tile with its video, score, length and title. This is where you review, edit and approve, and where **Make videos** is. The number beside it in the menu is how many clips wait for review.
 - **Look and branding:** the caption style, the template and opening text, your logo, outro line and music, the thumbnails, and the A and B versions. What you choose here is used for every clip made from now on.
@@ -121,7 +121,9 @@ At the bottom of the menu are the status lines (setup, watching, how many clips)
 
 **Setup check** (on the Settings page) shows whether this computer is ready: a green dot per item, or what is wrong and what to do. **Repair** downloads anything missing. **Update** appears when a newer version exists and installs it.
 
-**Reviewing on My clips.** Each tile has **Approve**, a red cross to **Reject**, and **Edit**. Click the video to play it. The tabs above the tiles switch between the lists: To review, Approved, Pending, Done, Rejected and All. **Sort and filter** opens the order, streamer, found-by and date filters. New drafts appear by themselves. When you have approved what you want, press **Make videos** at the top right: it makes the videos for every approved clip. **Stop** appears next to it while videos are being made (see below), and **Open the videos folder** shows the finished files.
+**Where the files are.** In this guide `D:\clipper-data` stands for your data folder: the one you chose in the installer (it suggests `clipper-data` on the drive with the most free space, or `data` inside the program folder on a PC with one drive). **Open the videos folder** on My clips opens its `ready` folder. The program's own folder is the one that holds `Stream-Clipper.cmd`; with the installer that is `app` inside the program folder you chose.
+
+**Reviewing on My clips.** Each tile has **Approve**, a red cross to **Reject**, and **Edit**. Click the video to play it. The tabs above the tiles switch between the lists: To review, Approved, Pending, Done, Rejected and All. **Sort and filter** opens the order, streamer, found-by and date filters. New drafts appear by themselves. When you have approved what you want, press **Make videos** at the top right (it shows how many clips are approved, for example *Make videos (3)*): it makes the videos for every approved clip. Each tile also says in a few words why the clip is there (a chat spike, a loud moment, chosen by you, AI pick); the full details are in its editor. **Stop** appears next to it while videos are being made (see below), and **Open the videos folder** shows the finished files.
 
 **Editing a clip.** Press **Edit** on a tile (or its title, or Enter). The clip opens over the page with its video on the left and tabs on the right:
 - **Text:** the opening text on the video, the title, description and hashtags to paste when you post. **Write text with AI** is under the tabs.
@@ -131,9 +133,9 @@ At the bottom of the menu are the status lines (setup, watching, how many clips)
 - **Thumbnail:** make a cover picture from the clip, or let ChatGPT draw it.
 - **Posted:** (on a finished clip) log where you posted it.
 
-At the top of the editor are the buttons that decide about the clip, and only the ones that fit where the clip is now: a clip to review has **Approve** and **Reject**; an approved clip has **Make this clip's videos now**, **Move to Pending**, **Back to review** and **Reject**; a finished clip has **Make its videos again**, **Move to Pending**, **Back to review** and **Reject**; a rejected clip has **Approve** and **Back to review**. Under the tabs are **Save changes**, **Write text with AI** and **Delete**. **Clips** at the top left (or Esc) goes back to the list; what you typed is saved. Approving or rejecting also goes back to the list.
+At the top of the editor are the buttons that decide about the clip, and only the ones that fit where the clip is now: a clip to review has **Approve** and **Reject**; an approved clip has **Make this clip's videos now**, **Move to Pending**, **Back to review** and **Reject**; a finished clip has **Make its videos again**, **Move to Pending**, **Back to review** and **Reject**; a rejected clip has **Approve** and **Back to review**. Under the tabs are **Save changes**, **Write text with AI** and **Delete**. **Clips** at the top left (or Esc) goes back to the list; what you typed is saved. Approving or rejecting also goes back to the list, and so does **Make this clip's videos now** (the progress bar is at the top of My clips). A problem that comes up while a clip is open shows in a red box at the top of the editor. Esc closes one thing at a time: first the help chat or the Activity log if one is open, then the editor.
 
-Under the video in the editor, small buttons switch between its versions (A, B, Explained, Raw) and, when it has one, its **Thumbnail**.
+Under the video in the editor, small buttons switch between its versions (**A**, **B**, **Explained A**, **Explained B**, **Raw**) and, when it has one, its **Thumbnail**. **Make B preview** renders version B now so you can compare.
 
 **Keyboard on My clips:** J and K move between clips, Space plays, A approves, R rejects, Enter opens the clip, Esc closes it. A key held down decides one clip only.
 
@@ -231,9 +233,9 @@ Steps 3 to 5 are now under **Or make clips straight away**. The main button is t
 1. Give the video and the start and end as above, then press **Download this part and open the cutting board**. Only that part is downloaded (at most 30 minutes at a time). From YouTube this can take a few minutes.
 2. When it is ready the page opens the **Cutting board** tab of the New clips page. You see the video, and under it the sound wave of the whole part.
 3. Play the video, or click the sound wave to jump. Where one clip should end and the next begin, press **Cut here** (or the **C** key). An orange marker appears; drag it to move the cut. Click a marker and press **Remove the selected cut** (or **Delete**) to take it away.
-4. Quick ways: **Split into N equal parts**, or **cut every N seconds**. You can move the markers afterwards.
+4. Quick ways: type a number beside *Split into ... equal parts* or *or cut every ... seconds* and press the **Do it** button next to it. You can move the markers afterwards.
 5. The list under the timeline shows every piece: where it is in the video and how long it is. Untick **make this one** for a piece you do not want (an intro, a break). The heading says how many clips will be made. A piece shorter than 8 seconds or longer than 5 minutes is marked in red and must be fixed first.
-6. Press **Make these clips**. They are cut out of the part that is already on this PC, so nothing is downloaded again. Each gets captions and text as usual and appears under **Clips**, in order.
+6. Press **Make these clips**. They are cut out of the part that is already on this PC, so nothing is downloaded again. Each gets captions and text as usual and appears under **My clips**, in order.
 
 Your cuts are remembered if you leave the page. The downloaded part stays until you press **Delete this download**, so you can cut it again differently.
 
@@ -245,20 +247,20 @@ A part can be between 8 seconds and 5 minutes long. A video file can also be sea
 
 ### Ask: the built-in help
 
-The **? Ask** button at the bottom right opens a chat. Type a question about the program, in English or Roman Urdu: "How do I clip a live stream?", "What does the score mean?", "Why is it not working?".
+**Ask for help** in the menu on the left opens a chat (bottom left, beside the menu). Type a question about the program, in English or Roman Urdu: "How do I clip a live stream?", "What does the score mean?", "Why is it not working?".
 
 - It answers in simple words, with numbered steps when there is something to do.
-- **Show me** beside a step takes you there: it opens the right page, tab or clip, scrolls to the button, highlights it and blurs everything else. **Walk me through it** does this for every step in turn; press **Next**, or **Done** (or Esc) to stop. You can press the highlighted button itself.
+- **Show me** beside a step takes you there: it opens the right page, tab or clip, scrolls to the button, highlights it and darkens everything else. **Walk me through it** does this for every step in turn; press **Next**, or **Done** (or Esc) to stop. You can press the highlighted button itself.
 - It knows what the program is doing right now, so it can explain an error that is on screen.
 - It only answers questions about this program.
 
 **Telling it to do something.** You can also give it an order instead of a question, in English or Roman Urdu: "start watching lacy and kick.com/name with chat only", "stop watching", "set the template to No template", "make a clip from this link from 3:53:30 to 3:54:00", "watching band kar do". It answers with the steps and a **Do it for me** button; press it and it does the steps on the page while you watch: each thing is highlighted, the text is typed, the choice is made, the button is pressed, and the step gets a tick in the chat. **Stop** (or Esc) ends it at once; steps already done stay done. When it is finished it says how many steps it did. If something could not be done (the page refused a press, a value did not fit, the thing is not there) it says which step and why, and does nothing after it. If a step has to wait for something first, such as a download, it stops before that step and leaves the rest to you.
 
-- If you only asked how to do something, it does nothing by itself; the answer has a **Do it for me** button. As installed it never does anything by itself: every answer that has steps comes with the **Do it for me** button, so you see the steps first and one press does them. This is so that text written by strangers, such as a stream's title, can never make it do something. If you would rather have it act at once, set `help_act_at_once: true` under `llm` in config.yaml; it then acts at once only when the steps follow from your own words (what it types must be something you wrote in the chat, and a button it presses must be one you named), and shows the button otherwise. The same if you closed the chat before the answer came. **New chat** drops an answer that is still on its way.
+- If you only asked how to do something, it does nothing by itself; the answer has a **Do it for me** button. When you told it to do something, the answer begins *Nothing has been done yet* until you press that button. As installed it never does anything by itself: every answer that has steps comes with the **Do it for me** button, so you see the steps first and one press does them. This is so that text written by strangers, such as a stream's title, can never make it do something. If you would rather have it act at once, set `help_act_at_once: true` under `llm` in config.yaml; it then acts at once only when the steps follow from your own words (what it types must be something you wrote in the chat, and a button it presses must be one you named), and shows the button otherwise. The same if you closed the chat before the answer came. **New chat** drops an answer that is still on its way.
 - While the chat is open, the keyboard shortcuts for clips (J, K, A, R) are switched off, so words you type can never approve or reject a clip.
 - It can use anything that is on the page: boxes, lists, tick boxes, sliders, tabs and buttons. A new feature can be used the day it is added.
 - If you left out something it needs (which channel, which link, what time), it asks instead of guessing.
-- **Some presses always stay yours.** Approve, Reject, Delete, Back to review, Move to Pending, the Thumbnail buttons, the **Thumbnail for each clip** choice on the Look and branding page, the three buttons of the "Stop making videos?" window, the Versions to make tick boxes and everything else on a clip's card, moving all approved clips to Pending, the box editor window, deleting, removing or clearing anything, taking a logo or music off, cutting the cutting board into equal parts (it replaces your cuts), which Claude connection is used, setting up the free local AI, and repairing, restarting or updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
+- **Some presses always stay yours.** Approve, Reject, Delete, Back to review, Move to Pending, the Thumbnail buttons, the **Thumbnail for each clip** choice on the Look and branding page, the three buttons of the "Stop making videos?" window, the tick boxes of a clip's Versions tab and everything else on a clip's tile and in its editor, the install and sign-in buttons of the Set up page, moving all approved clips to Pending, the box editor window, deleting, removing or clearing anything, taking a logo or music off, cutting the cutting board into equal parts (it replaces your cuts), which Claude connection is used, setting up the free local AI, and repairing, restarting or updating the program are never pressed for you. It points at the button and waits for you. That is on purpose: you decide about every clip.
 - It cannot post or upload anything; the program has no way to do that.
 
 It needs Claude (your Claude Code plan or an API key). Without Claude it still answers, by showing the parts of this guide that match your question, but it cannot do things for you. Each question counts towards your Claude plan like any other use.
@@ -268,7 +270,7 @@ It needs Claude (your Claude Code plan or an API key). Without Claude it still a
 On My clips, press **Sort and filter** above the tiles (the search box beside it is always there):
 
 - **Order:** newest first (the default, so a clip just made is at the top), best score first, or oldest first.
-- **Streamer**, **Found by** (chat, loud moment, fast action, excited words, AI, chosen by you) and **Made** (last hour, 24 hours, 7 days) narrow the list. **Search** looks in the words, the opening text and the titles. **Clear filters** shows everything again.
+- **Streamer**, **Found by** (chat, loud moment, fast action, excited words, AI, chosen by you) and **Made** (last hour, 24 hours, 7 days) narrow the list. The search box beside **Sort and filter** (it says *Search titles and words*) looks in the words, the opening text and the titles. **Clear filters** shows everything again.
 - Each tile says when it was made ("made 12 min ago", "made today 20:57"). A clip made in the last hour that you have not reviewed carries a **NEW** tag.
 
 A clip you approved, rejected or deleted stays that way, through every update and restart. Each decision is also written to a separate record (`decisions.json` in the data folder); every time the program starts it checks the clips against that record and puts back any decision a clip has lost. Only your own **Back to review** button brings a clip back.
@@ -278,9 +280,9 @@ A clip you approved, rejected or deleted stays that way, through every update an
 Kick works like Twitch, live and finished.
 
 - **Live.** In the channels box type the channel as `kick.com/name` (or paste its address). It can be mixed with the others: `lacy kick.com/name @channelname`. When the streamer goes live the program reads the chat, shows the hype meter, finds moments from chat (and from sound and picture if you chose those) and makes draft clips, and **Clip the last** works too. Clips are cut from the recording Kick makes while the stream runs. If the streamer has recordings switched off, the last few minutes of the live feed are kept instead, exactly as for Twitch. "Start watching by itself" covers Kick channels as well.
-- **Finished.** Paste a Kick video link (kick.com/…/videos/… or kick.com/video/…) anywhere a video link goes: **Pick the part myself**, the **Cutting board**, or **Find the best moments**. Finished stream downloads the video's chat replay and finds the moments from it, just as for Twitch; sound, picture and AI reading can be added. Kick hands chat out in small pages, so a short or quiet stream takes seconds, but the chat of a very long, very busy one can take a quarter of an hour or more (a 13-hour stream with 85,000 messages took 17 minutes). The bar shows how far it is, and if it is stopped, the next try carries on from where it was. If Kick no longer keeps an old video's chat, the page says so; choose sound, picture or AI reading for that one.
+- **Finished.** Paste a Kick video link (kick.com/…/videos/… or kick.com/video/…) anywhere a video link goes: **Pick the part myself** (which also feeds the Cutting board) or **Find the best moments**. Find the best moments downloads the video's chat replay and finds the moments from it, just as for Twitch; sound, picture and AI reading can be added. Kick hands chat out in small pages, so a short or quiet stream takes seconds, but the chat of a very long, very busy one can take a quarter of an hour or more (a 13-hour stream with 85,000 messages took 17 minutes). The bar shows how far it is, and if it is stopped, the next try carries on from where it was. If Kick no longer keeps an old video's chat, the page says so; choose sound, picture or AI reading for that one.
 
-Kick has no sound-only feed, so "chat + audio" on a live Kick channel reads its smallest picture instead (about 150 MB an hour rather than 70).
+Kick has no sound-only feed, so **Chat + sound** on a live Kick channel reads its smallest picture instead (about 150 MB an hour rather than 70).
 
 Kick's chat is read from Kick's own public pages, without an account. Nothing is posted there.
 
@@ -303,9 +305,9 @@ Clips already drafted get a new template when you press Make videos, or at once 
 - **Music grows louder over the last … seconds** (Branding): the music stays level, then rises to the end.
 - Two more caption movements: each line pops in, and plain lines with no highlight.
 
-### Transcript: find a moment by what was said
+### Search what was said: find a moment by its words
 
-The fourth button at the top, **Transcript**.
+Open **New clips** and choose the fourth tab, **Search what was said**.
 
 1. Paste a video link and press **Get the words**. A YouTube video with captions is ready in seconds. Other videos need one run under Find the best moments with *Let AI read the whole stream*; their words are kept and can be searched here.
 2. Type a word or phrase in the search box. Hindi and Urdu speech is shown in its own letters here, so search in those letters.
@@ -316,7 +318,7 @@ The fourth button at the top, **Transcript**.
 
 ### Subtitle files
 
-Open a clip with **Edit** and go to its **Captions** tab. **Download .srt** and **Download .vtt** give the clip's captions as a subtitle file, timed from the start of the clip. **Use a subtitle file** replaces the captions with your own file (its times must also count from the start of the clip).
+Open a clip with **Edit** and go to its **Captions** tab. **Download .srt** and **Download .vtt** give the clip's captions as a subtitle file, timed from the start of the clip. **Use a subtitle file…** replaces the captions with your own file (its times must also count from the start of the clip).
 
 ### Live: who is live, and how hot the chat is
 
@@ -326,7 +328,7 @@ Tick **Start watching this list by itself when the program opens** and the progr
 
 ### Layouts: what the clip shows
 
-Open the clip with **Edit** and go to **Trim and framing**. **Framing** has six choices, and **Set the face box and the video box** shows each one live:
+Open the clip with **Edit** and go to **Trim and framing**. **Framing** has seven choices (Automatic, which lets the program decide, and the six below), and **Set the face box and the video box** shows each one live:
 
 | Layout | What you get |
 |---|---|
@@ -344,7 +346,7 @@ For the last two, choose the corner and how big the small face is. A face in a b
 On the **Look and branding** page, under **Captions**:
 
 - **How the captions move:** the spoken word changes colour (as before), pops in, shows one big word at a time, or the line fills in word by word.
-- **Your own caption style:** type a font installed on the PC, pick the size, outline, words on screen and the two colours. **Use this style** applies it; **Save as a profile** keeps it under a name you choose, and it then appears in the Caption style list.
+- **Your own caption style:** type a font installed on the PC, pick the size, outline, words on screen and the two colours. **Use this style** applies it; **Save as a profile…** keeps it under a name you choose, and it then appears in the Caption style list.
 
 Clips already drafted get the new look when you press **Make videos**.
 
@@ -376,7 +378,7 @@ Twitch, live streams and video files are still listened to on this PC, because n
 
 ### Clip the last 30 seconds (live)
 
-While watching live, the Live channels page has **Clip the last** with a length next to it. Saw something chat did not react to? Press it right after the moment. A draft of that stretch appears at the top of My clips in two or three minutes; trim it in its editor under Trim and framing. It needs a stream being watched.
+While watching live, the Live channels page has **Clip the last** with a length next to it. Saw something chat did not react to? Press it right after the moment. A draft of that stretch appears at the top of My clips in two or three minutes; trim it in its editor under Trim and framing. It needs a stream being watched. Every press makes a clip of its own, also two presses close together. On a stream that is not being recorded only the last few minutes are kept (`watch.buffer_minutes`, 10 as installed): a longer stretch than that is shortened to what is kept, and the Activity log says so; a stretch from before the watch began cannot be clipped.
 
 ### Free local AI (optional)
 
@@ -406,7 +408,7 @@ Works on every clip: live Twitch, Kick and YouTube drafts, finished streams and 
 
 1. Open the clip with **Edit**, go to **Trim and framing** and press **Set the face box and the video box**.
 2. You see the stream as it was, with two boxes: orange **Face** and blue **Video**. Drag a box to move it; drag its round corner to make it bigger or smaller. The boxes keep the shape they are shown in, so what is inside a box is exactly what the viewer sees. The small picture on the right is the result. Use the slider or **Play** to check other moments of the clip.
-3. Under **What the clip shows** choose *Face on top, video below* (two boxes) or *Video only* (one tall box).
+3. Under **What the clip shows** choose one of its six layouts, for example *Face on top, video below* (two boxes) or *Video only, full height* (one tall box).
 4. Tick **Use the same boxes for the other clips of this video** to apply them to the other unfinished clips of the same video (handy for parts), and **Remember these boxes for new clips of this streamer** so the next drafts of that streamer start with them.
 5. Press **Save and make the draft again**. It takes up to a minute; then the clip shows the new draft.
 
@@ -449,7 +451,7 @@ The choice applies to clips made from then on. Set it back to English before wat
    uv run clipper review
    ```
 
-   Open the address it prints (http://127.0.0.1:8765/) in your browser. For each clip: watch it, fix the hook text if you want, press **Approve** or **Reject**. Under **Versions to make** tick **Make an explainer version** on a clip if you want the narrated version of it too. Press Ctrl+C in that terminal when finished.
+   Open the address it prints (http://127.0.0.1:8765/) in your browser. For each clip: watch it, fix the hook text if you want, press **Approve** or **Reject**. Press **Edit** on a clip, open its **Versions** tab and tick **Make an explainer version** if you want the narrated version of it too. Press Ctrl+C in that terminal when finished.
 3. **Finish.** This renders everything you approved and writes the upload text:
 
    ```powershell
@@ -504,6 +506,8 @@ These add a narrator, which is what YouTube asks for before it pays for clip con
   uv run clipper top --count 5 --opener "Five moments from tonight's GTA 6 streams."
   ```
 
+  `--count` must be 2 or more. The video is made fresh each time, with the caption look and branding of today.
+
   Without a link it picks the best approved clips from every stream; with a link, from that stream.
 
 The narration lines are written by Claude when the Anthropic key is set. Without it they are plain placeholders, and you should type your own `intro` and `rank_line` into each clip's `clip.json`.
@@ -519,7 +523,7 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 
 ## Part 4: Adding things
 
-- **A new streamer.** Nothing to do: just use the channel name. The clipper measures where the streamer's facecam is from the picture itself, and once two clips of that streamer agree it remembers the position (in `D:\clipper-data\facecams.json`). The first clip or two of a new streamer may be framed a little off; fix those with Layout on the review page. If a streamer's framing stays wrong, you can type the exact box under `channels:` in `config.yaml`, which always wins.
+- **A new streamer.** Nothing to do: just use the channel name. The clipper measures where the streamer's facecam is from the picture itself, and once two clips of that streamer agree it remembers the position (in `D:\clipper-data\facecams.json`). The first clip or two of a new streamer may be framed a little off; fix those in the clip's editor: press **Edit**, open **Trim and framing**, and change **Framing** or press **Set the face box and the video box**. If a streamer's framing stays wrong, you can type the exact box under `channels:` in `config.yaml`, which always wins.
 - **A new campaign.** Ask Claude Code: "add a brief for this campaign" and paste the campaign page link. It writes a file under `briefs/`. Check it against the live campaign page yourself.
 
 ## Part 5: When something goes wrong
@@ -533,13 +537,15 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | "no chat replay" | That video cannot be scored from chat. Use a live watch instead |
 | A clip is framed wrong | Open the clip with Edit, go to Trim and framing, change Framing (or set the boxes) and save; then press Make videos again |
 | "an NVIDIA card was found but speech-to-text cannot run on it" | Not an error: speech-to-text runs on the processor instead (slower, same result). To use the card, run the setup command again with `-Gpu` added at the end. It downloads NVIDIA's libraries (about 1 GB) and then says whether the card works. If it still cannot, update the NVIDIA driver and run `uv run clipper hardware --refresh` |
-| A red box at the top of the page | The watcher stopped by itself, or the program is not answering. The red and yellow lines in the log under it, and the terminal window, say why. A clip that could not be made says so on its tile and shows its own reason in red in its editor |
+| A red box at the top of the page | The watcher stopped by itself, or the program is not answering. The red and yellow lines in the **Activity log** (bottom of the menu), and the terminal window, say why. A clip that could not be made says so on its tile and shows its own reason in red in its editor |
 | The program closes or says "access violation" when captions are made | The computer's Microsoft Visual C++ runtime is too old. Install the x64 version from https://aka.ms/vs/17/release/vc_redist.x64.exe, restart, and try again. `uv run clipper doctor` shows the installed version |
 | Captions miss words | Normal on very noisy moments. The larger model is already the default |
 | Too many clips with nothing in them in mode B, C or D | Raise `audio_level` or `video_level` under `watch:` in `config.yaml` |
 | Anything else | Open an issue on the project's GitHub page, or open Claude Code in this folder and describe it |
 
 ## When something goes wrong: how errors are shown
+
+**A mistake in a settings file.** If `config.yaml` or `config.local.yaml` has a wrong value, the program says which setting and which file, in one line: for example *config.local.yaml.moments.top must be a number; it is 'five'*, or *config.yaml has a writing mistake at line 12*. Numbers and `true`/`false` are written without quotes; each setting is `name: value` on its own line, indented with spaces, never tabs. A damaged clip file is named the same way (*...clip.json is damaged*): delete that clip on My clips and make it again.
 
 Every error is shown in plain words, in three parts:
 
@@ -553,7 +559,7 @@ A clip whose own record on disk is damaged (the computer was switched off at the
 
 Two things the program now handles by itself and only mentions in the Activity log: a video with **no sound** gets a silent sound track so that it can still be made into a clip (it has no captions), and when the **graphics card cannot make a video** (a game is using it, or its driver changed) that video is made with the processor instead, which is slower.
 
-**Stop watching** also removes the copy of the last minutes of the live feed that is kept for streams the site is not recording. If the site says once that a stream is not live, the program asks again a minute later before it stops watching it.
+**Stop** on the Live channels page (beside Start watching) also removes the copy of the last minutes of the live feed that is kept for streams the site is not recording. If the site says once that a stream is not live, the program asks again a minute later before it stops watching it.
 
 The most common ones and what they mean:
 
@@ -566,7 +572,7 @@ The most common ones and what they mean:
 - **"The video is not available..."**: deleted, private or for subscribers only.
 - **"The disk is full"**: free space on the drive with the data folder.
 - **"A file could not be changed because another program has it open"**: close the video player or folder window showing it and press again.
-- **"The AI service refused: the limit of your plan is reached..."**: wait for the limit to reset or choose another AI under Setup check.
+- **"The AI service refused: the limit of your plan is reached..."**: wait for the limit to reset, or open **Settings** and pick another way under **AI for titles and ratings** (*How to reach Claude*).
 - **"The AI program on this computer is not signed in any more"**: open **Set up** in the menu; the Claude or ChatGPT step has a **Sign in** button.
 - **"The graphics card could not do this step"** or **"The computer ran out of memory"**: close games and other heavy programs and try again.
 - **"The video file for this step is damaged or was only half downloaded"**: make the draft again: open the clip with Edit, Trim and framing, Make this video's drafts again.
@@ -577,9 +583,9 @@ The most common ones and what they mean:
 
 | Place | What is in it |
 |---|---|
-| `Clipping\config.yaml` | Every setting, with a comment on each |
-| `Clipping\.env` | Your paid keys (never share this file) |
-| `Clipping\briefs\` | One file per campaign |
+| `config.yaml` in the program's folder | Every setting, with a comment on each |
+| `.env` in the program's folder | Your paid keys (never share this file) |
+| `briefs\` in the program's folder | One file per campaign |
 | `D:\clipper-data\work\` | One folder per stream, with its clips |
 | `D:\clipper-data\ready\` | Finished videos and their upload text, by date |
 | `D:\clipper-data\usage.jsonl` | Cost of each paid call |

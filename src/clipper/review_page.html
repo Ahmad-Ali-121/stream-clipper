@@ -191,19 +191,22 @@ pre.log:empty::before{content:"Nothing yet.";color:var(--faint)}
 .vid .score{left:8px}.vid .dur{right:8px}
 .vid .score.good{background:var(--ok);color:#06140d}.vid .score.meh{color:var(--muted)}
 .vtabs{display:none}
-.tile{padding:10px 11px 11px;display:flex;flex-direction:column;gap:6px;min-height:118px}
+.tile{padding:10px 11px 11px;display:flex;flex-direction:column;gap:5px;min-height:136px}
 .tt{all:unset;cursor:pointer;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.7em}
 .tt:hover{color:var(--accent-hi)}.tt:focus-visible{outline:2px solid var(--accent)}
 .tm{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden}
 .tm .who{overflow:hidden;text-overflow:ellipsis}
 .newtag{font:700 10px/16px var(--mono);letter-spacing:.06em;padding:0 5px;border-radius:3px;background:var(--accent);color:var(--accent-ink)}
 .tprob{font-size:12px;color:var(--bad)}
+.tfound{font-size:12px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ta{display:flex;gap:6px;margin-top:auto}
 .ta .btn{flex:1;height:30px;padding:0 6px;font-size:12.5px;min-width:0}
 .ta .btn.icon{flex:none;width:30px}
 .edhead,.info{display:none}
 /* the editor: the same card, opened over the page */
 body.editing{overflow:hidden}
+/* a problem must be seen from inside a clip's editor too, which covers the page */
+body.editing #errbox{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9;margin:0;width:min(760px,92vw);max-height:40vh;overflow:auto;box-shadow:0 12px 34px rgba(0,0,0,.6)}
 .clip.open{display:grid!important;position:fixed;inset:0;z-index:7;border:0;border-radius:0;background:var(--bg);overflow:auto;
   grid-template-columns:minmax(240px,330px) minmax(0,1fr);grid-template-rows:auto 1fr;gap:0 26px;padding:0 28px 28px;align-content:start}
 .clip.open .tile,.clip.open .vid .score,.clip.open .vid .dur{display:none}
@@ -637,10 +640,10 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
       <div class="pagehead"><h1>Posted and earnings</h1></div>
       <div class="mainhead"><h2></h2>
         <div class="filters"><button class="chipbtn" id="b-views" onclick="refreshViews()">Refresh views</button><a class="chipbtn" href="/api/tracker.csv" style="text-decoration:none">Download as a spreadsheet</a></div></div>
-      <p class="keys">After you post a clip by hand, open that clip and use "Posted it? Log it". Views can be read automatically from public links; payouts and rejections you type in.</p>
+      <p class="keys">After you post a clip by hand, open that clip with Edit and use its Posted tab. Views can be read automatically from public links; payouts and rejections you type in.</p>
       <div class="totals" id="t-totals"></div>
       <div class="card twrap"><table class="ttable"><thead><tr><th>Clip</th><th>Version</th><th>Campaign</th><th>Platform</th><th>Link</th><th>Status</th><th>Views</th><th>Paid ($)</th><th>Rejection reason or note</th><th></th></tr></thead><tbody id="t-rows"></tbody></table></div>
-      <div class="empty" id="t-empty" hidden><b>Nothing logged yet.</b>Make a clip's videos, post one by hand, then open the clip and use "Posted it? Log it".</div>
+      <div class="empty" id="t-empty" hidden><b>Nothing logged yet.</b>Make a clip's videos, post one by hand, then open the clip with Edit and use its Posted tab.</div>
       <h2 class="sect">Campaign <small>checks every clip against a campaign's rules</small></h2>
       <div class="card narrow"><div class="body">
         <label class="f" for="o-camp">Campaign (checks every clip against its rules)</label>
@@ -875,7 +878,7 @@ function show(s){
   if(document.activeElement!==$('o-avoid')&&!avoidDirty)$('o-avoid').value=s.thumbnail_avoid||'';
   $('thumb-sum').textContent=(s.thumbnail_face!==false?'face big and excited':'face not forced')+(s.thumbnail_avoid?' · a not-wanted list is set':' · no not-wanted list');
   const gpt=s.chatgpt||{text:'this running program is older than the page; restart it'};
-  $('thumb-note').innerHTML=({off:'No thumbnail is made by itself. You can still make one for any clip, under <b>Thumbnail</b> on its card.',
+  $('thumb-note').innerHTML=({off:'No thumbnail is made by itself. You can still make one for any clip: press Edit on it and open its <b>Thumbnail</b> tab.',
     frame:'Free, no AI: the sharpest frame of the clip with its opening text in big letters. Saved beside the video with the same name.',
     chatgpt:'ChatGPT looks at frames of the clip and draws the thumbnail itself; you write nothing. One to three minutes per clip. Frames, the title and the words of the clip are sent to OpenAI, and it counts towards your ChatGPT plan.'}[s.thumbnail||'off'])
     +((s.thumbnail==='chatgpt'||gpt.signed_in)?'<br><b>ChatGPT:</b> <span style="color:'+(gpt.signed_in?'var(--ok)':(gpt.checking?'var(--muted)':'var(--bad)'))+'">'+esc(gpt.text)+'</span>':'');
@@ -897,7 +900,7 @@ function show(s){
   $('w-live').innerHTML=Object.entries(s.live||{}).map(([n,c])=>'<div class="live1"><b>'+esc(n)+'</b>'+(c.live
       ?'<span class="hbar"><i style="width:'+c.percent+'%;background:'+(HC[c.label]||'var(--accent)')+'"></i></span><span>'+c.percent+'% · '+esc(c.label)+' · '+c.per_minute+' msgs/min'+(c.waiting?' · clip being made':'')+'</span>'
       :'<span style="color:var(--muted)">not live yet; checked every half minute</span>')+'</div>').join('');
-  $('w-note').innerHTML=s.watching?'<b>Watching.</b> Drafts appear on the right as moments happen. '+esc(lastLine(s.watch_log)):(s.watch_problem?'<b>Stopped with a problem.</b> Open the activity log.':'Not watching.');
+  $('w-note').innerHTML=s.watching?'<b>Watching.</b> Drafts appear under My clips as moments happen. '+esc(lastLine(s.watch_log)):(s.watch_problem?'<b>Stopped with a problem.</b> Open the activity log.':'Not watching.');
   logTo('wlog',s.watch_log);
   $('b-run').disabled=s.running; $('b-runstop').disabled=!s.running;
   $('r-note').innerHTML=s.running?'<b>Working…</b> '+esc(lastLine(s.run_log)):(s.run_problem?'<b>It stopped with a problem.</b> Open the activity log.':(s.run_log.length?(/ stopped$/.test(lastLine(s.run_log))?'<b>Stopped by you.</b>':'<b>Done.</b> '+esc(lastLine(s.run_log))):'Nothing running.'));
@@ -932,9 +935,10 @@ function show(s){
   if(cbRunning!==s.running){cbRunning=s.running;if(CB)cbRows();if(TW)twDraw()}
   /* A job started from this page has ended: go where its result is. */
   if(cbWasRunning&&!s.running&&cbJob){const job=cbJob;cbJob='';
-    if(!s.run_problem&&job==='range'){CB=null;view('board');toast('Downloaded. Mark your cuts on the timeline.')}
-    if(!s.run_problem&&job==='pieces'){view('clips');setFilter('candidate');toast('Your clips are ready to review.')}
-    if(s.run_problem)toast('It stopped with a problem. The activity log in step 1 says why.',true)}
+    const here=curPage==='new'&&!openKey;   /* still where the job was started: go on to the next step. Anywhere else: only say so */
+    if(!s.run_problem&&job==='range'){CB=null;if(here){view('board');toast('Downloaded. Mark your cuts on the timeline.')}else toast('Downloaded. Open New clips, Cutting board, to mark your cuts.')}
+    if(!s.run_problem&&job==='pieces'){if(here){view('clips');setFilter('candidate');toast('Your clips are ready to review.')}else{loadClips();toast('Your clips are ready: My clips, To review.')}}
+    if(s.run_problem)toast('It stopped with a problem. The Activity log (bottom of the menu) says why.',true)}
   cbWasRunning=s.running;
 }
 async function act(url,body){
@@ -1043,7 +1047,7 @@ function cardHtml(c){
   const tabs=(c.videos||[]).length>1||(c.videos||[]).includes('final.mp4')?'<div class="vtabs">'+(c.videos||[]).map(n=>'<button class="'+(n===c.video?'on':'')+'" onclick="showVid(\''+k+'\',\''+n+'\',this)">'+VN[n]+'</button>').join('')
     +(cv.made?'<button onclick="showCover(\''+k+'\',this)" title="This clip\'s thumbnail">Thumbnail</button>':'')
     +((c.videos||[]).includes('final.mp4')&&!(c.videos||[]).includes('final_b.mp4')?'<button onclick="makeB(\''+k+'\',this)" title="Render version B now so you can compare it">Make B preview</button>':'')+'</div>':'';
-  const vid=c.video?'<video'+(openKey===k?' controls':'')+' preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+'#t=1.5"></video>'+tabs+'<small>'+shown+'</small>'
+  const vid=c.video?'<video'+(openKey===k?' controls':'')+' preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+(openKey===k?'':'#t=1.5')+'"></video>'+tabs+'<small>'+shown+'</small>'
     :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
   const pc=c.points>=70?'good':(c.points>=40?'':'meh');
   const chips='<span class="chip '+pc+'" title="One score from chat, sound, picture and AI. Higher is better."><b>Score '+c.points+'</b></span>'
@@ -1081,6 +1085,7 @@ function cardHtml(c){
    +'<div class="tile"><button class="tt" onclick="openClip(\''+k+'\')" title="Open this clip to edit it">'+esc(title)+'</button>'
    +'<div class="tm"><span class="who">'+esc(who)+'</span><span class="newtag" title="Made in the last hour and not reviewed yet"'+(isNew(c)?'':' hidden')+'>NEW</span>'
    +'<span class="when2" title="When this clip was made'+(c.decided_at?'. Decided '+esc(c.decided_at):'')+'">'+madeText(c.made_at)+'</span></div>'
+   +'<div class="tfound" title="Why this clip is here. Press Edit for the details.">'+esc(foundBy(c).concat(c.ai_pick?['AI pick']:[]).join(' · '))+'</div>'
    +(c.error?'<div class="tprob">Has a problem. Open it to read why.</div>':'')
    +'<div class="ta">'+quick+'<button class="btn" onclick="openClip(\''+k+'\')" title="Text, captions, trim, framing, thumbnail, versions">'+ICON.edit+'Edit</button></div></div>'
    +'<div class="info">'
@@ -1132,7 +1137,7 @@ function cardHtml(c){
    +'<textarea name="t_cover" maxlength="2000" style="min-height:64px" oninput="coverText.set(\''+k+'\',this.value)" placeholder="For example: the streamer shocked on the left, the bike upside down in the air on the right, big yellow text NO WAY">'+esc(coverText.has(k)?coverText.get(k):(cv.prompt||''))+'</textarea>'
    +'<div class="btns"><button class="btn" onclick="makeCover(\''+k+'\',\'prompt\',this)">Make it from my description</button>'
    +(cv.made?'<a class="btn" href="/media/'+k+'/cover.jpg" download="thumbnail.jpg">Download</a><button class="btn quiet" onclick="makeCover(\''+k+'\',\'none\',this)">Remove thumbnail</button>':'')+'</div></details>'
-   +(c.exported?'<details'+P('posted')+'><summary>Posted it? Log it <small>keeps views, payouts and rejections in the Tracker</small></summary>'
+   +(c.exported?'<details'+P('posted')+'><summary>Posted <small>log where you posted it; keeps views, payouts and rejections under Posted and earnings</small></summary>'
      +'<div class="three"><div><label class="f">Where</label><select name="t_platform"><option>YouTube Shorts</option><option>TikTok</option><option>Instagram Reels</option><option>Facebook Reels</option><option>Other</option></select></div>'
      +'<div><label class="f">Version</label><select name="t_version"><option>A</option><option>B</option><option>Explained A</option><option>Explained B</option></select></div>'
      +'<div><label class="f">Link to the post</label><input type="text" name="t_url" placeholder="https://..."></div></div>'
@@ -1152,13 +1157,13 @@ function drawFilters(clips,shownList){
   if(filter==='approved'&&n.approved)$('filters').insertAdjacentHTML('beforeend','<button class="chipbtn act" data-yours title="Takes every approved clip out of Make videos. They wait in the Pending list, not mixed into To review" onclick="holdApproved('+n.approved+')">Move all '+n.approved+' to Pending</button>');
   $('n-count').textContent=n.candidate||'';$('n-count').dataset.n=n.candidate;drawVideos(clips);
   $('p-count').textContent=n.candidate+' to review · '+n.approved+' approved · '+(n.pending?n.pending+' pending · ':'')+n.done+' done';
-  if(HAS_PANEL)$('b-finish').textContent=n.approved?'Make '+n.approved+' video'+(n.approved>1?'s':''):'Make videos';
+  if(HAS_PANEL)$('b-finish').textContent=n.approved?'Make videos ('+n.approved+')':'Make videos';
   const shown=shownList.filter(c=>filter==='all'||place(c)===filter).length, em=$('empty');
   em.hidden=shown>0;
   em.innerHTML=(clips.length&&shownList.length<clips.length&&(filter==='all'?clips.length:n[filter])>0)?'<b>No clip matches the filters.</b>Press Sort and filter, then Clear filters.':clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',pending:'in Pending. A clip you take back from Approved with "Move to Pending" waits here',done:'finished yet. Approve a clip and press Make videos',rejected:'rejected'}[filter]||'in this list')+'.'
     :'<b>No clips yet.</b>'+(HAS_PANEL?'Paste a finished stream under New clips, or start watching under Live channels.':'Run find first.');
 }
-function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
+function setFilter(f){filter=f;$('clips').dataset.filter=f;for(const o of document.querySelectorAll('#clips .clip:not(.open) video'))o.pause();loadClips()}
 let known=[];
 /* What a card was drawn from: when any of this changes, the card is drawn again. */
 function sig(c){return [c.mtime,c.status,c.made,c.points,c.campaign,(c.campaign_issues||[]).length,(c.videos||[]).join(),c.held,c.simple,(c.files||[]).join(),(c.cover||{}).mtime,(c.cover||{}).error].join('|')}
@@ -1170,10 +1175,12 @@ function madeText(t){if(!t)return '';const d=new Date(t*1000), age=(Date.now()-d
   const day=x=>new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime(), diff=Math.round((day(new Date())-day(d))/864e5);
   if(diff===0)return 'made today '+hm;if(diff===1)return 'made yesterday '+hm;
   return 'made '+d.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+hm}
-function arrangeNow(){return {sort:val('s-sort'),who:val('s-who'),how:val('s-how'),when:val('s-when'),find:val('s-find').trim().toLowerCase()}}
-function setArrange(){try{localStorage.setItem('arrange',JSON.stringify(arrangeNow()))}catch(e){} loadClips()}
-function clearArrange(){$('s-who').value='';$('s-how').value='';$('s-when').value='';$('s-find').value='';setArrange()}
+let onlyVid='';   /* set by a click on one of "Your videos": only that video's clips, until Clear filters */
+function arrangeNow(){return {sort:val('s-sort'),who:val('s-who'),how:val('s-how'),when:val('s-when'),find:val('s-find').trim().toLowerCase(),vid:onlyVid}}
+function setArrange(){try{const a=arrangeNow();delete a.vid;localStorage.setItem('arrange',JSON.stringify(a))}catch(e){} loadClips()}
+function clearArrange(){onlyVid='';$('s-who').value='';$('s-how').value='';$('s-when').value='';$('s-find').value='';setArrange()}
 function fits(c,a){
+  if(a.vid&&String(c.key).split('/')[0]!==a.vid)return false;
   if(a.who&&(c.channel||c.stream_title||'Your video')!==a.who)return false;
   if(a.how&&!(String(c.trigger||'chat').split('+').includes(a.how)||(a.how==='ai'&&c.ai_pick)||(a.how==='said'&&c.said>=5)))return false;
   if(a.when&&!(c.made_at&&Date.now()/1000-c.made_at<a.when*3600))return false;
@@ -1204,7 +1211,7 @@ async function loadClips(){
   if(who.dataset.sig!==names.join('|')){who.dataset.sig=names.join('|');const keep=who.value;
     who.innerHTML='<option value="">All</option>'+names.map(n=>'<option value="'+esc(n)+'">'+esc(n)+'</option>').join('');who.value=names.includes(keep)?keep:''}
   const box=$('clips'), want=new Set(clips.map(c=>domId(c.key)));
-  for(const el of [...box.children])if(!want.has(el.id))el.remove();
+  for(const el of [...box.children])if(!want.has(el.id)){if(el.classList.contains('open')){closeClip(true);toast('The clip you had open is no longer there.',true)}el.remove()}
   let prev=null;
   for(const c of clips){
     let el=$(domId(c.key));
@@ -1213,7 +1220,6 @@ async function loadClips(){
         if(e.target.closest&&e.target.closest('.words'))el.dataset.wdirty='1';el.dataset.dirty='1';const s=el.querySelector('.acts .saved');s.textContent='Unsaved changes';s.className='saved warn'});
       if(prev)prev.after(el);else box.prepend(el)}
     else if(sig(c)!==el.dataset.m&&!busy(el)){el.dataset.status=place(c);el.dataset.m=sig(c);el._c=c;el.innerHTML=cardHtml(c)}
-    else el._c=c;
     /* the clock on the card moves on without redrawing the card (a redraw would close fold-outs and rewind the video) */
     const w2=el.querySelector('.when2'), nt=el.querySelector('.newtag');if(w2)w2.textContent=madeText(c.made_at);if(nt)nt.hidden=!isNew(c);
     el.hidden=!fits(c,a)&&!busy(el);   /* a card you are typing in or watching is never hidden under you */
@@ -1222,8 +1228,11 @@ async function loadClips(){
   /* Put the cards in the chosen order. A card that is playing or being typed in is not moved under you: next time. */
   const order=clips.map(c=>domId(c.key)), have=[...box.children].map(e=>e.id);
   if(order.join()!==have.join()&&![...box.children].some(busy))for(const id of order)box.appendChild($(id));
-  const shownNow=clips.filter(c=>fits(c,a)), filtering=!!(a.who||a.how||a.when||a.find);
-  $('s-clear').hidden=!filtering;if(a.who||a.how||a.when)$('sortrow').hidden=false;$('s-count').textContent=filtering?shownNow.length+' of '+clips.length+' clips match':'';
+  if(a.vid&&!clips.some(c=>String(c.key).split('/')[0]===a.vid)){onlyVid='';a.vid=''}   /* that video's clips are all gone */
+  const shownNow=clips.filter(c=>fits(c,a)), filtering=!!(a.who||a.how||a.when||a.find||a.vid);
+  const one=a.vid&&clips.find(c=>String(c.key).split('/')[0]===a.vid);
+  $('s-clear').hidden=!filtering;if(a.who||a.how||a.when||a.vid)$('sortrow').hidden=false;
+  $('s-count').textContent=filtering?(one?'Only one video ('+String(one.stream_title||one.channel||'your video').slice(0,40)+'): ':'')+shownNow.length+' of '+clips.length+' clips'+(one?'. Clear filters shows all.':' match'):'';
   drawFilters(clips,shownNow);
 }
 async function save(key,extra){
@@ -1270,7 +1279,7 @@ async function delClip(key){
   const c=known.find(x=>x.key===key)||{};
   if(!confirm('Delete this clip'+(c.channel?' of '+c.channel:'')+' for good?'+NL+NL+'Its draft and downloaded video are removed and cannot be brought back. Finished videos you already made stay in the ready folder.'))return;
   const r=await post('/api/clip/'+key+'/delete'); if(!r)return;
-  const el=$(domId(key)); if(el)el.remove();
+  const el=$(domId(key)); if(el){if(openKey===key)closeClip(true);el.remove()}
   toast('Clip deleted'+(r.mb?' ('+r.mb+' MB freed)':'')); loadClips();
 }
 async function delRejected(n){
@@ -1315,7 +1324,8 @@ async function makeOne(key,again){
   if(again&&!confirm('Make this finished clip\'s videos again?'+NL+NL+'Its files in the videos folder are replaced. If you changed the caption look or the opening effects since, it is rendered again with the new ones.'))return;
   if(el&&el.dataset.dirty==='1'){toast('This clip has unsaved changes. Press Save changes first, then make its videos.',true);return}
   if(document.activeElement)document.activeElement.blur();   /* a focused button would keep the card from being redrawn when it is done */
-  await act('/api/finish',{only:key});
+  const inEditor=openKey===key;
+  if(await act('/api/finish',{only:key})&&inEditor&&openKey===key){closeClip();toast('Making this clip\'s videos. The progress is at the top of My clips.')}
 }
 /* Stop making videos: the person chooses between not stopping, after this video, and now. */
 function stopText(s){const fp=s.finish_progress||{};
@@ -1326,7 +1336,10 @@ function stopAsk(open){if(open){if(!last.finishing){toast('No videos are being m
 async function finishStop(how){$('stopbox').hidden=true;
   if(await act('/api/finish/stop',{how:how}))toast(how==='now'?'Stopping now. Videos already made are kept.':'It stops after the video being made.')}
 async function openReady(){const r=await send('/api/ready/open');if(r.error)toast(r.error,true)}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('stopbox').hidden)stopAsk(false)});
+/* What Esc closes is decided before any handler runs, so one press never closes two things. */
+let escTop='';
+window.addEventListener('keydown',e=>{if(e.key==='Escape')escTop=!$('stopbox').hidden?'stop':!$('boxes').hidden?'boxes':!$('spot').hidden?'spot':!$('helpbox').hidden?'help':!$('drawer').hidden?'drawer':openKey?'clip':''},true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&escTop==='stop')stopAsk(false)});
 async function clearErr(key){if(await post('/api/clip/'+key+'/clear-error')){const el=$(domId(key));if(document.activeElement)document.activeElement.blur();if(el)el.dataset.m='';loadClips()}}
 function showCover(key,btn){const el=$(domId(key)),v=el.querySelector('.vid video'),c=known.find(x=>x.key===key)||{};
   v.pause();v.removeAttribute('src');v.poster='/media/'+key+'/cover.jpg?v='+((c.cover||{}).mtime||0);v.load();
@@ -1657,7 +1670,7 @@ async function cbMake(){
   const pieces=cbSegs().filter(s=>s.on).map(s=>[s.a,s.b]);
   const r=await send('/api/range/cut',{key:CB.key,pieces:pieces,part_label:$('cb-label').checked});
   if(r.error){toast(r.error,true);return}
-  cbJob='pieces';cbWasRunning=true;show(r);toast('Making '+pieces.length+' clip'+(pieces.length>1?'s':'')+'. They appear under Clips as each one is ready.');
+  cbJob='pieces';cbWasRunning=true;show(r);toast('Making '+pieces.length+' clip'+(pieces.length>1?'s':'')+'. They appear under My clips as each one is ready.');
 }
 async function cbDrop(){
   if(!CB||!confirm('Delete this downloaded part ('+CB.r.mb+' MB)?'+NL+NL+'Clips already made from it are kept. To cut it again you would have to download it again.'))return;
@@ -1688,7 +1701,7 @@ function cbInit(){
   $('cb-rows').addEventListener('click',e=>{const b=e.target.closest('[data-play]');if(!b)return;const s=cbSegs()[+b.dataset.play];v.currentTime=s.a;cbStopAt=s.b;v.play().catch(()=>{})});
   window.addEventListener('resize',cbDraw);
   document.addEventListener('keydown',e=>{
-    if($('view-board').hidden||!CB||!$('helpbox').hidden||!$('spot').hidden||HELP.doing||e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary')))return;
+    if(curPage!=='new'||curSub!=='board'||openKey||!$('drawer').hidden||!$('stopbox').hidden||!CB||!$('helpbox').hidden||!$('spot').hidden||HELP.doing||e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary')))return;
     const k=e.key.toLowerCase(),step=d=>{v.currentTime=Math.max(0,Math.min(CB.total,v.currentTime+d))};
     if(k===' '){v.paused?v.play().catch(()=>{}):v.pause()}else if(k==='arrowleft')step(e.shiftKey?-5:-1);else if(k==='arrowright')step(e.shiftKey?5:1)
     else if(k===',')step(-.1);else if(k==='.')step(.1);else if(k==='c')cbCut(v.currentTime);else if(k==='delete'||k==='backspace')cbRemove(CB.sel);else return;
@@ -1779,7 +1792,7 @@ function helpLabel(el){
   return t.trim().replace(/\s+/g,' ').slice(0,90)}
 /* Everything on the page that can be pressed, chosen or typed into, right now. Built fresh for every question, so new features are covered by themselves. */
 function helpTargets(){
-  HELP.map=new Map();HELP.meta={};const out=[];let n=0;const firstClip=document.querySelector('#clips .clip');
+  HELP.map=new Map();HELP.meta={};const out=[];let n=0;const firstClip=(openKey&&$(domId(openKey)))||[...document.querySelectorAll('#clips .clip')].find(e=>e.offsetParent!==null)||document.querySelector('#clips .clip');
   const kinds={BUTTON:'button',SELECT:'choice',TEXTAREA:'box',SUMMARY:'fold-out',A:'link',LABEL:'option'};
   for(const el of document.querySelectorAll('button,select,input,textarea,summary,a.btn,label.mode,.pill')){
     if(el.closest('#helpbox,#spot,#toast,#helpbtn')||el.type==='hidden'||el.type==='file')continue;
@@ -1931,7 +1944,7 @@ function helpReveal(el){
   const part=el.closest('#tab-vod,#tab-own,#view-board,#view-words');if(part&&part.hidden)sub(Object.keys(SUBS).find(k=>SUBS[k]===part.id));
   if(el.closest('#sortrow'))$('sortrow').hidden=false;
   if(el.closest('#drawer'))actToggle(true);
-  const clip=el.closest('.clip');if(clip&&clip.offsetParent===null&&filter!=='all')setFilter('all');
+  const clip=el.closest('.clip');if(clip&&!clip.classList.contains('open')&&clip.offsetParent===null&&filter!=='all')setFilter('all');
   if(clip&&el.closest('.info,.edhead')&&!clip.classList.contains('open')&&clip._c){const pane=el.closest('details.pane');openClip(clip._c.key,pane?pane.dataset.tab:'text')}
   else if(clip&&clip.classList.contains('open')){const pane=el.closest('details.pane');if(pane&&!pane.open)edGo(clip._c.key,pane.dataset.tab)}
   for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details'))if(!d.open&&!d.classList.contains('pane')&&d.querySelector('summary')!==el)d.open=true;
@@ -1968,7 +1981,7 @@ function helpInit(){
   $('spotnext').addEventListener('click',spotNext);$('spotdone').addEventListener('click',spotEnd);
   for(const id of ['sp-t','sp-b','sp-l','sp-r'])$(id).addEventListener('click',spotEnd);
   window.addEventListener('resize',()=>{if(HELP.el)spotPlace()});window.addEventListener('scroll',()=>{if(HELP.el)spotPlace()},true);
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(HELP.el)spotEnd();else if(!$('helpbox').hidden)helpToggle()}});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(escTop==='spot'||escTop==='help')){if(HELP.el)spotEnd();else if(!$('helpbox').hidden)helpToggle()}});
 }
 helpInit();
 
@@ -2020,7 +2033,7 @@ document.addEventListener('click',async e=>{
     let r=await send('/api/tracker/add',body);
     if(r.error&&/already logged/.test(r.error)){if(!confirm(r.error+String.fromCharCode(10,10)+'Log it anyway?'))return; r=await send('/api/tracker/add',Object.assign(body,{allow_duplicate:true}))}
     if(r.error){toast('Not logged: '+r.error,true);return}
-    el.querySelector('[name=t_url]').value=''; toast('Logged. See it under Tracker.')}
+    el.querySelector('[name=t_url]').value=''; toast('Logged. See it under Posted and earnings.')}
 });
 async function refreshViews(){const b=$('b-views');b.disabled=true;b.textContent='Reading views…';
   const r=await send('/api/tracker/refresh');b.disabled=false;b.textContent='Refresh views';
@@ -2032,7 +2045,7 @@ let cur=null;
 function shownCards(){return [...$('clips').children].filter(e=>e.offsetParent!==null)}
 function setCur(el){if(cur)cur.classList.remove('cur');cur=el||null;if(cur){cur.classList.add('cur');cur.scrollIntoView({block:'center',behavior:'smooth'})}}
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'&&$('boxes').hidden&&$('stopbox').hidden&&$('spot').hidden){if(!$('drawer').hidden){actToggle(false);return}if(openKey){closeClip();e.preventDefault();return}}
+  if(e.key==='Escape'){if(escTop==='drawer')actToggle(false);else if(escTop==='clip'&&openKey){closeClip();e.preventDefault()}return}
   if($('view-clips').hidden||!$('boxes').hidden||!$('stopbox').hidden||!$('spot').hidden||!$('helpbox').hidden||HELP.doing)return;   /* words meant for the chat must never approve or reject */
   if(e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary,[contenteditable]')))return;
   if(openKey)return;   /* in the editor the keys belong to what is being edited */
@@ -2042,10 +2055,10 @@ document.addEventListener('keydown',e=>{
   else if(k==='k'||k==='arrowup'){setCur(cards[Math.max(0,i<0?0:i-1)]);e.preventDefault()}
   else if(cur&&(k==='a'||k==='r')){if(e.repeat){e.preventDefault();return}   /* a key held down decides one clip, not every clip after it */
     const key=(cur._c&&cur._c.key)||cur.id.slice(2).replace('--','/'), next=cards[i+1]||cards[i-1]||null;
-    if(cur._c&&cur._c.broken){toast('This clip is damaged and cannot be approved or rejected. Press Delete on its card to remove it.',true);e.preventDefault();return}
+    if(cur._c&&cur._c.broken){toast('This clip is damaged and cannot be approved or rejected. Press Delete on its tile to remove it.',true);e.preventDefault();return}
     save(key,{status:k==='a'?'approved':'rejected'});setCur(next);e.preventDefault()}
   else if(cur&&(k==='enter'||k==='e')&&cur._c&&!cur._c.broken){openClip(cur._c.key);e.preventDefault()}
-  else if(cur&&k===' '){const v=cur.querySelector('.vid video');if(v){v.paused?v.play().catch(()=>{}):v.pause()}e.preventDefault()}
+  else if(cur&&k===' '){const v=cur.querySelector('.vid video');if(v)playTile(v);e.preventDefault()}
 });
 async function clipLoop(){try{await loadClips()}catch(e){setErr('THE PAGE HIT A FAULT OF ITS OWN while drawing the clips ('+e+'). The program is still running. Reload the page; if this stays, report this line.')}
   setTimeout(clipLoop,8000)}
@@ -2060,35 +2073,48 @@ let curPage='clips', curSub='vod';
 function go(p){
   if(!PAGES[p]||(!HAS_PANEL&&p!=='clips'))p=HAS_PANEL?'new':'clips';
   if(openKey)closeClip();
+  for(const o of document.querySelectorAll('#clips video'))o.pause();
   curPage=p;for(const k in PAGES){$(PAGES[k]).hidden=k!==p;const b=$('n-'+k);if(b)b.className=k===p?'on':''}
-  if(p!=='new')$('cb-video').pause();if(p==='track')loadTracker();if(p==='new'&&curSub==='board')loadBoard();if(p==='setup'&&last)suDraw(last);
+  if(p!=='new')$('cb-video').pause();if(p==='track')loadTracker();if(p==='new'&&curSub==='board'){loadBoard();redrawSoon()}if(p==='setup'&&last)suDraw(last);
   try{localStorage.setItem('page',p)}catch(e){}
   window.scrollTo(0,0)}
 function sub(n){
   if(!SUBS[n])n='vod';curSub=n;if(n==='vod'||n==='own')curTab=n;
   for(const k in SUBS){$(SUBS[k]).hidden=k!==n;$((k==='board'||k==='words'?'v-':'t-')+k).className=k===n?'on':''}
   $('videos-wrap').style.display=(n==='vod'||n==='own')?'':'none';
-  if(n!=='board')$('cb-video').pause();if(n==='board')loadBoard()}
-function actToggle(open){const d=$('drawer');d.hidden=open===undefined?!d.hidden:!open}
+  if(n!=='board')$('cb-video').pause();if(n==='board'){loadBoard();redrawSoon()}}
+function actToggle(open){const d=$('drawer'), was=d.hidden;d.hidden=open===undefined?!d.hidden:!open;
+  if(was&&!d.hidden)for(const p of d.querySelectorAll('pre.log'))p.scrollTop=p.scrollHeight}
 /* The videos there are clips of, newest first, on the first page: one click shows that video's clips. */
 function drawVideos(clips){
   const by=new Map();
   for(const c of clips){const id=String(c.key).split('/')[0], g=by.get(id)||{who:c.channel||c.stream_title||'Your video',title:c.channel?(c.stream_title||''):'',n:{},t:0};
-    const p=place(c);g.n[p]=(g.n[p]||0)+1;g.t=Math.max(g.t,Date.parse(String(c.made_at||'').replace(' ','T'))||0);by.set(id,g)}
+    const p=place(c);g.n[p]=(g.n[p]||0)+1;g.id=id;g.t=Math.max(g.t,Number(c.made_at)||0);by.set(id,g)}
   const list=[...by.values()].sort((x,y)=>y.t-x.t).slice(0,12);
-  const html=list.map(g=>'<button data-who="'+esc(g.who)+'" onclick="pickVideo(this.dataset.who)"><b>'+esc(g.who)+'</b><span>'+esc(g.title||'\u00a0')+'</span>'
+  const html=list.map(g=>'<button data-vid="'+esc(g.id)+'" onclick="pickVideo(this.dataset.vid)"><b>'+esc(g.who)+'</b><span>'+esc(g.title||'\u00a0')+'</span>'
     +(g.n.candidate?'<i class="tag new">'+g.n.candidate+' to review</i>':'')+(g.n.approved?'<i class="tag">'+g.n.approved+' approved</i>':'')+(g.n.done?'<i class="tag ok">'+g.n.done+' done</i>':'')+'</button>').join('');
   const box=$('videos');if(box._h!==html){box._h=html;box.innerHTML=html}
   $('videos-wrap').hidden=!list.length}
-function pickVideo(who){go('clips');const s=$('s-who');if([...s.options].some(o=>o.value===who))s.value=who;setArrange();setFilter('candidate')}
+function pickVideo(id){
+  const mine=known.filter(c=>String(c.key).split('/')[0]===id), has=p=>mine.some(c=>place(c)===p);
+  go('clips');onlyVid=id;$('s-who').value='';$('s-how').value='';$('s-when').value='';$('s-find').value='';
+  setFilter(has('candidate')?'candidate':has('approved')?'approved':'all')}
 /* ---------- the setup guide: what this computer still needs, one step per screen ---------- */
-const SU={at:-1,skipped:new Set(),opened:false,fastUntil:0,timer:0};
+const SU={at:-1,skipped:new Set(),opened:false,fastUntil:0,timer:0,wait:''};
 function suDraw(s){
   const g=(s&&s.setup)||{}, steps=g.steps||[], flag=$('n-setup-flag'), left=(g.required_left||[]).length;
   flag.textContent=left?'!':'';flag.dataset.n=left;
   /* the first time the program is used the guide opens by itself; afterwards only when you choose it */
-  if(!SU.opened&&steps.length){SU.opened=true;if(!g.finished){const t=steps.findIndex(x=>x.state==='todo');SU.at=t>=0?t:Math.max(0,steps.findIndex(x=>x.state!=='done'));go('setup');return}}
+  /* It opens by itself until it is finished, but only while something needed is missing or this browser has never shown it:
+     a person who looked and went on to work is not pulled back at every reload. */
+  if(!SU.opened&&steps.length){SU.opened=true;let seen=false;try{seen=localStorage.getItem('setupSeen')==='1';localStorage.setItem('setupSeen','1')}catch(e){}
+    if(!g.finished&&(left||!seen)){const t=steps.findIndex(x=>x.state==='todo');SU.at=t>=0?t:Math.max(0,steps.findIndex(x=>x.state!=='done'));go('setup');return}}
   if(curPage!=='setup')return;
+  const box=$('su-body');
+  /* before the program has answered there is nothing to say yet: never "This computer is ready" on no evidence */
+  if(!steps.length){const w='<div class="card"><div class="body"><h2 class="sutitle">Checking this computer…</h2><p class="suwhat">'+(g.problem?'The guide could not be worked out: '+esc(g.problem):'This takes a few seconds.')+'</p></div></div>';
+    if(box._h!==w){box._h=w;box.innerHTML=w}return}
+  if(SU.wait){const w=steps.find(x=>x.id===SU.wait);if(!w||w.state==='done'){SU.wait='';SU.fastUntil=0}}   /* what was waited for has happened: no more asking every few seconds */
   const n=steps.length; if(SU.at<0)SU.at=steps.findIndex(x=>x.state!=='done');if(SU.at<0||SU.at>n)SU.at=n;
   const at=SU.at, m=(s.health||{}).maint||{}, running=!!m.running;
   let h='<div class="suprog" aria-label="Steps">'+steps.map((x,i)=>'<button class="'+(i===at?'on ':'')+(x.state==='done'?'ok':'')+'" onclick="suGo('+i+')" title="'+esc(x.title)+(x.state==='done'?': done':'')+'">'+(i+1)+'</button>').join('')
@@ -2101,7 +2127,7 @@ function suDraw(s){
       +(x.actions.length?'<div class="btns">'+x.actions.map(a=>'<button class="btn primary big" data-yours'+(running?' disabled':'')+' onclick="suAct(\''+a.do+'\',\''+a.what+'\')">'+esc(a.label)+'</button>').join('')
          +(signin?'':'<span class="saved">Download: '+esc(x.size)+'</span>')+'</div>':'')
       +(signin?'<p class="help" style="margin-top:10px">A window opens and then your browser. Sign in there with your own account. This program never sees your password. When you are done, come back here: the step turns green by itself.</p>':'')
-      +(running?'<div class="bar indet"><i></i></div><div class="pct"><b>'+esc(m.name||'Working')+'</b> · '+esc((m.step||[])[2]||'working')+'</div><pre class="log">'+esc((m.lines||[]).slice(-7).join(NL))+'</pre>':'')
+      +(running?'<div class="bar indet"><i></i></div><div class="pct supct"></div><pre class="log sulog"></pre>':'')
       +'</div></div>'
       +'<div class="btns sunav"><button class="btn"'+(at===0?' disabled':'')+' onclick="suGo('+(at-1)+')">Back</button><span class="sp"></span>'
       +(!done&&x.optional?'<button class="btn" onclick="suSkip(\''+x.id+'\')">Skip this</button>':'')
@@ -2114,27 +2140,38 @@ function suDraw(s){
       +'<div class="btns"><button class="btn primary big" onclick="suFinish()">Start using Stream Clipper</button></div></div></div>'
       +'<div class="btns sunav"><button class="btn" onclick="suGo('+(n-1)+')">Back</button></div>';
   }
-  const box=$('su-body');if(box._h!==h){box._h=h;box.innerHTML=h}
+  if(box._h!==h){box._h=h;box.innerHTML=h}
+  /* the lines of a running install change every second: only their text is replaced, so buttons keep their focus and
+     text you are selecting to copy stays selected */
+  const lg=box.querySelector('.sulog'), pc=box.querySelector('.supct');
+  if(pc){const t=(m.name||'Working')+' · '+((m.step||[])[2]||'working');if(pc.textContent!==t)pc.textContent=t}
+  if(lg){const t=(m.lines||[]).slice(-7).join(NL), sel=window.getSelection&&window.getSelection();
+    if(lg.textContent!==t&&!(sel&&!sel.isCollapsed&&lg.contains(sel.anchorNode)))lg.textContent=t}
   /* while a sign-in is awaited the tools are asked more often, so the step turns green soon after */
   if(Date.now()<SU.fastUntil&&!SU.timer)SU.timer=setTimeout(async()=>{SU.timer=0;if(curPage==='setup'&&Date.now()<SU.fastUntil){const r=await send('/api/setup/refresh',{});if(!r.error)show(r)}},6000);
 }
 function suGo(i){SU.at=i;if(last)suDraw(last);window.scrollTo(0,0)}
 function suSkip(id){SU.skipped.add(id);suGo(SU.at+1)}
 async function suAct(what,thing){
+  const step=((last&&last.setup&&last.setup.steps)||[])[SU.at];
   const ok=await act('/api/setup/'+(what==='signin'?'signin':'install'),{what:thing});
   if(ok&&what==='signin'){SU.fastUntil=Date.now()+5*60*1000;toast('A sign-in window opened. Sign in there, then come back here.')}
   if(ok&&what==='install')SU.fastUntil=Date.now()+60*1000;
+  if(ok&&step)SU.wait=step.id;
   if(last)suDraw(last)}
 async function suRefresh(){const b=$('su-again');b.disabled=true;const r=await send('/api/setup/refresh',{});b.disabled=false;if(r.error){toast(r.error,true);return}show(r);toast('Checked again')}
-async function suFinish(){await act('/api/setup/finish',{skipped:[...SU.skipped]});go('new')}
+async function suFinish(){if(await act('/api/setup/finish',{skipped:[...SU.skipped]}))go('new')}   /* a failure has said why, and the guide stays open */
 /* ---------- one clip opened as an editor: the same card, shown over the page with its sections as tabs ---------- */
 let openKey='';const edTab=new Map();
 function edGo(key,name){
   const el=$(domId(key));if(!el)return;const panes=[...el.querySelectorAll('details.pane')];
   if(!panes.some(d=>d.dataset.tab===name))name='text';edTab.set(key,name);
-  for(const d of panes)d.open=d.dataset.tab===name;
+  for(const d of panes){if(d.dataset.tab!==name)for(const o of d.querySelectorAll('video'))o.pause();d.open=d.dataset.tab===name}
   for(const b of el.querySelectorAll('.edtabs button'))b.classList.toggle('on',b.dataset.tab===name);
-  if(name==='trim')initTrim(key);if(name==='captions')initWords(key)}
+  if(name==='trim')initTrim(key);if(name==='captions')initWords(key);
+  if(name==='trim')redrawSoon()}
+/* A sound wave drawn while its box was hidden has no width. Drawing again once it shows puts it there. */
+function redrawSoon(){requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')))}
 function openClip(key,tabName){
   const el=$(domId(key));if(!el||(el._c&&el._c.broken))return;
   if(curPage!=='clips')go('clips');if(openKey&&openKey!==key)closeClip();
@@ -2145,15 +2182,19 @@ function openClip(key,tabName){
 function closeClip(decided){
   const key=openKey, el=key&&$(domId(key));openKey='';document.body.classList.remove('editing');if(!el)return;
   el.classList.remove('open');
-  const v=el.querySelector('.vid video');if(v){v.pause();v.removeAttribute('controls')}
+  for(const o of el.querySelectorAll('video'))o.pause();
+  const v=el.querySelector('.vid video');if(v)v.removeAttribute('controls');
   for(const d of el.querySelectorAll('details.pane'))d.open=false;
   if(!decided&&el.dataset.dirty==='1')save(key);   /* what was typed is not lost by going back */
   if(cur)cur.classList.remove('cur');cur=el;el.classList.add('cur')}
 $('clips').addEventListener('click',e=>{
   const v=e.target.closest&&e.target.closest('.vid video');if(!v)return;const el=v.closest('.clip');if(!el||el.classList.contains('open'))return;
-  for(const o of document.querySelectorAll('#clips video'))if(o!==v)o.pause();
-  if(v.paused){if(!v.dataset.begun){v.dataset.begun='1';v.currentTime=0}v.play().catch(()=>{})}else v.pause();
+  playTile(v);
   if(cur)cur.classList.remove('cur');cur=el;el.classList.add('cur')});
+/* A tile shows a frame from 1.5 s in so it is not black; the first play still starts at the beginning. One clip plays at a time. */
+function playTile(v){
+  for(const o of document.querySelectorAll('#clips video'))if(o!==v)o.pause();
+  if(v.paused){if(!v.dataset.begun){v.dataset.begun='1';v.currentTime=0}v.play().catch(()=>{})}else v.pause()}
 $('clips').addEventListener('dblclick',e=>{const el=e.target.closest&&e.target.closest('.clip');if(el&&el._c&&!el.classList.contains('open')&&e.target.closest('.vid'))openClip(el._c.key)});
 setInterval(()=>{const t=$('lang-sum').textContent;for(const m of document.querySelectorAll('.lang-mirror'))if(m.textContent!==t)m.textContent=t},1500);
 $('scope').textContent=__TITLE__;

@@ -38,7 +38,8 @@ RULES: list[tuple[str, str, str]] = [
     (r"no space left|not enough space|disk is full|errno 28|there is not enough space on the disk",
      "The disk is full, so the file could not be saved.",
      "Free some space on the drive that holds the data folder (delete finished videos you no longer need from the videos folder and empty the Recycle Bin), then press the button again."),
-    (r"winerror 32|being used by another process|is in use right now|winerror 5\b|access is denied|permissionerror|permission denied",
+    (r"winerror 32|being used by another process|is in use right now|winerror 5\b|access is denied|permissionerror|permission denied|"
+     r"unauthorizedaccess|access to the path[\s\S]{0,300}is denied",
      "A file could not be changed because another program has it open (a video player, a folder preview, or an antivirus scan).",
      "Close the video player or the folder window showing that file, wait a few seconds, and press the button again."),
     (r"no such file or directory|filenotfounderror|winerror 2\b|winerror 3\b|cannot find the (file|path)",
@@ -48,9 +49,10 @@ RULES: list[tuple[str, str, str]] = [
      "A helper program that this step needs is not installed on this computer.",
      "Open Settings: the Setup check there says which one is missing and has a button to install it."),
     # ---- the internet and the video sites ----
-    (r"(codex|chatgpt|claude|anthropic|openai)[\s\S]{0,300}(\b429\b|too many requests)",
+    # the first group: a channel that happens to be called @OpenAI or kick.com/claude is a channel, not the AI service
+    (r"(^|[^@\w/.])(codex|chatgpt|claude|anthropic|openai)\b[\s\S]{0,300}(\b429\b|too many requests)",
      "The AI service refused: the limit of your plan is reached for now, or the service is overloaded.",
-     "Wait until the limit resets (often a few hours) and try again, or choose another AI under Setup check. The clip itself is fine."),
+     "Wait until the limit resets (often a few hours) and try again, or open Settings and pick another way under AI for titles and ratings. The clip itself is fine."),
     (r"http error 429|too many requests|rate.?limit(ed)? by (youtube|twitch|kick)",
      "The video site is refusing for a while because too many requests came from this internet connection in a short time.",
      "Wait 15 to 30 minutes, then try again. Watching fewer channels at once makes this rarer."),
@@ -65,10 +67,14 @@ RULES: list[tuple[str, str, str]] = [
     (r"sign in to confirm|not a bot|confirm your age|login required|only available for registered users|cookies-from-browser",
      "The video site refused to hand over the video: it wants a signed-in viewer, or it suspects an automatic program.",
      "Wait an hour and try again, or try another video. This comes from the site, not from your computer."),
+    (r"(^|[^@\w/.])(codex|chatgpt|claude|anthropic|openai)\b[\s\S]{0,300}(\b403\b|forbidden|request not allowed)",
+     "The AI service refused the request: this account, or the network this computer is on, is not allowed to use it right now.",
+     "Open Set up in the menu and check that the Claude or ChatGPT step is green. A VPN or an office or campus network can also cause this: try without it, "
+     "or open Settings and pick another way under AI for titles and ratings. The clip itself is fine."),
     (r"http error 403|forbidden",
      "The video site refused the request.",
      "Wait a few minutes and try again. If it keeps happening for every video, update the program: the site may have changed something."),
-    (r"getaddrinfo failed|name resolution|name or service not known|network is unreachable|connection refused|connection reset|connection aborted|connectionreseterror|"
+    (r"getaddrinfo failed|failed to resolve hostname|no such host is known|error in the pull function|name resolution|name or service not known|network is unreachable|connection refused|connection reset|connection aborted|connectionreseterror|"
      r"winerror 10060|winerror 10054|winerror 10061|urlopen error|read timed out|connection timed out|remote end closed|incomplete read|unable to download|"
      r"http error 50\d|bad gateway|service unavailable|\bssl|certificate verify failed|eof occurred|could not reach the claude api",
      "The internet connection dropped, or the site did not answer.",
@@ -81,10 +87,10 @@ RULES: list[tuple[str, str, str]] = [
      r"exceeded your current quota|quota exceeded|credit balance|"
      r"insufficient_quota|rate_limit_error|rate limit reached|overloaded",
      "The AI service refused: the limit of your plan is reached for now, or the service is overloaded.",
-     "Wait until the limit resets (often a few hours) and try again, or choose another AI under Setup check. The clip itself is fine."),
-    (r"invalid x-api-key|invalid api key|incorrect api key|http error 401|unauthorized|authentication_error|authentication failed",
+     "Wait until the limit resets (often a few hours) and try again, or open Settings and pick another way under AI for titles and ratings. The clip itself is fine."),
+    (r"invalid x-api-key|invalid api key|incorrect api key|http error 401|\bunauthorized\b|authentication_error|authentication failed",
      "The AI service did not accept the key or the sign-in.",
-     "Open Setup check and press Check again under AI. If it stays red, the key in the .env file is wrong or has been cancelled."),
+     "Open Settings and press Check again under AI for titles and ratings. If it stays red, the key in the .env file is wrong or has been cancelled."),
     (r"11434|ollama.{0,80}(refused|not running|not reachable|unreachable|did not answer|timed out)|could not reach ollama",
      "The free AI on this computer (Ollama) is not running or did not answer.",
      "Start Ollama from the Start menu, wait half a minute, then try again. Setup check shows whether it is running."),

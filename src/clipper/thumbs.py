@@ -53,12 +53,18 @@ def codex_status(fresh: bool = False) -> dict:
     else:
         try:
             proc = run([exe, "login", "status"], timeout_s=30, what="asking Codex whether it is signed in")
-            said = " ".join((proc.stdout + " " + proc.stderr).split())
-            ok = "logged in" in said.lower() and "not logged in" not in said.lower()
+            # Only the yes or no is taken from the answer. The rest (how it is signed in, part of a key) is never
+            # kept, shown or logged.
+            low = (proc.stdout + " " + proc.stderr).lower()
+            ok = "logged in" in low and "not logged in" not in low
             value = {"installed": True, "signed_in": ok,
-                     "text": ("Ready: " + said) if ok else f"Codex is installed but not signed in ({said[:200]}). Open Set up in the menu and press Sign in to ChatGPT"}
+                     "text": "Ready: Codex is signed in." if ok else "Codex is installed but not signed in. Open Set up in the menu and press Sign in to ChatGPT"}
         except ToolError as e:
-            value = {"installed": True, "signed_in": False, "text": f"Codex is installed but did not answer ({str(e)[:200]}). Open Set up in the menu and press Check again; if it stays, press Sign in to ChatGPT"}
+            # Codex ends with an error when it is signed out, and its words may name the account: only the kind of
+            # ending is said here. Running "codex login status" in a terminal shows the rest to the person themself.
+            kind = "it did not answer in 30 seconds" if "timed out" in str(e) else "it is signed out, or it ended with an error"
+            value = {"installed": True, "signed_in": False, "text": f"Codex is installed but cannot be used yet ({kind}). Open Set up in the menu and press "
+                                                                    "Sign in to ChatGPT; if that does not help, run 'codex login status' in a terminal to see what it says"}
     _status.update(at=time.time(), value=value)
     return value
 

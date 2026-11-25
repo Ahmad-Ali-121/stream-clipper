@@ -283,7 +283,38 @@ def _apply(target: Any, values: dict[str, Any], where: str) -> None:
         if is_dataclass(current):
             _apply(current, value, f"{where}.{key}")
         else:
-            setattr(target, key, value)
+            setattr(target, key, _right_kind(current, value, f"{where}.{key}"))
+
+
+def _right_kind(current: Any, value: Any, where: str) -> Any:
+    """The value to use. One of the wrong kind is refused here, with its key and its file, instead of failing
+    somewhere far away with a programmer's message. The kind is the kind of the built-in value. A yes/no or a
+    number that was written in quotes is taken as what it says: "false" must never count as switched on."""
+    said = "nothing (the line is empty)" if value is None else f"{value!r}"
+    if isinstance(current, bool):
+        if isinstance(value, str) and value.strip().lower() in ("true", "yes", "on", "false", "no", "off"):
+            return value.strip().lower() in ("true", "yes", "on")
+        if not isinstance(value, bool):
+            raise ConfigError(f"{where} must be true or false; it is {said}")
+    elif isinstance(current, (int, float)):
+        if isinstance(value, str):
+            try:
+                number = float(value.strip())
+                return int(number) if isinstance(current, int) and number == int(number) else number
+            except ValueError:
+                pass
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ConfigError(f"{where} must be a number; it is {said}")
+    elif isinstance(current, dict):
+        if not isinstance(value, dict):
+            raise ConfigError(f"{where} must be a list of 'name: value' lines indented under it (see the example in config.yaml); it is {said}")
+    elif isinstance(current, list):
+        if not isinstance(value, list):
+            raise ConfigError(f"{where} must be a list, like [a, b]; it is {said}")
+    elif isinstance(current, str):
+        if isinstance(value, (dict, list)):
+            raise ConfigError(f"{where} must be one piece of text; it is {said}")
+    return value
 
 
 def load_env(path: Path | None = None) -> None:
@@ -308,13 +339,35 @@ def load_config(path: str | Path | None = None) -> Config:
     Order of precedence for the base file: explicit ``path``, the
     ``CLIPPER_CONFIG`` environment variable, then config.yaml in the project root.
     """
-    base = Path(path or os.environ.get("CLIPPER_CONFIG") or PROJECT_ROOT / "config.yaml")
+    named = path or os.environ.get("CLIPPER_CONFIG")
+    base = Path(named or PROJECT_ROOT / "config.yaml")
     cfg = Config()
-    if path is not None and not base.exists():
-        raise ConfigError(f"config file not found: {base}")
+    if named and not base.exists():
+        # Going on with built-in settings would put the data in another folder without a word.
+        raise ConfigError(f"config file not found: {base}" + ("" if path else " (named by the CLIPPER_CONFIG setting of this terminal)"))
     for candidate in (base, base.with_name("config.local.yaml")):
         if candidate.exists():
-            data = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
+            try:
+                data = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
+            except UnicodeDecodeError:
+                raise ConfigError(f"{candidate} is not saved as plain UTF-8 text, so it cannot be read. Open it in Notepad, choose Save as, "
+                                  "and pick UTF-8 under Encoding") from None
+            except IsADirectoryError:
+                raise ConfigError(f"{candidate} is a folder, not a settings file") from None
+            except OSError as e:
+                raise ConfigError(f"{candidate} could not be read: {e}") from None
+            except yaml.YAMLError as e:
+                where = getattr(e, "problem_mark", None)
+                raise ConfigError(f"{candidate} has a writing mistake" + (f" at line {where.line + 1}" if where else "") + f": {getattr(e, 'problem', None) or e}. "
+                                  "Each setting is 'name: value' on its own line, indented with spaces (never tabs), and every [ and quote is closed") from None
             _apply(cfg, data, candidate.name)
+    if not isinstance(cfg.paths.data_dir, str) or not cfg.paths.data_dir.strip():
+        raise ConfigError(f"paths.data_dir (in {base.name} or config.local.yaml) must be the path of a folder, for example D:/clipper-data; it is {cfg.paths.data_dir!r}")
     cfg.moments.validate()
+    if not os.environ.get("CLIPPER_DATA_DIR"):
+        folder = cfg.data_dir
+        if folder.is_file():
+            raise ConfigError(f"paths.data_dir names a file, not a folder: {folder}")
+        if folder.anchor and not Path(folder.anchor).exists():
+            raise ConfigError(f"paths.data_dir is on a drive this computer does not have: {folder}. Change it in config.local.yaml")
     return cfg

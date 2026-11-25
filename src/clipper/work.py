@@ -65,7 +65,11 @@ def read_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return default
     if default is None:
-        return json.loads(path.read_text(encoding="utf-8"))
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except ValueError as e:   # says which file: "Expecting property name..." alone tells a person nothing
+            raise ValueError(f"{path} is damaged and cannot be read ({e}). If it is a clip's file, delete that clip on the review page "
+                             "(My clips, its Delete button) and make it again") from None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
