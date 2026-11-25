@@ -8,7 +8,7 @@ You give it a Twitch stream. It finds the moments where chat went wild (and, if 
 
 ## Part 1: Install on a computer (once)
 
-**The easy way: the installer.** Get **Stream-Clipper-Setup.exe** (from the program's page on GitHub, under Releases, or from whoever gave you the program) and double-click it. You do not need Python, Git or anything else first, and it does not ask for administrator rights.
+**The easy way: the installer.** Download **Stream-Clipper-Setup.exe** from https://github.com/Ahmad-Ali-121/stream-clipper/releases/latest/download/Stream-Clipper-Setup.exe (or get it from whoever gave you the program) and double-click it. You do not need Python, Git or anything else first, and it does not ask for administrator rights.
 
 1. It shows two folders: where the program goes, and where your clips, downloads and models go (it suggests the drive with the most free space). Change them if you want, then press **Install**.
 2. It works through five steps and ticks each one: fetch **uv** (the small tool that installs Python for this program only), make sure **Git** is there (for the Update button), fetch the program, install Python and the program's parts (the longest step), download the video tools and models (about 300 MB). It takes 5 to 20 minutes and needs the internet.
