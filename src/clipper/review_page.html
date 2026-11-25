@@ -5,356 +5,400 @@
 <title>Stream Clipper</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
+/* ---------- Stream Clipper: one dark theme. Graphite surfaces, hairlines, one signal colour. No gradients, no glows. ---------- */
 :root{
-  --bg:#0e1014;--surface:#161a21;--surface2:#1d222b;--line:#2a303b;--text:#e9ecf1;--muted:#98a1b0;
-  --accent:#8b7cf6;--accent-ink:#fff;--ok:#2fae68;--ok-soft:#173526;--bad:#e5534b;--bad-soft:#3b1c1a;--warn:#e0a93b;--warn-soft:#3a2f14;
-  --field:#0e1014;--shadow:0 1px 2px rgba(0,0,0,.35);
+  --bg:#0c0d0f;--panel:#111214;--surface:#16181b;--surface2:#1d2024;--surface3:#24282d;--line:#26292e;--line2:#363a41;
+  --text:#ecebe7;--muted:#9096a0;--faint:#666b74;
+  --accent:#ff5a2b;--accent-hi:#ff7347;--accent-ink:#1a0a04;--accent-soft:#2b160e;
+  --ok:#3fb27f;--ok-soft:#11261c;--bad:#ea5455;--bad-soft:#2a1416;--warn:#e0a53a;--warn-soft:#2a2010;
+  --field:#0f1012;--r:6px;--r2:8px;
+  --ui:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  --display:Bahnschrift,"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,monospace;
 }
-@media (prefers-color-scheme: light){:root{
-  --bg:#f3f4f7;--surface:#fff;--surface2:#f0f1f5;--line:#d9dce3;--text:#161a21;--muted:#5d6675;
-  --accent:#5b4be0;--ok:#1f8f52;--ok-soft:#dcf3e6;--bad:#c93a32;--bad-soft:#fbe2e0;--warn:#9a6b00;--warn-soft:#fbefcf;
-  --field:#fff;--shadow:0 1px 2px rgba(20,24,33,.08);
-}}
 *{box-sizing:border-box}
-[hidden]{display:none!important}  /* a hidden button must stay hidden even though buttons set their own display */
-html{color-scheme:light dark}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+[hidden]{display:none!important}
+html{color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--text);font:13.5px/1.5 var(--ui);-webkit-font-smoothing:antialiased}
 h1,h2,h3,p{margin:0}
 button,input,select,textarea{font:inherit;color:inherit}
-.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
-.brand{font-size:17px;font-weight:700;letter-spacing:.2px}
-.brand small{display:block;font-size:12px;font-weight:400;color:var(--muted)}
-.pills{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
-.pill{display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);font-size:12.5px;white-space:nowrap}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
-.pill.live .dot{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
-.pill.busy .dot{background:var(--warn)}
-#errbox{display:none;margin:14px 20px 0;padding:11px 44px 11px 14px;border-radius:10px;background:var(--bad-soft);border:1px solid var(--bad);white-space:pre-wrap;font-size:13px;position:relative}
-.x{position:absolute;top:6px;right:8px;width:26px;height:26px;border:0;border-radius:7px;background:none;color:inherit;font-size:18px;line-height:1;cursor:pointer;opacity:.75}
-.x:hover{opacity:1;background:rgba(127,127,127,.25)}
-.layout{display:grid;grid-template-columns:372px minmax(0,1fr);gap:20px;padding:20px;align-items:start;max-width:1500px;margin:0 auto}
-.side{position:sticky;top:72px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 88px);overflow:auto;padding-right:2px}
-@media (max-width:980px){.layout{grid-template-columns:1fr;padding:14px}.side{position:static;max-height:none}}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
-.card>header{display:flex;align-items:center;gap:10px;padding:13px 16px 0}
-.step{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:13px;display:grid;place-items:center}
-.card h2{font-size:15px}
-.card .body{padding:10px 16px 16px}
-.help{color:var(--muted);font-size:12.5px;margin:2px 0 10px}
-.tabs{display:flex;gap:4px;padding:3px;background:var(--surface2);border-radius:10px;margin-bottom:12px}
-.tabs button{flex:1;border:0;background:none;padding:7px 8px;border-radius:8px;cursor:pointer;font-weight:600;color:var(--muted)}
-.tabs button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
-label.f{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px}
-input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;background:var(--field);border:1px solid var(--line);border-radius:8px}
-textarea{resize:vertical;min-height:64px}
-input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.modes{display:grid;gap:6px;margin-top:4px}
-.mode{display:grid;grid-template-columns:26px 1fr;gap:2px 8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--field)}
-.mode input{position:absolute;opacity:0}
-.mode b{grid-row:span 2;width:24px;height:24px;border-radius:7px;background:var(--surface2);display:grid;place-items:center;font-size:12.5px}
-.mode span{font-weight:600;font-size:13.5px}.mode em{font-style:normal;color:var(--muted);font-size:12px}
-.mode.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}.mode.on b{background:var(--accent);color:var(--accent-ink)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:9px;border:1px solid transparent;font-weight:600;cursor:pointer;background:var(--surface2);border-color:var(--line)}
-.btn:hover{filter:brightness(1.08)}.btn:disabled{opacity:.5;cursor:default;filter:none}
-.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
-.btn.ok{background:var(--ok);color:#fff;border-color:transparent}
-.btn.bad{background:none;color:var(--bad);border-color:var(--bad)}
-.btn.wide{width:100%}
-.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.note{margin-top:10px;padding:8px 10px;border-radius:9px;background:var(--surface2);font-size:12.5px;color:var(--muted)}
+::selection{background:var(--accent);color:var(--accent-ink)}
+a{color:var(--accent-hi)}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+
+/* ---------- frame: menu on the left, one page at a time on the right ---------- */
+.app{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:100vh}
+.nav{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);padding:16px 10px 12px;overflow:auto}
+.brand{display:flex;align-items:center;gap:9px;padding:2px 8px 18px;font:600 15px/1 var(--display);letter-spacing:.09em;text-transform:uppercase}
+.brand::before{content:"";width:9px;height:9px;background:var(--accent);border-radius:2px}
+.brand small{display:none}
+.navlist{display:flex;flex-direction:column;gap:1px}
+.navlist button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:var(--r);color:var(--muted);position:relative;font-size:13.5px}
+.navlist button:hover{color:var(--text);background:var(--surface)}
+.navlist button.on{color:var(--text);background:var(--surface2)}
+.navlist button.on::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:2px;background:var(--accent)}
+.navlist button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.navlist .count{margin-left:auto;font:600 11.5px/18px var(--mono);min-width:22px;text-align:center;padding:0 6px;border-radius:3px;background:var(--accent);color:var(--accent-ink)}
+.navlist .count:empty,.navlist .count[data-n="0"]{display:none}
+.navsep{height:1px;background:var(--line);margin:10px 8px}
+.navfill{flex:1;min-height:12px}
+.status{display:flex;flex-direction:column;gap:2px;padding:8px 2px 0;border-top:1px solid var(--line)}
+.pills{display:contents}
+.pill{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--r);font-size:12px;color:var(--muted);background:none;border:0;text-align:left;min-width:0}
+.pill>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill[onclick],button.pill{cursor:pointer}.pill[onclick]:hover,button.pill:hover{background:var(--surface);color:var(--text)}
+.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.pill.live .dot{background:var(--ok)}.pill.busy .dot{background:var(--warn)}.pill.live{color:var(--text)}
+.minibar{flex:none;display:inline-block;width:44px;height:4px;border-radius:2px;background:var(--line2);overflow:hidden}.minibar i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
+main{min-width:0;padding:0 28px 80px}
+.pagehead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:20px 0 16px;position:sticky;top:0;z-index:4;background:var(--bg)}
+.pagehead h1{font:600 21px/1.2 var(--display);letter-spacing:.01em}
+.pagehead .sub{color:var(--muted);font-size:13px}
+.pagehead .sp{flex:1}
+.page{max-width:1240px}
+.narrow{max-width:760px}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+@media (max-width:1100px){.cols{grid-template-columns:1fr}}
+@media (max-width:860px){.app{grid-template-columns:1fr}.nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}.navlist{flex-direction:row;flex-wrap:wrap}.navlist button.on::before{display:none}.navfill,.navsep{display:none}.status{flex-direction:row;flex-wrap:wrap}main{padding:0 14px 60px}}
+body.nopanel .app{grid-template-columns:1fr}body.nopanel .nav,body.nopanel .panelonly{display:none!important}
+
+/* ---------- building blocks ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2)}
+.card>header{display:flex;align-items:center;gap:10px;padding:14px 16px 0}
+.card h2,.sect{font:600 14.5px/1.3 var(--display);letter-spacing:.02em}
+.card .body{padding:12px 16px 16px}
+.sect{margin:22px 0 10px;display:flex;align-items:center;gap:10px}.sect:first-child{margin-top:0}
+.sect small{font:400 12.5px var(--ui);color:var(--muted);letter-spacing:0}
+.step{display:none}
+.help{color:var(--muted);font-size:12.5px;margin:2px 0 10px;max-width:70ch}
+.keys{color:var(--muted);font-size:12.5px;margin:0 0 12px}
+kbd{font:11.5px var(--mono);border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--surface2)}
+label.f{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px}
+label.f small{color:var(--faint)}
+input[type=text],input[type=number],select,textarea{width:100%;height:34px;padding:0 10px;background:var(--field);border:1px solid var(--line);border-radius:var(--r)}
+textarea{height:auto;padding:8px 10px;resize:vertical;min-height:64px;line-height:1.45}
+input[type=text]:hover,input[type=number]:hover,select:hover,textarea:hover{border-color:var(--line2)}
+input:focus,select:focus,textarea:focus,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+input[type=range]{accent-color:var(--accent);width:100%}input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
+input[type=color]{width:100%;height:34px;padding:2px;background:var(--field);border:1px solid var(--line);border-radius:var(--r)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:34px;padding:0 13px;border-radius:var(--r);border:1px solid var(--line2);background:var(--surface2);font-weight:600;font-size:13px;cursor:pointer;text-decoration:none;color:var(--text);white-space:nowrap}
+.btn:hover{background:var(--surface3);border-color:#474c55}.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}.btn.primary:hover{background:var(--accent-hi);border-color:var(--accent-hi)}
+.btn.ok{background:var(--ok-soft);border-color:#27634a;color:#7fdcb0}.btn.ok:hover{background:var(--ok);border-color:var(--ok);color:#06140d}
+.btn.bad{background:none;border-color:transparent;color:var(--bad)}.btn.bad:hover{background:var(--bad-soft);border-color:#6a2a2c}
+.btn.bad:disabled{display:none}   /* a Stop button with nothing to stop is not shown at all */
+.btn.quiet{background:none;border-color:transparent;color:var(--muted);margin-left:auto;font-weight:500}.btn.quiet:hover{color:var(--bad);background:var(--bad-soft)}
+.btn.wide{width:100%}.btn.big{height:42px;padding:0 20px;font-size:14px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.note{margin-top:10px;padding:8px 10px;border-radius:var(--r);background:var(--field);border:1px solid var(--line);font-size:12.5px;color:var(--muted)}
 .note b{color:var(--text)}
-details.log{margin-top:10px}details.log summary{cursor:pointer;color:var(--muted);font-size:12.5px}
-pre.log{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid var(--line);border-radius:8px;font:11.5px/1.45 Consolas,monospace;max-height:230px;overflow:auto;white-space:pre-wrap;word-break:break-word}
-.hrow{display:grid;grid-template-columns:14px 1fr;gap:2px 9px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
-.hrow:first-child{border-top:0}.hrow .dot{margin-top:6px}.hrow small{grid-column:2;color:var(--muted);font-size:12px;word-break:break-word}
-.hrow small.fix{color:var(--text)}
-.vtabs{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-top:6px}
-.vtabs button{border:1px solid var(--line);background:var(--surface2);color:var(--muted);border-radius:7px;padding:2px 9px;font-size:12px;cursor:pointer}
-.vtabs button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.trim video{width:100%;max-height:230px;background:#000;border-radius:8px;display:block}
-.tl{position:relative;height:64px;margin-top:8px;border:1px solid var(--line);border-radius:8px;background:var(--field);touch-action:none;user-select:none;cursor:pointer}
-.tl canvas{position:absolute;inset:0;width:100%;height:100%}
-.tl .sel{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 22%,transparent);border-left:2px solid var(--accent);border-right:2px solid var(--accent);pointer-events:none}
-.tl .h{position:absolute;top:-4px;bottom:-4px;width:16px;margin-left:-8px;cursor:ew-resize;display:grid;place-items:center}
-.tl .h::after{content:"";width:6px;height:60%;border-radius:4px;background:var(--accent)}
-.tl .ph{position:absolute;top:0;bottom:0;width:1px;background:var(--text);pointer-events:none;display:none}
-.words{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
-.words input{width:auto;padding:4px 6px;font-size:13px;border-radius:6px}
-.pct{font-size:12.5px;color:var(--muted);margin-top:5px}.pct b{color:var(--text);font-size:14px}
-.bar{height:8px;background:var(--surface2);border-radius:99px;overflow:hidden;margin-top:8px}
+.saved{font-size:12.5px;color:var(--muted)}.saved.warn{color:var(--warn)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.three{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:12px}
+@media (max-width:680px){.two,.three{grid-template-columns:1fr}}
+.hms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.check{display:flex;gap:9px;align-items:center;margin-top:11px;cursor:pointer}
+.switch{display:flex;gap:11px;align-items:flex-start;padding:9px 0;cursor:pointer}
+.switch+.switch{border-top:1px solid var(--line)}
+.switch input{flex:none;width:32px;height:18px;appearance:none;background:var(--line2);border-radius:9px;position:relative;cursor:pointer;margin-top:2px;transition:background .12s}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--text);transition:left .12s}
+.switch input:checked{background:var(--accent)}.switch input:checked::after{left:16px;background:#fff}
+.switch span{font-size:12.5px;color:var(--muted)}.switch span b{display:block;font-weight:600;color:var(--text);font-size:13.5px}
+.tabs{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:16px;background:var(--panel)}
+.tabs button{border:0;background:none;height:34px;padding:0 15px;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);border-right:1px solid var(--line)}
+.tabs button:last-child{border-right:0}.tabs button:hover{color:var(--text)}
+.tabs button.on{background:var(--surface2);color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+details.sec{border-top:1px solid var(--line);margin-top:14px;padding-top:10px}
+details.sec>summary{cursor:pointer;font-weight:600;list-style:none;display:flex;align-items:center;gap:8px}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary::before{content:"";width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:rotate(-45deg);transition:transform .12s;margin:0 3px 0 1px}
+details.sec[open]>summary::before{transform:rotate(45deg)}
+details.sec>summary small{font-weight:400;color:var(--muted)}
+.bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:10px}
 .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
 .bar.indet i{width:30%;animation:slide 1.3s infinite linear}
 @keyframes slide{from{margin-left:-30%}to{margin-left:100%}}
 @media (prefers-reduced-motion:reduce){.bar.indet i{animation:none;width:100%;opacity:.5}}
-.clip.cur{outline:2px solid var(--accent);outline-offset:2px}
-.keys{color:var(--muted);font-size:12px;margin:-4px 0 12px}.keys kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--surface);font:inherit;font-size:11.5px}
-.capprev{margin-top:8px;padding:14px 8px;border-radius:9px;background:linear-gradient(135deg,#2b3550,#16324a);text-align:center;font-size:22px;line-height:1.2;letter-spacing:.3px}
-.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
-.tot{padding:12px 14px}.tot b{display:block;font-size:22px}.tot span{color:var(--muted);font-size:12.5px}
-.ttable{width:100%;border-collapse:collapse;font-size:13px}
-.ttable th{text-align:left;color:var(--muted);font-weight:600;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
-.ttable td{padding:6px;border-bottom:1px solid var(--line);vertical-align:top}
-.ttable input,.ttable select{padding:5px 7px;font-size:13px;min-width:70px}
-.ttable td.num input{width:92px}.ttable td.link input{min-width:190px}
-.twrap{overflow-x:auto}
-.issues{margin:0 0 8px;padding:8px 10px;border-radius:9px;background:var(--surface2);font-size:13px}
-.issues ul{margin:4px 0 0;padding-left:18px}.issues li.fail{color:var(--bad)}
-.hms{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-.lerr{color:var(--bad);font-weight:600}.lwarn{color:var(--warn)}
-.switch{display:flex;gap:10px;align-items:flex-start;padding:7px 0;cursor:pointer}
-.switch input{flex:none;width:36px;height:20px;appearance:none;background:var(--line);border-radius:999px;position:relative;cursor:pointer;margin-top:1px;transition:.15s}
-.switch input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s}
-.switch input:checked{background:var(--accent)}.switch input:checked::after{left:18px}
-.switch span b{display:block;font-weight:600}.switch span{font-size:12.5px;color:var(--muted)}.switch span b{color:var(--text);font-size:13.5px}
-.ready{list-style:none;margin:8px 0 0;padding:0;font-size:12.5px}.ready li{padding:3px 0;word-break:break-all}.ready li::before{content:"✓ ";color:var(--ok);font-weight:700}
-.ready li.nm::before{content:"✕ ";color:var(--bad)}
-.mainhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-.mainhead h2{font-size:17px;display:flex;align-items:center;gap:10px}
-.filters{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
-.chipbtn{border:1px solid var(--line);background:var(--surface);padding:5px 12px;border-radius:999px;cursor:pointer;font-weight:600;color:var(--muted)}
-.chipbtn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.chipbtn i{font-style:normal;opacity:.8;margin-left:4px}
-.clips{display:flex;flex-direction:column;gap:16px}
-.clip{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;padding:16px;border-left:4px solid var(--line)}
-.clip[data-status=approved]{border-left-color:var(--ok)}.clip[data-status=done]{border-left-color:var(--accent)}.clip[data-status=pending]{border-left-color:var(--warn)}
-.clip[data-status=pending] .badge{border-color:var(--warn);color:var(--warn)}
-.clips[data-filter=pending] .clip:not([data-status=pending]){display:none}
-.modal>.card.small{width:min(500px,100%)}
-.acts .brk{flex-basis:100%;height:0}
-.acts .tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex:1;padding-top:10px;border-top:1px dashed var(--line)}
-.acts .tools .btn{padding:6px 12px;font-size:13px}
-.makebar{position:sticky;bottom:0;z-index:2;background:var(--surface);padding:10px 0 6px;margin-top:10px;border-top:1px solid var(--line)}
-.makebar .btns{margin-top:0}
-img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:10px;display:block;margin:8px 0;border:1px solid var(--line)}
-button.pill{cursor:pointer;color:inherit;font:inherit;font-size:12.5px;border-color:var(--ok)}
-.minibar{display:inline-block;width:70px;height:6px;border-radius:999px;background:var(--line);overflow:hidden}.minibar i{display:block;height:100%;width:0;background:var(--ok);transition:width .4s}
-.clips[data-filter=done] .clip:not([data-status=done]){display:none}
-.clip[data-status=done] .badge{background:color-mix(in srgb,var(--accent) 18%,transparent);border-color:var(--accent);color:var(--accent)}.clip[data-status=rejected]{border-left-color:var(--bad);opacity:.6}
-@media (max-width:680px){.clip{grid-template-columns:1fr}}
-.clips[data-filter=candidate] .clip:not([data-status=candidate]),.clips[data-filter=approved] .clip:not([data-status=approved]),.clips[data-filter=rejected] .clip:not([data-status=rejected]){display:none}
-.vid video{width:100%;aspect-ratio:9/16;background:#000;border-radius:10px;display:block}
-.vid .none{aspect-ratio:9/16;border-radius:10px;border:1px dashed var(--line);display:grid;place-items:center;text-align:center;color:var(--muted);padding:16px;font-size:13px}
-.vid small{display:block;margin-top:6px;color:var(--muted);font-size:12px;text-align:center}
-.chead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.chead h3{font-size:16px}.chead .when{color:var(--muted);font-size:13px}
-.badge{margin-left:auto;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;background:var(--surface2);border:1px solid var(--line)}
-.clip[data-status=approved] .badge{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
-.clip[data-status=rejected] .badge{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
-.chip{padding:2px 9px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);font-size:12px;color:var(--muted)}
-.chip.good{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}.chip.meh{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
-.ai{font-size:13px;color:var(--muted);margin-bottom:8px}
-.cliperr{position:relative;background:var(--bad-soft);border:1px solid var(--bad);padding:8px 40px 8px 10px;border-radius:9px;font-size:13px;margin-bottom:10px;white-space:pre-wrap}
-.said{border-left:3px solid var(--line);padding:2px 0 2px 12px;margin:4px 0 6px;color:var(--text);font-size:13.5px;max-height:5.9em;overflow:hidden}
-.said.open{max-height:none}
-.more{background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-size:12.5px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.three{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:10px}
-@media (max-width:680px){.two,.three{grid-template-columns:1fr}}
-details.sec{border-top:1px solid var(--line);margin-top:12px;padding-top:8px}
-details.sec>summary{cursor:pointer;font-weight:600;font-size:13.5px;list-style:none;display:flex;align-items:center;gap:8px}
-details.sec>summary::before{content:"▸";color:var(--muted);transition:.15s}details.sec[open]>summary::before{transform:rotate(90deg)}
-details.sec>summary small{font-weight:400;color:var(--muted)}
-.check{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13.5px;cursor:pointer}
-.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
-.saved{font-size:12.5px;color:var(--muted)}.saved.warn{color:var(--warn)}
-.empty{padding:40px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
-.empty b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}
-#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(640px,92vw);padding:10px 16px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.35);display:none;z-index:40;white-space:pre-wrap;padding-right:44px}
-.btn.quiet{background:none;border-color:transparent;color:var(--muted);margin-left:auto}.btn.quiet:hover{color:var(--bad);border-color:var(--bad)}
-#toast.err{border-color:var(--bad);background:var(--bad-soft)}
-.errtech{margin-top:6px;font-size:12px;color:var(--muted)}
-.errtech summary{cursor:pointer;user-select:none}
-.errtech div{margin-top:4px;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,monospace}
+.pct{font-size:12.5px;color:var(--muted);margin-top:6px}.pct b{color:var(--text);font:600 13px var(--mono)}
+.empty{padding:44px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line2);border-radius:var(--r2)}
+.empty b{display:block;color:var(--text);font:600 15px var(--display);margin-bottom:4px}
+.x{position:absolute;top:6px;right:8px;width:26px;height:26px;border:0;border-radius:var(--r);background:none;color:inherit;font-size:18px;line-height:1;cursor:pointer;opacity:.7}
+.x:hover{opacity:1;background:rgba(255,255,255,.08)}
+#errbox{display:none;margin:16px 0 0;padding:11px 44px 11px 14px;border-radius:var(--r);background:var(--bad-soft);border:1px solid #6a2a2c;white-space:pre-wrap;font-size:13px;position:relative}
+.errtech{margin-top:6px;font-size:12px;color:var(--muted)}.errtech summary{cursor:pointer;user-select:none}
+.errtech div{margin-top:4px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono)}
 .errstep{color:var(--muted);font-size:12px}
-.errline+.errline{margin-top:10px;padding-top:10px;border-top:1px solid var(--bad)}
-.modal{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.62);display:grid;place-items:center;padding:16px;overflow:auto}
-.modal>.card{width:min(1080px,100%);padding:16px}
-.modal h2{font-size:17px;margin-bottom:4px}
-.bxgrid{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:16px;align-items:start}
-@media (max-width:760px){.bxgrid{grid-template-columns:1fr}}
-.stage{position:relative;background:#000;border-radius:8px;overflow:hidden;touch-action:none;user-select:none}
-.stage video{width:100%;display:block}
-.bx{position:absolute;border:3px solid;box-sizing:border-box;cursor:move;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
-.bx b{position:absolute;left:0;top:0;font-size:11.5px;padding:1px 7px;color:#111;border-bottom-right-radius:6px;pointer-events:none}
-.bx i{position:absolute;right:-9px;bottom:-9px;width:20px;height:20px;border-radius:50%;border:2px solid #111;cursor:nwse-resize}
-.bx.face{border-color:#ffb020}.bx.face b,.bx.face i{background:#ffb020}
-.bx.video{border-color:#35c2ff}.bx.video b,.bx.video i{background:#35c2ff}
-.bxprev{width:200px;border-radius:8px;background:#000;display:block;border:1px solid var(--line)}
-.bxseek{width:100%;margin-top:8px}
+.errline+.errline{margin-top:10px;padding-top:10px;border-top:1px solid #6a2a2c}
+.lerr{color:var(--bad);font-weight:600}.lwarn{color:var(--warn)}
+pre.log{margin:0;padding:10px 12px;background:var(--field);border:1px solid var(--line);border-radius:var(--r);font:11.5px/1.5 var(--mono);max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word;min-height:44px}
+pre.log:empty::before{content:"Nothing yet.";color:var(--faint)}
+
+/* ---------- new clips ---------- */
+.start{max-width:760px}
+.start .lead{font:600 25px/1.2 var(--display);margin:6px 0 4px}
+.videos{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.videos button{all:unset;box-sizing:border-box;cursor:pointer;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r2);background:var(--surface);display:block}
+.videos button:hover{border-color:var(--line2);background:var(--surface2)}
+.videos b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.videos span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.tag{display:inline-block;font:600 11px/18px var(--mono);padding:0 6px;border-radius:3px;background:var(--surface3);color:var(--muted);margin:6px 4px 0 0}
+.tag.new{background:var(--accent-soft);color:var(--accent-hi)}.tag.ok{background:var(--ok-soft);color:#7fdcb0}
+.modes{display:grid;gap:6px;margin-top:4px}
+.mode{display:grid;grid-template-columns:24px 1fr;gap:1px 10px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);cursor:pointer;background:var(--field)}
+.mode:hover{border-color:var(--line2)}
+.mode input{position:absolute;opacity:0}
+.mode b{grid-row:span 2;width:22px;height:22px;border-radius:4px;background:var(--surface3);display:grid;place-items:center;font:600 11.5px var(--mono);color:var(--muted)}
+.mode span{font-weight:600}.mode em{font-style:normal;color:var(--muted);font-size:12px}
+.mode.on{border-color:var(--accent);background:var(--accent-soft)}.mode.on b{background:var(--accent);color:var(--accent-ink)}
+.live1{display:grid;grid-template-columns:minmax(0,150px) 110px 1fr;gap:10px;align-items:center;font-size:12.5px;padding:9px 0;border-top:1px solid var(--line)}.live1 b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}.hbar i{display:block;height:100%;transition:width .6s}
+.hrow{display:grid;grid-template-columns:12px 1fr;gap:2px 10px;padding:9px 0;border-top:1px solid var(--line)}
+.hrow:first-child{border-top:0}.hrow .dot{margin-top:7px}.hrow small{grid-column:2;color:var(--muted);font-size:12px;word-break:break-word}
+.hrow small.fix{color:var(--text)}
+.capprev{margin-top:8px;padding:22px 8px;border-radius:var(--r);background:#23272d;border:1px solid var(--line);text-align:center;font-size:22px;line-height:1.2;letter-spacing:.3px}
+.makebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.makebar .btns{margin:0}
+.makestate{margin:0 0 14px}.makestate .bar{margin-top:0}
+.ready{list-style:none;margin:8px 0 0;padding:0;font-size:12.5px}.ready li{padding:2px 0;word-break:break-all}.ready li::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-right:8px;vertical-align:1px}
+.ready li.nm::before{background:var(--bad)}
+
+/* ---------- my clips: a grid of tiles; one tile opens into the editor ---------- */
+.filters{display:flex;gap:0;flex-wrap:wrap;align-items:center}
+.chipbtn{border:0;background:none;height:34px;padding:0 13px;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;text-decoration:none;display:inline-flex;align-items:center}
+.chipbtn:hover{color:var(--text)}
+.chipbtn.on{color:var(--text);border-bottom-color:var(--accent)}
+.chipbtn i{font:600 11.5px var(--mono);font-style:normal;margin-left:7px;padding:0 5px;border-radius:3px;background:var(--surface2);color:var(--muted)}
+.chipbtn.on i{background:var(--accent-soft);color:var(--accent-hi)}
+.chipbtn.minor{font-weight:500}
+.chipbtn.act{height:28px;margin-left:10px;border:1px solid var(--line2);border-radius:var(--r);background:var(--surface2);color:var(--text)}
+.listbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:16px}
+.listbar .sp{flex:1}.listbar input[type=text]{width:220px;height:30px}
+.sortrow{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:-4px 0 16px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);font-size:12.5px;color:var(--muted)}
+.sortrow select{width:auto;height:28px;margin-left:6px}
+.clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:14px;align-items:start}
+.clip{position:relative;display:flex;flex-direction:column;overflow:hidden;border-top:2px solid var(--line2)}
+.clip[data-status=approved]{border-top-color:var(--ok)}.clip[data-status=done]{border-top-color:var(--muted)}.clip[data-status=pending]{border-top-color:var(--warn)}.clip[data-status=rejected]{border-top-color:var(--bad)}
+.clip[data-status=rejected]:not(.open){opacity:.62}
+.clip.cur:not(.open){outline:2px solid var(--accent);outline-offset:2px}
+.clips[data-filter=candidate] .clip:not([data-status=candidate]),.clips[data-filter=approved] .clip:not([data-status=approved]),.clips[data-filter=rejected] .clip:not([data-status=rejected]),
+.clips[data-filter=pending] .clip:not([data-status=pending]),.clips[data-filter=done] .clip:not([data-status=done]){display:none}
+.vid{position:relative;background:#000}
+.vid video{width:100%;aspect-ratio:9/16;background:#000;display:block;cursor:pointer}
+.vid .none{aspect-ratio:9/16;display:grid;place-items:center;text-align:center;color:var(--muted);padding:16px;font-size:12.5px;background:var(--field)}
+.vid small{display:none}
+.vid .score,.vid .dur{position:absolute;top:8px;font:600 11.5px/20px var(--mono);padding:0 6px;border-radius:3px;background:rgba(10,11,13,.82);color:var(--text);pointer-events:none}
+.vid .score{left:8px}.vid .dur{right:8px}
+.vid .score.good{background:var(--ok);color:#06140d}.vid .score.meh{color:var(--muted)}
+.vtabs{display:none}
+.tile{padding:10px 11px 11px;display:flex;flex-direction:column;gap:6px;min-height:118px}
+.tt{all:unset;cursor:pointer;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.7em}
+.tt:hover{color:var(--accent-hi)}.tt:focus-visible{outline:2px solid var(--accent)}
+.tm{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden}
+.tm .who{overflow:hidden;text-overflow:ellipsis}
+.newtag{font:700 10px/16px var(--mono);letter-spacing:.06em;padding:0 5px;border-radius:3px;background:var(--accent);color:var(--accent-ink)}
+.tprob{font-size:12px;color:var(--bad)}
+.ta{display:flex;gap:6px;margin-top:auto}
+.ta .btn{flex:1;height:30px;padding:0 6px;font-size:12.5px;min-width:0}
+.ta .btn.icon{flex:none;width:30px}
+.edhead,.info{display:none}
+/* the editor: the same card, opened over the page */
+body.editing{overflow:hidden}
+.clip.open{display:grid!important;position:fixed;inset:0;z-index:7;border:0;border-radius:0;background:var(--bg);overflow:auto;
+  grid-template-columns:minmax(240px,330px) minmax(0,1fr);grid-template-rows:auto 1fr;gap:0 26px;padding:0 28px 28px;align-content:start}
+.clip.open .tile,.clip.open .vid .score,.clip.open .vid .dur{display:none}
+.clip.open .edhead{display:flex;grid-column:1/-1;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 0;margin-bottom:18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:2}
+.edhead h3{font:600 18px/1.25 var(--display);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}
+.edhead .sp{flex:1}
+.clip.open .vid{align-self:start;position:sticky;top:78px;background:none}
+.clip.open .vid video{border-radius:var(--r2);max-height:calc(100vh - 170px);cursor:default}
+.clip.open .vid .none{border-radius:var(--r2);border:1px dashed var(--line2)}
+.clip.open .vid small{display:block;margin-top:8px;color:var(--muted);font-size:12px;text-align:center}
+.clip.open .vtabs{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+.vtabs button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:4px;height:26px;padding:0 9px;font-size:12px;cursor:pointer}
+.vtabs button.on{background:var(--surface3);border-color:var(--line2);color:var(--text)}
+.clip.open .info{display:block;min-width:0;max-width:860px}
+@media (max-width:820px){.clip.open{grid-template-columns:1fr;padding:0 14px 24px}.clip.open .vid{position:static;max-width:300px}}
+.badge{padding:0 8px;border-radius:3px;font:600 11.5px/22px var(--ui);background:var(--surface2);border:1px solid var(--line2);color:var(--muted);white-space:nowrap}
+.clip[data-status=approved] .badge{background:var(--ok-soft);border-color:#27634a;color:#7fdcb0}
+.clip[data-status=rejected] .badge{background:var(--bad-soft);border-color:#6a2a2c;color:#f19a9b}
+.clip[data-status=pending] .badge{background:var(--warn-soft);border-color:#6b5320;color:#ecc375}
+.when{color:var(--muted);font-size:12.5px}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 10px}
+.chip{padding:0 7px;border-radius:3px;background:var(--surface2);font:500 12px/22px var(--ui);color:var(--muted)}
+.chip b{font-family:var(--mono);font-weight:600;color:var(--text)}
+.chip.good{background:var(--ok-soft);color:#7fdcb0}.chip.meh{background:var(--warn-soft);color:#ecc375}
+.ai{font-size:13px;color:var(--muted);margin-bottom:8px;max-width:78ch}.ai b{color:var(--text);font-weight:600}
+.cliperr{position:relative;background:var(--bad-soft);border:1px solid #6a2a2c;padding:9px 40px 9px 12px;border-radius:var(--r);font-size:13px;margin-bottom:10px;white-space:pre-wrap}
+.issues{margin:0 0 10px;padding:9px 12px;border-radius:var(--r);background:var(--surface2);font-size:13px}
+.issues ul{margin:4px 0 0;padding-left:18px}.issues li.fail{color:var(--bad)}
+.said{border-left:2px solid var(--line2);padding:1px 0 1px 12px;margin:6px 0;color:var(--text);max-height:4.6em;overflow:hidden;max-width:78ch}
+.said.open{max-height:none}
+.more{background:none;border:0;color:var(--accent-hi);cursor:pointer;padding:0;font-size:12.5px}
+.edtabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin:14px 0 4px;flex-wrap:wrap}
+.edtabs button{border:0;background:none;height:36px;padding:0 14px;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.edtabs button:hover{color:var(--text)}.edtabs button.on{color:var(--text);border-bottom-color:var(--accent)}
+.edtabs button.flag::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--bad);margin-left:6px;vertical-align:2px}
+.clip.open details.pane{border:0;margin:0;padding:6px 0 0}
+.clip.open details.pane>summary{display:none}
+.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.acts .tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex:1}
+.trim video{width:100%;max-height:230px;background:#000;border-radius:var(--r);display:block}
+.tl{position:relative;height:64px;margin-top:8px;border:1px solid var(--line);border-radius:var(--r);background:var(--field);touch-action:none;user-select:none;cursor:pointer}
+.tl canvas{position:absolute;inset:0;width:100%;height:100%}
+.tl .sel{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 20%,transparent);border-left:2px solid var(--accent);border-right:2px solid var(--accent);pointer-events:none}
+.tl .h{position:absolute;top:-4px;bottom:-4px;width:16px;margin-left:-8px;cursor:ew-resize;display:grid;place-items:center}
+.tl .h::after{content:"";width:5px;height:62%;border-radius:2px;background:var(--accent)}
+.tl .ph{position:absolute;top:0;bottom:0;width:1px;background:var(--text);pointer-events:none;display:none}
 .tl.big{height:104px;margin-top:10px}
-.cutm{position:absolute;top:-6px;bottom:-6px;width:16px;margin-left:-8px;cursor:ew-resize;display:grid;justify-items:center;z-index:2}
-.cutm::after{content:"";width:3px;height:100%;background:#ffb020;border-radius:2px}
-.cutm::before{content:"";position:absolute;top:-3px;width:13px;height:13px;border-radius:3px;background:#ffb020;border:1px solid #111}
-.cutm.picked::after{box-shadow:0 0 0 2px var(--text)}.cutm.picked::before{box-shadow:0 0 0 2px var(--text)}
-.segn{position:absolute;bottom:3px;font-size:11px;font-weight:700;padding:0 7px;border-radius:99px;background:var(--surface);border:1px solid var(--line);transform:translateX(-50%);pointer-events:none;white-space:nowrap}
-.segn.off{opacity:.6;text-decoration:line-through}
-.cbruler{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:4px}
-.cbq{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}.cbq input{width:66px}
-#cb-video{width:100%;max-height:46vh;background:#000;border-radius:8px;display:block}
-.twlines{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-top:6px}
-.twl{display:grid;grid-template-columns:74px 1fr;gap:10px;padding:6px 10px;border-top:1px solid var(--line);cursor:pointer;font-size:13.5px}.twl:first-child{border-top:0}
-.twl:hover{background:var(--surface2)}.twl.on{background:color-mix(in srgb,var(--accent) 20%,transparent)}.twl b{color:var(--muted);font-weight:600}.twl mark{background:var(--accent);color:var(--accent-ink);border-radius:3px;padding:0 2px}
-.live1{display:grid;grid-template-columns:auto 90px 1fr;gap:8px;align-items:center;font-size:12.5px;margin-top:8px}.live1 b{max-width:110px;overflow:hidden;text-overflow:ellipsis}
-.hbar{height:8px;border-radius:99px;background:var(--surface2);overflow:hidden}.hbar i{display:block;height:100%;transition:width .6s}
-.vid{position:relative}
+.words{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.words input{width:auto;height:28px;padding:0 6px;font-size:13px;border-radius:4px}
+img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);display:block;margin:8px 0;border:1px solid var(--line)}
 .clips[data-zones]:not([data-zones=""]) .vid::after{content:"";position:absolute;left:0;right:0;top:0;aspect-ratio:9/16;pointer-events:none;
-  background:linear-gradient(rgba(255,60,90,.34),rgba(255,60,90,.34)) top/100% var(--zt) no-repeat,linear-gradient(rgba(255,60,90,.34),rgba(255,60,90,.34)) bottom/100% var(--zb) no-repeat,
-  linear-gradient(rgba(255,60,90,.34),rgba(255,60,90,.34)) right/var(--zr) 100% no-repeat}
-.sortrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px;font-size:12.5px;color:var(--muted)}
-.sortrow select{width:auto;padding:4px 8px;margin-left:4px}.sortrow input{width:210px;padding:5px 9px}
-.newtag{font-size:11px;font-weight:800;letter-spacing:.6px;padding:2px 8px;border-radius:99px;background:linear-gradient(90deg,var(--accent2),#b6f04a);color:#0b0714}
-.when2{font-size:12px;color:var(--muted)}
-.cbrow{display:grid;grid-template-columns:74px minmax(0,1fr) auto auto auto;gap:12px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
+  background:linear-gradient(rgba(234,84,85,.34),rgba(234,84,85,.34)) top/100% var(--zt) no-repeat,linear-gradient(rgba(234,84,85,.34),rgba(234,84,85,.34)) bottom/100% var(--zb) no-repeat,
+  linear-gradient(rgba(234,84,85,.34),rgba(234,84,85,.34)) right/var(--zr) 100% no-repeat}
+
+/* ---------- cutting board, transcript, tracker ---------- */
+#cb-video{width:100%;max-height:46vh;background:#000;border-radius:var(--r);display:block}
+.cutm{position:absolute;top:-6px;bottom:-6px;width:16px;margin-left:-8px;cursor:ew-resize;display:grid;justify-items:center;z-index:2}
+.cutm::after{content:"";width:2px;height:100%;background:var(--warn)}
+.cutm::before{content:"";position:absolute;top:-3px;width:11px;height:11px;border-radius:2px;background:var(--warn);border:1px solid #111}
+.cutm.picked::after,.cutm.picked::before{box-shadow:0 0 0 2px var(--text)}
+.segn{position:absolute;bottom:3px;font:600 11px/18px var(--mono);padding:0 6px;border-radius:3px;background:var(--surface);border:1px solid var(--line2);transform:translateX(-50%);pointer-events:none;white-space:nowrap}
+.segn.off{opacity:.6;text-decoration:line-through}
+.cbruler{display:flex;justify-content:space-between;font:11.5px var(--mono);color:var(--muted);margin-top:4px}
+.cbq{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}.cbq input{width:66px}
+.cbrow{display:grid;grid-template-columns:74px minmax(0,1fr) auto auto auto;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .cbrow.off{opacity:.55}.cbrow .badt{color:var(--bad);font-weight:600}.cbrow .warnt{color:var(--warn)}
 .cbrow label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.twlines{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:var(--r);margin-top:6px}
+.twl{display:grid;grid-template-columns:74px 1fr;gap:10px;padding:7px 10px;border-top:1px solid var(--line);cursor:pointer}.twl:first-child{border-top:0}
+.twl:hover{background:var(--surface2)}.twl.on{background:var(--accent-soft)}.twl b{color:var(--muted);font:600 12px/1.7 var(--mono)}.twl mark{background:var(--accent);color:var(--accent-ink);border-radius:2px;padding:0 2px}
+.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.tot{padding:12px 14px}.tot b{display:block;font:600 22px/1.2 var(--mono)}.tot span{color:var(--muted);font-size:12.5px}
+.twrap{overflow-x:auto}
+.ttable{width:100%;border-collapse:collapse;font-size:13px}
+.ttable th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ttable td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.ttable input,.ttable select{height:30px;padding:0 7px;font-size:13px;min-width:70px}
+.ttable td.num input{width:92px}.ttable td.link input{min-width:190px}
 
-/* ---------- the neon look: one dark theme, pink and cyan accents (these rules come last, so they win) ---------- */
-:root{
-  --bg:#0b0714;--surface:#150d24;--surface2:#1f1535;--line:#34254f;--text:#f4f0fb;--muted:#a99dc0;
-  --accent:#ff3d8b;--accent-ink:#fff;--accent2:#58e8f7;--hot:#ff8a3d;--ok:#2fd27f;--ok-soft:#10301f;--bad:#ff5a6a;--bad-soft:#3a1420;--warn:#ffb84d;--warn-soft:#3a2a10;
-  --field:#0e0819;--shadow:0 1px 0 rgba(255,255,255,.03),0 10px 28px rgba(0,0,0,.38);
-}
-html{color-scheme:dark}
-body{background:radial-gradient(1100px 520px at 78% -12%,#4a1378 0,transparent 62%),radial-gradient(900px 420px at -5% 0,#3a0b45 0,transparent 55%),var(--bg);background-attachment:fixed}
-::selection{background:var(--accent);color:#fff}
-.top{background:rgba(11,7,20,.82);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);box-shadow:0 1px 0 rgba(255,61,139,.25)}
-.brand{font-weight:900;letter-spacing:1.2px;text-transform:uppercase;font-size:16px}
-.brand::first-line{background:linear-gradient(90deg,#fff,var(--accent2));-webkit-background-clip:text;background-clip:text}
-.brand small{letter-spacing:.3px;text-transform:none}
-.pill{background:rgba(255,255,255,.04);border-color:var(--line)}
-.pill.live{border-color:rgba(47,210,127,.6);box-shadow:0 0 0 1px rgba(47,210,127,.25),0 0 18px rgba(47,210,127,.18)}
-.card{border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 130px),var(--surface)}
-.card>header .step,.mainhead .step{display:inline-block;width:auto;height:auto;background:none;color:var(--accent);font-size:13px;font-weight:800;letter-spacing:1px;border-radius:0}
-.card>header .step::before,.mainhead .step::before{content:"0"}
-.card h2,.mainhead h2{font-weight:800;letter-spacing:.2px}
-.mainhead h2{font-size:19px}
-.btn{border-radius:12px;background:rgba(255,255,255,.05);transition:transform .08s,filter .15s,box-shadow .15s}
-.btn:hover{filter:brightness(1.12)}.btn:active{transform:translateY(1px)}
-.btn.primary{background:linear-gradient(90deg,var(--accent),var(--hot));color:#fff;box-shadow:0 8px 22px rgba(255,61,139,.30)}
-.btn.ok{background:linear-gradient(90deg,var(--accent2),#b6f04a);color:#0b0714;font-weight:800;box-shadow:0 8px 22px rgba(88,232,247,.22)}
-.btn.bad{border-color:rgba(255,90,106,.7)}
-.tabs{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:13px}
-.tabs button{border-radius:10px}
-.tabs button.on{background:linear-gradient(90deg,rgba(255,61,139,.26),rgba(88,232,247,.14));box-shadow:inset 0 0 0 1px rgba(255,61,139,.55);color:#fff}
-.chipbtn{background:rgba(255,255,255,.04)}
-.chipbtn.on{background:linear-gradient(90deg,var(--accent),var(--hot));border-color:transparent;color:#fff;box-shadow:0 6px 18px rgba(255,61,139,.28)}
-input[type=text],input[type=number],select,textarea{border-radius:10px}
-input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent2);outline-offset:1px}
-input[type=range]{accent-color:var(--accent)}input[type=checkbox]{accent-color:var(--accent)}
-.mode{background:rgba(255,255,255,.03)}.mode.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset,0 0 22px rgba(255,61,139,.16)}
-.mode.on b{background:linear-gradient(135deg,var(--accent),var(--hot))}
-.bar{background:rgba(255,255,255,.07)}.bar i{background:linear-gradient(90deg,var(--accent),var(--accent2))}
-.pct b{color:var(--accent2)}
-.note{background:rgba(255,255,255,.04);border:1px solid var(--line)}
-.capprev{background:linear-gradient(135deg,#3b0f66,#b3216f 70%,#ff6a4d)}
-.clip{border-left-width:3px}
-.clip.cur{box-shadow:0 0 0 1px var(--accent2),0 0 26px rgba(88,232,247,.16)}
-.chip.good{border-color:rgba(47,210,127,.6)}
-.tl{background:rgba(0,0,0,.35)}
-.modal{background:rgba(6,3,12,.74);backdrop-filter:blur(4px)}
-kbd{background:rgba(255,255,255,.06)!important}
-.hero{position:relative;overflow:hidden;border-radius:20px;padding:22px 26px;margin-bottom:16px;border:1px solid rgba(255,61,139,.35);
-  background:linear-gradient(120deg,#1c0a36 0%,#4b0f6e 45%,#b3216f 82%,#ff6a4d 110%)}
-.hero::after{content:"";position:absolute;right:-70px;top:-90px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,#ffd45a 0,#ff8a3d 45%,transparent 70%);opacity:.5}
-.hero::before{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2),#b6f04a)}
-.hero .kicker{font-size:11.5px;font-weight:800;letter-spacing:3px;color:var(--accent2)}
-.hero h1{font-size:30px;line-height:1.1;font-weight:900;letter-spacing:-.3px;margin:6px 0 4px;position:relative}
-.hero h1 em{font-style:normal;color:var(--accent)}
-.hero p{color:#e9dcf3;font-size:13.5px;position:relative;max-width:560px}
-@media (max-width:980px){.hero h1{font-size:24px}}
-
-/* ---------- the help assistant ---------- */
-#helpbtn{position:fixed;right:20px;bottom:20px;z-index:20;border:0;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;color:#0b0714;
-  background:linear-gradient(90deg,var(--accent2),#b6f04a);box-shadow:0 10px 28px rgba(88,232,247,.35)}
-#helpbox{position:fixed;right:20px;bottom:76px;z-index:20;width:min(400px,calc(100vw - 32px));height:min(600px,calc(100vh - 110px));display:flex;flex-direction:column;
-  background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden}
-#helpbox header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);background:linear-gradient(120deg,#1c0a36,#4b0f6e)}
-#helpbox header b{flex:1;font-size:14.5px}
+/* ---------- windows over the page ---------- */
+.modal{position:fixed;inset:0;z-index:9;background:rgba(5,6,7,.72);display:grid;place-items:center;padding:16px;overflow:auto}
+.modal>.card{width:min(1080px,100%);padding:18px}
+.modal>.card.small{width:min(500px,100%)}
+.modal h2{font:600 17px var(--display);margin-bottom:4px}
+.bxgrid{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:16px;align-items:start}
+@media (max-width:760px){.bxgrid{grid-template-columns:1fr}}
+.stage{position:relative;background:#000;border-radius:var(--r);overflow:hidden;touch-action:none;user-select:none}
+.stage video{width:100%;display:block}
+.bx{position:absolute;border:2px solid;box-sizing:border-box;cursor:move;box-shadow:0 0 0 1px rgba(0,0,0,.6)}
+.bx b{position:absolute;left:0;top:0;font-size:11.5px;padding:1px 7px;color:#111;border-bottom-right-radius:4px;pointer-events:none}
+.bx i{position:absolute;right:-9px;bottom:-9px;width:18px;height:18px;border-radius:50%;border:2px solid #111;cursor:nwse-resize}
+.bx.face{border-color:#ffb020}.bx.face b,.bx.face i{background:#ffb020}
+.bx.video{border-color:#35c2ff}.bx.video b,.bx.video i{background:#35c2ff}
+.bxprev{width:200px;border-radius:var(--r);background:#000;display:block;border:1px solid var(--line)}
+.bxseek{width:100%;margin-top:8px}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(640px,92vw);padding:10px 44px 10px 14px;border-radius:var(--r);background:var(--surface3);border:1px solid var(--line2);box-shadow:0 10px 30px rgba(0,0,0,.5);display:none;z-index:40;white-space:pre-wrap}
+#toast.err{border-color:#6a2a2c;background:var(--bad-soft)}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100vw);z-index:8;background:var(--panel);border-left:1px solid var(--line);box-shadow:-18px 0 40px rgba(0,0,0,.45);display:flex;flex-direction:column}
+#drawer header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+#drawer header b{flex:1;font:600 15px var(--display)}
+#drawer .body{flex:1;overflow:auto;padding:4px 16px 20px}
+#drawer h3{font:600 12px var(--ui);color:var(--muted);margin:16px 0 6px;display:flex;align-items:center;gap:8px}
+#drawer h3 .dot.on{background:var(--ok)}
+#helpbox{position:fixed;left:228px;bottom:14px;z-index:20;width:min(400px,calc(100vw - 32px));height:min(600px,calc(100vh - 40px));display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line2);border-radius:var(--r2);box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden}
+@media (max-width:860px){#helpbox{left:14px}}
+#helpbox header{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line)}
+#helpbox header b{flex:1;font:600 14px var(--display)}
 #helpmsgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
-.hq,.ha{max-width:92%;padding:9px 12px;border-radius:14px;font-size:13.5px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
-.hq{align-self:flex-end;background:linear-gradient(90deg,var(--accent),var(--hot));color:#fff;border-bottom-right-radius:4px}
-.ha{align-self:flex-start;background:var(--surface2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.hq,.ha{max-width:92%;padding:9px 12px;border-radius:var(--r2);line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.hq{align-self:flex-end;background:var(--surface3);border:1px solid var(--line2)}
+.ha{align-self:flex-start;background:var(--surface);border:1px solid var(--line)}
 .ha ol{margin:8px 0 0;padding-left:20px}.ha li{margin:5px 0}
-.ha .show{display:inline-block;margin-left:6px;padding:1px 9px;border-radius:99px;border:1px solid var(--accent2);background:none;color:var(--accent2);font-size:12px;font-weight:700;cursor:pointer}
-.ha .show:hover{background:var(--accent2);color:#0b0714}
-.ha .tour{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}.ha li.did{color:var(--good,#4ade80)}.ha li.did::marker{content:"✓  "}.ha li.fail{color:var(--bad)}
-.ha .mine{display:inline-block;margin-left:6px;font-size:11.5px;font-weight:700;color:var(--muted)}.ha small{display:block;margin-top:8px;color:var(--muted)}
-.hsug{display:flex;flex-wrap:wrap;gap:6px}.hsug button{border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--text);text-align:left}
+.ha .show{display:inline-block;margin-left:6px;padding:0 8px;border-radius:3px;border:1px solid var(--line2);background:none;color:var(--accent-hi);font-size:12px;font-weight:600;cursor:pointer;line-height:20px}
+.ha .show:hover{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ha .tour{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}.ha li.did{color:#7fdcb0}.ha li.did::marker{content:"✓  "}.ha li.fail{color:var(--bad)}
+.ha .mine{display:inline-block;margin-left:6px;font-size:11.5px;font-weight:600;color:var(--muted)}.ha small{display:block;margin-top:8px;color:var(--muted)}
+.hsug{display:flex;flex-wrap:wrap;gap:6px}.hsug button{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:5px 10px;font-size:12px;cursor:pointer;color:var(--text);text-align:left}
+.hsug button:hover{border-color:var(--line2);background:var(--surface2)}
 #helpform{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
 #helpform input{flex:1}
-/* the spotlight: four panels blur and darken everything except the thing being shown */
-.spotp{position:fixed;z-index:30;background:rgba(6,3,12,.66);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
-#spotring{position:fixed;z-index:31;border:3px solid var(--accent2);border-radius:12px;box-shadow:0 0 0 4px rgba(88,232,247,.25),0 0 30px rgba(88,232,247,.6);pointer-events:none;animation:spotpulse 1.2s infinite}
-@keyframes spotpulse{50%{box-shadow:0 0 0 9px rgba(88,232,247,.12),0 0 40px rgba(88,232,247,.8)}}
-#spottip{position:fixed;z-index:32;max-width:340px;padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--accent2);box-shadow:0 14px 40px rgba(0,0,0,.6);font-size:13.5px;line-height:1.45}
+.spotp{position:fixed;z-index:30;background:rgba(5,6,7,.7)}
+#spotring{position:fixed;z-index:31;border:2px solid var(--accent);border-radius:var(--r2);box-shadow:0 0 0 4px rgba(255,90,43,.22);pointer-events:none;animation:spotpulse 1.2s infinite}
+@keyframes spotpulse{50%{box-shadow:0 0 0 9px rgba(255,90,43,.1)}}
+#spottip{position:fixed;z-index:32;max-width:340px;padding:12px 14px;border-radius:var(--r2);background:var(--surface3);border:1px solid var(--line2);box-shadow:0 14px 40px rgba(0,0,0,.6);line-height:1.45}
 #spottip .btns{margin-top:10px}
+
+/* ---------- small things ---------- */
+.tag{font-style:normal}
+.videos span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#page-look #tplbox,#page-look #brandbox{border:0;margin:0;padding:0}
+#page-look #tplbox>summary,#page-look #brandbox>summary{display:none}
+#page-look .card .body>.switch:first-child{padding-top:0}
+
+.mainhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.mainhead h2{font:600 15px var(--display)}.mainhead .filters{margin-left:auto;gap:8px}
+.mainhead .chipbtn,#cb-list .chipbtn{height:30px;border:1px solid var(--line2);border-radius:var(--r);background:var(--surface2);color:var(--text)}#cb-list .chipbtn.on{border-color:var(--accent)}
+.makestate .note{border:0;background:none;padding:0;margin:6px 0 0}
+#page-settings details>summary[hidden]{display:none}
 </style>
 </head>
 <body>
-<div class="top">
-  <div class="brand">Stream Clipper<small id="scope"></small></div>
-  <div class="pills">
-    <span class="pill" id="p-health" style="cursor:pointer" onclick="const d=$('healthbox');d.open=true;d.scrollIntoView({block:'start'})"><span class="dot"></span><span>Checking setup…</span></span>
-    <span class="pill" id="p-watch"><span class="dot"></span><span>Not watching</span></span>
-    <button class="pill" id="p-make" hidden onclick="$('f-bar').scrollIntoView({block:'center',behavior:'smooth'})" title="Videos are being made. Click to see the details and the Stop button."><span class="minibar"><i></i></span><span></span></button>
-    <span class="pill" id="p-count">0 to review</span>
-  </div>
-</div>
-<div id="errbox"><span id="errtext"></span> <button class="btn" id="b-restart" data-yours hidden onclick="restartNow()" style="margin-left:8px">Restart now</button><button class="x" title="Close this message" aria-label="Close this message" onclick="closeErr()">×</button></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol><symbol id="i-live" viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.7"/><path d="M4.6 4.6a4.8 4.8 0 0 0 0 6.8M11.4 4.6a4.8 4.8 0 0 1 0 6.8"/></symbol><symbol id="i-grid" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></symbol><symbol id="i-look" viewBox="0 0 16 16"><path d="M2.5 5h5.6M11.4 5h2.1M2.5 11h2.1M7.9 11h5.6"/><circle cx="9.8" cy="5" r="1.6"/><circle cx="6.2" cy="11" r="1.6"/></symbol><symbol id="i-chart" viewBox="0 0 16 16"><path d="M3 13V8.5M8 13V3M13 13V6"/></symbol><symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.4"/><path d="M8 1.6v1.9M8 12.5v1.9M1.6 8h1.9M12.5 8h1.9M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M3.5 12.5l1.3-1.3M11.2 4.8l1.3-1.3"/></symbol><symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.7 1.6c-.6.4-1 .8-1 1.4M8 11.5v.1"/></symbol><symbol id="i-list" viewBox="0 0 16 16"><path d="M3 4.2h10M3 8h10M3 11.8h6"/></symbol><symbol id="i-check" viewBox="0 0 16 16"><path d="M3.2 8.6l3.1 3 6.5-7.2"/></symbol><symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol><symbol id="i-edit" viewBox="0 0 16 16"><path d="M2.8 13.2l.7-3L10.7 3l2.3 2.3-7.2 7.2z"/></symbol><symbol id="i-back" viewBox="0 0 16 16"><path d="M9.6 3.4L5 8l4.6 4.6"/></symbol><symbol id="i-folder" viewBox="0 0 16 16"><path d="M2.5 4.5h3.8L7.6 6h5.9v6.5h-11z"/></symbol><symbol id="i-filter" viewBox="0 0 16 16"><path d="M2.5 4h11M4.8 8h6.4M6.8 12h2.4"/></symbol></svg>
+<div class="app">
+  <nav class="nav panelonly" id="side" aria-label="Sections">
+    <div class="brand">Stream Clipper</div>
+    <div class="navlist">
+      <button id="n-new" onclick="go('new')" title="Make clips from a finished stream, a video link or a file"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>New clips</button>
+      <button id="n-live" onclick="go('live')" title="Watch channels while they are live and clip them as it happens"><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live channels</button>
+      <button id="n-clips" onclick="go('clips')" title="Review, edit and approve your clips, and make the videos"><svg class="i" aria-hidden="true"><use href="#i-grid"/></svg>My clips<span class="count" id="n-count"></span></button>
+      <button id="n-look" onclick="go('look')" title="Caption style, template, logo, music, thumbnails"><svg class="i" aria-hidden="true"><use href="#i-look"/></svg>Look and branding</button>
+      <button id="n-track" onclick="go('track')" title="What you posted, its views and what it earned"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg>Posted and earnings</button>
+    </div>
+    <div class="navsep"></div>
+    <div class="navlist">
+      <button id="n-settings" onclick="go('settings')" title="Setup check, AI, language, updates"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg>Settings</button>
+      <button id="helpbtn" onclick="helpToggle()" title="Ask how something works, or ask for it to be done"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg>Ask for help</button>
+    </div>
+    <div class="navfill"></div>
+    <div class="status">
+      <div class="pills">
+        <span class="pill" id="p-health" onclick="go('settings')" title="Open the setup check"><span class="dot"></span><span>Checking setup…</span></span>
+        <span class="pill" id="p-watch" onclick="go('live')" title="Open Live channels"><span class="dot"></span><span>Not watching</span></span>
+        <button class="pill" id="p-make" hidden onclick="go('clips')" title="Videos are being made. Click to see the details and the Stop button."><span class="minibar"><i></i></span><span></span></button>
+        <span class="pill" id="p-count" onclick="go('clips')" title="Open My clips">0 to review</span>
+        <button class="pill" id="b-activity" onclick="actToggle()" title="Everything the program has done, line by line"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><span>Activity log</span></button>
+      </div>
+    </div>
+  </nav>
 
-<div class="layout">
-  <aside class="side" id="side">
-    <section class="card">
-      <details id="healthbox">
-        <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:13px 16px">
-          <span class="step" id="h-badge" style="background:var(--surface2);color:var(--text);border:1px solid var(--line)">✓</span>
-          <h2 style="flex:1">Setup check</h2><span class="help" id="h-sum" style="margin:0"></span>
-        </summary>
-        <div class="body" style="padding-top:0">
-          <div id="h-items"></div>
-          <div class="btns">
-            <button class="btn" id="b-hcheck" onclick="hAct('/api/health/check')">Run the full check</button>
-            <button class="btn" id="b-hrepair" data-yours onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. Continue?')">Repair</button>
-            <button class="btn primary" id="b-hupdate" hidden onclick="hAct('/api/health/update','Update takes the newest version from GitHub. Your clips, settings and keys are not touched. Continue?')">Update</button>
-          </div>
-          <div class="bar indet" id="h-bar" hidden><i></i></div><div class="pct" id="h-pct" hidden></div>
-          <div class="note" id="h-note" hidden></div>
-          <details class="log"><summary>Activity log</summary><pre class="log" id="hlog"></pre></details>
-        </div>
-      </details>
-    </section>
-    <section class="card">
-      <header><span class="step">1</span><h2>Find moments</h2></header>
-      <div class="body">
-        <div class="tabs"><button id="t-live" class="on" onclick="tab('live')">Live streams</button><button id="t-vod" onclick="tab('vod')">Finished stream</button><button id="t-own" onclick="tab('own')">Your own clip</button></div>
-        <details class="log" id="langbox" style="margin:0 0 10px"><summary>Language: <b id="lang-sum">English</b></summary>
-          <label class="f" for="l-speech">What the streamer speaks</label>
-          <select id="l-speech" onchange="saveLang()"><option value="en">English</option><option value="ur">Urdu</option><option value="hi">Hindi</option><option value="auto">Detect it (can guess wrong on mixed speech)</option></select>
-          <label class="f" for="l-script">Captions for Urdu or Hindi speech</label>
-          <select id="l-script" onchange="saveLang()"><option value="roman">Latin letters: "bhai ne kamaal kar diya" (best with Claude)</option><option value="native">Urdu or Hindi letters</option></select>
-          <label class="f" for="l-text">Opening text and titles written in</label>
-          <select id="l-text" onchange="saveLang()"><option value="Roman Urdu">Roman Urdu mixed with English</option><option>English</option><option value="Hinglish">Hinglish (Roman Hindi mixed with English)</option><option value="Urdu">Urdu letters</option><option value="Hindi">Hindi letters</option></select>
-          <label class="f" for="l-yt">Words of YouTube videos come from</label>
-          <select id="l-yt" onchange="saveLang()"><option value="auto">YouTube's own captions when it has them (seconds)</option><option value="off">Listening on this PC (minutes; try it if the captions are poor)</option></select>
-          <p class="help" style="margin-top:6px">Applies to clips made from now on. The narrator in explainer videos speaks English. Twitch, live streams and video files are always listened to on this PC.</p>
-        </details>
-        <div id="tab-live">
-          <p class="help">Watches the streams while they are live and makes a draft clip each time something happens.</p>
-          <label class="f" for="o-channels">Channels, separated by spaces: Twitch names, Kick channels as kick.com/name, YouTube handles starting with @</label>
-          <input type="text" id="o-channels" placeholder="lacy xqc @youtubechannel">
-          <label class="check"><input type="checkbox" id="o-auto" onchange="act('/api/options',{watch_autostart:$('o-auto').checked})"> Start watching this list by itself when the program opens</label>
-          <p class="help" style="margin-top:4px">Creators who are not live yet are checked every half minute and clipped as soon as they go live. Add only creators you have a campaign or permission for.</p>
-          <label class="f">What should find the moments?</label>
-          <div class="modes" id="o-modes"></div>
-          <div class="btns"><button class="btn primary" id="b-start" onclick="startWatch()">Start watching</button><button class="btn bad" id="b-stop" onclick="act('/api/watch/stop',{})">Stop</button></div>
-          <div class="btns" style="align-items:center"><button class="btn" id="b-clipnow" onclick="clipNow()" disabled>Clip the last</button>
-            <select id="w-last" style="width:auto" aria-label="How many seconds to clip"><option value="15">15 seconds</option><option value="30" selected>30 seconds</option><option value="45">45 seconds</option><option value="60">60 seconds</option><option value="90">90 seconds</option></select></div>
-          <p class="help" style="margin-top:6px">Saw something chat did not react to? Press it right after the moment. The draft appears in a minute or two, at the top of the list.</p>
-          <div id="w-live"></div>
-          <div class="note" id="w-note">Not watching.</div>
-          <details class="log"><summary>Activity log</summary><pre class="log" id="wlog"></pre></details>
-        </div>
-        <div id="tab-own" hidden>
+  <main>
+    <div id="errbox"><span id="errtext"></span> <button class="btn" id="b-restart" data-yours hidden onclick="restartNow()" style="margin-left:8px">Restart now</button><button class="x" title="Close this message" aria-label="Close this message" onclick="closeErr()">×</button></div>
+
+    <section class="page panelonly" id="page-new" hidden>
+      <div class="pagehead"><h1>New clips</h1><span class="sub">Language: <b class="lang-mirror">English</b> · <a href="#" onclick="go('settings');return false">change</a></span></div>
+      <div class="tabs"><button id="t-vod" class="on" onclick="sub('vod')">Find the best moments</button><button id="t-own" onclick="sub('own')">Pick the part myself</button><button id="v-board" onclick="sub('board')">Cutting board</button><button id="v-words" onclick="sub('words')">Search what was said</button></div>
+      <div id="tab-vod" class="narrow"><div class="card"><div class="body">
+          <p class="help">Paste the link of a stream that has ended. Its chat replay is scored, its sound and picture can be measured too, and only the best moments are downloaded and turned into drafts.</p>
+          <label class="f" for="r-url">Link to the finished stream (Twitch, YouTube or Kick)</label>
+          <input type="text" id="r-url" placeholder="https://www.twitch.tv/videos/1234567890  or a YouTube or Kick video link">
+          <label class="f" for="r-sig">What should find the moments?</label>
+          <select id="r-sig">
+            <option value="chat">Chat only (fastest, almost no internet)</option>
+            <option value="audio" selected>Chat + sound (about 100 MB per stream hour)</option>
+            <option value="video">Chat + picture (about 130 MB per stream hour)</option>
+            <option value="all">Chat + sound + picture (about 130 MB per stream hour)</option>
+          </select>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="r-ai"><span><b>Let AI read the whole stream</b>Turns all the speech into text and has Claude pick moments from what was said. Slow on a processor (a 4-hour stream can take an hour) and costs a few cents. Needs a Claude key.</span></label>
+          <label class="f" for="r-mix">What kind of moments</label>
+          <select id="r-mix" onchange="act('/api/options',{moment_mix:val('r-mix')})"></select>
+          <label class="f" for="r-top">How many clips</label>
+          <select id="r-top"><option>5</option><option selected>8</option><option>12</option><option>20</option></select>
+          <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig'),ai:$('r-ai').checked})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="stopRun()">Stop</button></div>
+          <div class="bar indet" id="r-bar" hidden><i></i></div><div class="pct" id="r-pct" hidden></div>
+          <div class="note" id="r-note">Nothing running.</div>
+      </div></div></div>
+      <div id="tab-own" class="narrow" hidden><div class="card"><div class="body">
           <p class="help">Pick the part of a video yourself. Works with a YouTube, Twitch or Kick video link, or a video file on this PC such as a screen recording. No chat is needed.</p>
           <label class="f" for="m-src">Video link, or the path of a video file</label>
           <input type="text" id="m-src" placeholder="YouTube, Twitch or Kick video link, or D:\Videos\recording.mp4">
@@ -379,143 +423,34 @@ kbd{background:rgba(255,255,255,.06)!important}
           <div class="btns"><button class="btn" id="b-own" onclick="makeOwn()">Make the clip</button></div></details>
           <div class="bar indet" id="m-bar" hidden><i></i></div><div class="pct" id="m-pct" hidden></div>
           <div class="note" id="m-note">Nothing running.</div>
-          <details class="log"><summary>Activity log</summary><pre class="log" id="mlog"></pre></details>
+      </div></div></div>
+      <div id="view-board" hidden>
+      <div class="mainhead"><h2>Cutting board</h2><div class="filters" id="cb-list"></div></div>
+      <div class="empty" id="cb-empty" hidden><b>Nothing downloaded yet.</b>Open "Pick the part myself", give a video with a start and an end, and press "Download this part and open the cutting board".</div>
+      <div id="cb-body" hidden>
+        <p class="keys" id="cb-title"></p>
+        <div class="card" style="padding:14px">
+          <video id="cb-video" controls preload="metadata"></video>
+          <div class="tl big" id="cb-tl"><canvas></canvas><div id="cb-marks"></div><div class="ph" id="cb-ph"></div></div>
+          <div class="cbruler" id="cb-ruler"></div>
+          <div class="btns"><button class="btn primary" id="cb-cut">Cut here</button><button class="btn" id="cb-del">Remove the selected cut</button><button class="btn" id="cb-clear">Remove all cuts</button>
+            <span class="cbq">Split into <input type="number" id="cb-n" value="3" min="2" max="60" aria-label="number of equal parts"> equal parts <button class="btn" id="cb-eq" data-yours>Do it</button></span>
+            <span class="cbq">or cut every <input type="number" id="cb-s" value="50" min="8" max="300" aria-label="seconds per piece"> seconds <button class="btn" id="cb-ev" data-yours>Do it</button></span></div>
+          <p class="keys" style="margin:10px 0 0">Play the video or click the sound wave to move. Press <b>Cut here</b> where a clip should end and the next begin; drag an orange marker to move a cut. Keys: <kbd>Space</kbd> play or pause · <kbd>←</kbd> <kbd>→</kbd> one second (with <kbd>Shift</kbd> five) · <kbd>,</kbd> <kbd>.</kbd> a tenth of a second · <kbd>C</kbd> cut · <kbd>Delete</kbd> remove the selected cut</p>
         </div>
-        <div id="tab-vod" hidden>
-          <p class="help">Paste the link of a stream that has ended. Its chat replay is scored, its sound and picture can be measured too, and only the best moments are downloaded and turned into drafts.</p>
-          <label class="f" for="r-url">Link to the finished stream (Twitch, YouTube or Kick)</label>
-          <input type="text" id="r-url" placeholder="https://www.twitch.tv/videos/1234567890  or a YouTube or Kick video link">
-          <label class="f" for="r-sig">What should find the moments?</label>
-          <select id="r-sig">
-            <option value="chat">Chat only (fastest, almost no internet)</option>
-            <option value="audio" selected>Chat + sound (about 100 MB per stream hour)</option>
-            <option value="video">Chat + picture (about 130 MB per stream hour)</option>
-            <option value="all">Chat + sound + picture (about 130 MB per stream hour)</option>
-          </select>
-          <label class="switch" style="margin-top:8px"><input type="checkbox" id="r-ai"><span><b>Let AI read the whole stream</b>Turns all the speech into text and has Claude pick moments from what was said. Slow on a processor (a 4-hour stream can take an hour) and costs a few cents. Needs a Claude key.</span></label>
-          <label class="f" for="r-mix">What kind of moments</label>
-          <select id="r-mix" onchange="act('/api/options',{moment_mix:val('r-mix')})"></select>
-          <label class="f" for="r-top">How many clips</label>
-          <select id="r-top"><option>5</option><option selected>8</option><option>12</option><option>20</option></select>
-          <div class="btns"><button class="btn primary" id="b-run" onclick="act('/api/run',{url:val('r-url'),top:+val('r-top'),signals:val('r-sig'),ai:$('r-ai').checked})">Find the best moments</button><button class="btn bad" id="b-runstop" onclick="stopRun()">Stop</button></div>
-          <div class="bar indet" id="r-bar" hidden><i></i></div><div class="pct" id="r-pct" hidden></div>
-          <div class="note" id="r-note">Nothing running.</div>
-          <details class="log"><summary>Activity log</summary><pre class="log" id="rlog"></pre></details>
+        <div class="card" style="padding:14px;margin-top:14px">
+          <h2 id="cb-count" style="font-size:15px;margin-bottom:8px"></h2>
+          <div id="cb-rows"></div>
+          <label class="check"><input type="checkbox" id="cb-label" checked> Show "Part 1", "Part 2"… on the videos, and "Part 2 next" at the end</label>
+          <div class="btns"><button class="btn primary" id="cb-make">Make the clips</button><button class="btn bad" id="cb-stop" onclick="stopRun()">Stop</button><button class="btn quiet" id="cb-drop">Delete this download</button></div>
+          <div class="bar indet" id="cb-bar" hidden><i></i></div><div class="pct" id="cb-pct" hidden></div>
+          <div class="note" id="cb-note">Nothing running.</div>
         </div>
       </div>
-    </section>
-
-    <section class="card">
-      <header><span class="step" style="background:var(--surface2);color:var(--text);border:1px solid var(--line)">AI</span><h2>Claude (optional)</h2></header>
-      <div class="body">
-        <p class="help">Claude writes the opening text and titles, judges each clip, and can read a whole stream. Without it everything still works, with placeholder text.</p>
-        <label class="f" for="a-backend">How to reach Claude</label>
-        <select id="a-backend" data-yours onchange="saveAi()"></select>
-        <div id="a-auto">
-          <label class="f" for="a-prefer">When both work, use first</label>
-          <select id="a-prefer" onchange="saveAi()"></select>
-          <label class="switch"><input type="checkbox" id="a-fallback" data-yours onchange="saveAi()"><span><b>Use the other if the first fails</b>For example when your plan's limit is reached. This can move work onto your paid API key; the page says so when it happens.</span></label>
-        </div>
-        <div id="a-ways" style="margin-top:10px"></div>
-        <div class="two">
-          <div><label class="f" for="a-model">Model for clip text</label><select id="a-model" onchange="saveAi()"></select></div>
-          <div><label class="f" for="a-stream">Model for reading streams</label><select id="a-stream" onchange="saveAi()"></select></div>
-        </div>
-        <div class="note" id="a-note"></div>
-        <div class="note" id="a-local"></div>
-        <div class="btns"><button class="btn" id="b-aicheck" onclick="act2('/api/ai/check')">Check again</button>
-          <button class="btn" id="b-localai" data-yours hidden onclick="localAi()">Set up free local AI</button></div>
       </div>
-    </section>
-
-    <section class="card">
-      <header><span class="step">3</span><h2>Make the videos</h2></header>
-      <div class="body">
-        <p class="help">Turns every approved clip into finished 9:16 videos with their upload text. Nothing is posted.</p>
-        <label class="switch"><input type="checkbox" id="o-ab" onchange="saveOpts()"><span><b>A and B versions</b>Two versions of each clip with different opening text and title, to test which does better.</span></label>
-        <label class="switch"><input type="checkbox" id="o-opening" onchange="saveOpts()"><span><b>Eye-catching first seconds</b>Zoom-in, pop-in text, a whoosh and a progress bar.</span></label>
-        <label class="f" for="o-thumb">Thumbnail for each clip <small>(a cover picture, made together with its videos)</small></label>
-        <select id="o-thumb" data-yours onchange="act('/api/options',{thumbnail:val('o-thumb')})"></select>
-        <p class="help" id="thumb-note" style="margin:6px 0 0"></p>
-        <details class="sec" id="thumb-more"><summary>What ChatGPT thumbnails look like <small id="thumb-sum"></small></summary>
-          <label class="switch"><input type="checkbox" id="o-face" onchange="act('/api/options',{thumbnail_face:this.checked})"><span><b>The streamer's face, big and excited</b>When the streamer is visible in the clip, their face is the main thing in the picture, with a shocked or excited look. Used when ChatGPT decides the picture itself.</span></label>
-          <label class="f" for="o-avoid">Things I do not want in thumbnails <small>(optional, in your own words)</small></label>
-          <textarea id="o-avoid" maxlength="500" style="min-height:58px" placeholder="For example: no guns, no blood, no half-naked people, no swear words, no red arrows"></textarea>
-          <div class="btns"><button class="btn" onclick="saveAvoid()">Save this list</button></div>
-          <p class="help" style="margin:6px 0 0">The list is used for every ChatGPT thumbnail, also the ones made from your own description. It is sent to OpenAI with the request. The free thumbnail is a real frame of the clip, so the list cannot change it.</p>
-        </details>
-        <label class="f" for="o-camp">Campaign (checks every clip against its rules)</label>
-        <select id="o-camp" onchange="saveOpts()"></select>
-        <p class="help" id="camp-rules" style="margin:6px 0 0"></p>
-        <label class="f" for="o-cap">Caption style</label>
-        <select id="o-cap" onchange="pickLook()"></select>
-        <div class="capprev" id="capprev" aria-hidden="true"></div>
-        <label class="f" for="o-anim">How the captions move</label>
-        <select id="o-anim" onchange="act('/api/options',{caption_animation:val('o-anim')})"></select>
-        <details class="sec" id="lookbox"><summary>Your own caption style <small>font, colours, size; save it as a profile</small></summary>
-          <label class="f" for="k-font">Font (one installed on this computer)</label>
-          <input type="text" id="k-font" list="k-fonts"><datalist id="k-fonts"><option>Arial Black</option><option>Impact</option><option>Segoe UI Black</option><option>Bahnschrift</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Georgia</option><option>Comic Sans MS</option><option>Franklin Gothic Heavy</option><option>Montserrat</option><option>Poppins</option></datalist>
-          <div class="three"><div><label class="f" for="k-size">Size</label><input type="number" id="k-size" min="40" max="160"></div>
-            <div><label class="f" for="k-outline">Outline</label><input type="number" id="k-outline" min="0" max="14"></div>
-            <div><label class="f" for="k-words">Words on screen</label><input type="number" id="k-words" min="1" max="6"></div></div>
-          <div class="two"><div><label class="f" for="k-text">Text colour</label><input type="color" id="k-text" style="height:38px;padding:2px"></div>
-            <div><label class="f" for="k-active">Colour of the spoken word</label><input type="color" id="k-active" style="height:38px;padding:2px"></div></div>
-          <label class="check"><input type="checkbox" id="k-upper"> ALL CAPITALS</label>
-          <div class="btns"><button class="btn" onclick="useLook()">Use this style</button><button class="btn" onclick="useLook(true)">Save as a profile…</button><button class="btn quiet" id="k-del" hidden onclick="delLook()">Delete this profile</button></div>
-          <p class="help" style="margin-top:6px">Clips already drafted get the new style when you press Make videos.</p>
-        </details>
-        <details class="sec" id="tplbox"><summary>Template and opening text <small>a card, a post, a news banner</small></summary>
-          <label class="f" for="t-tpl">Template</label>
-          <select id="t-tpl" onchange="saveFrame()"></select>
-          <div id="t-card" hidden>
-            <label class="f" for="t-bg">Behind the card</label>
-            <select id="t-bg" onchange="saveFrame()"></select>
-            <div class="two" id="t-cols" hidden><div><label class="f" for="t-c1">Colour</label><input type="color" id="t-c1" style="height:38px;padding:2px" onchange="saveFrame()"></div>
-              <div id="t-c2w"><label class="f" for="t-c2">Second colour</label><input type="color" id="t-c2" style="height:38px;padding:2px" onchange="saveFrame()"></div></div>
-            <div class="btns" id="t-img" hidden style="margin-top:8px"><button class="btn" onclick="$('t-imgfile').click()">Choose an image</button><span class="saved" id="t-imgname"></span></div>
-            <input type="file" id="t-imgfile" accept=".png,.jpg,.jpeg,.webp" hidden onchange="brandFile(this,'card')">
-          </div>
-          <div class="two" id="t-post" hidden><div><label class="f" for="t-name">Name on the post</label><input type="text" id="t-name" maxlength="40" placeholder="the streamer's name" onchange="saveFrame()"></div>
-            <div><label class="f" for="t-handle">Handle</label><input type="text" id="t-handle" maxlength="40" placeholder="@yourpage" onchange="saveFrame()"></div></div>
-          <label class="f" for="t-hook">Opening text stays for <b id="t-hookv"></b> seconds</label>
-          <input type="range" id="t-hook" min="2" max="60" step="1" oninput="$('t-hookv').textContent=this.value" onchange="act('/api/options',{hook_seconds:+this.value})">
-          <p class="help" style="margin-top:6px">The post, news and hook-box templates show the opening text for the whole clip. Clips already drafted get the template when you press Make videos, or use "Make this video's drafts again" on a clip.</p>
-        </details>
-        <details class="sec" id="brandbox"><summary>Branding <small>your logo, an outro line, music</small></summary>
-          <label class="f">Logo or watermark</label>
-          <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-logofile').click()">Choose an image</button><span class="saved" id="g-logoname"></span><button class="btn quiet" id="g-logooff" hidden onclick="act('/api/options',{brand_logo:''})">Take it off</button></div>
-          <input type="file" id="g-logofile" accept=".png,.jpg,.jpeg,.webp,.gif" hidden onchange="brandFile(this,'logo')">
-          <div class="three"><div><label class="f" for="g-corner">Corner</label><select id="g-corner" onchange="saveBrand()"><option value="top-left">top left</option><option value="top-right">top right</option><option value="bottom-left">bottom left</option><option value="bottom-right">bottom right</option></select></div>
-            <div><label class="f" for="g-size">Size</label><input type="range" id="g-size" min="5" max="50" onchange="saveBrand()"></div>
-            <div><label class="f" for="g-op">See-through</label><input type="range" id="g-op" min="10" max="100" onchange="saveBrand()"></div></div>
-          <label class="f" for="g-outro">Outro line over the last seconds <small>(empty = none)</small></label>
-          <input type="text" id="g-outro" maxlength="60" placeholder="Follow for part 2" onchange="saveBrand()">
-          <label class="f">Music under the voice</label>
-          <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-musicfile').click()">Choose a sound file</button><span class="saved" id="g-musicname"></span><button class="btn quiet" id="g-musicoff" hidden onclick="act('/api/options',{brand_music:''})">Take it off</button></div>
-          <input type="file" id="g-musicfile" accept=".mp3,.m4a,.wav,.ogg,.aac,.flac" hidden onchange="brandFile(this,'music')">
-          <label class="f" for="g-vol">Music loudness</label><input type="range" id="g-vol" min="0" max="50" onchange="saveBrand()">
-          <label class="f" for="g-rise">Music grows louder over the last <b id="g-risev">0</b> seconds <small>(0 = stays level)</small></label>
-          <input type="range" id="g-rise" min="0" max="20" oninput="$('g-risev').textContent=this.value" onchange="saveBrand()">
-          <p class="help" style="margin-top:6px">Use only music you have the right to use: platforms mute or remove clips with other people's songs. Branding is added when a draft or a video is made; press Make videos to add it to clips already drafted.</p>
-        </details>
-        <div class="makebar"><div class="btns"><button class="btn ok wide" id="b-finish" onclick="act('/api/finish',{})">Make videos</button>
-          <button class="btn" id="b-fstop" disabled onclick="stopAsk(true)" title="Stop making videos: now, or after the one being made">Stop</button>
-          <button class="btn" id="b-ready" onclick="openReady()" title="Opens the folder on this computer where the finished videos are">Open the videos folder</button></div>
-        <div class="bar" id="f-bar" hidden><i></i></div><div class="pct" id="f-pct" hidden></div>
-        <div class="note" id="f-note">Nothing made yet in this session.</div></div>
-        <ul class="ready" id="f-ready"></ul>
-        <details class="log"><summary>Activity log</summary><pre class="log" id="flog"></pre></details>
-      </div>
-    </section>
-  </aside>
-
-  <main>
-    <div class="hero"><div class="kicker">FIND · CHECK · POST</div><h1>Long streams. <em>Short clips.</em></h1>
-      <p>The program finds the moments. You check every clip. Only what you approve becomes a video.</p></div>
-    <div class="tabs" style="max-width:640px"><button id="v-clips" class="on" onclick="view('clips')">Clips</button><button id="v-track" onclick="view('track')">Tracker</button><button id="v-board" onclick="view('board')">Cutting board</button><button id="v-words" onclick="view('words')">Transcript</button></div>
-    <div id="view-words" hidden>
-      <div class="mainhead"><h2>Transcript: find a moment by what was said</h2></div>
-      <p class="keys">Works at once for YouTube videos that have captions. For other videos, run them once in the Finished stream tab with "Let AI read the whole stream"; their words are kept.</p>
+      <div id="view-words" hidden>
+      
+      <p class="keys">Works at once for YouTube videos that have captions. For other videos, run them once under "Find the best moments" with "Let AI read the whole stream"; their words are kept.</p>
       <div class="card" style="padding:14px">
         <label class="f" for="tw-url">Video link</label>
         <div class="btns" style="margin-top:0"><input type="text" id="tw-url" placeholder="https://www.youtube.com/watch?v=..." style="flex:1;min-width:240px"><button class="btn primary" id="tw-get" onclick="twGet()">Get the words</button></div>
@@ -543,63 +478,223 @@ kbd{background:rgba(255,255,255,.06)!important}
           </details>
         </div>
       </div>
-    </div>
-    <div id="view-board" hidden>
-      <div class="mainhead"><h2>Cutting board</h2><div class="filters" id="cb-list"></div></div>
-      <div class="empty" id="cb-empty" hidden><b>Nothing downloaded yet.</b>In step 1 open "Your own clip", give a video with a start and an end, and press "Download this part and open the cutting board".</div>
-      <div id="cb-body" hidden>
-        <p class="keys" id="cb-title"></p>
-        <div class="card" style="padding:14px">
-          <video id="cb-video" controls preload="metadata"></video>
-          <div class="tl big" id="cb-tl"><canvas></canvas><div id="cb-marks"></div><div class="ph" id="cb-ph"></div></div>
-          <div class="cbruler" id="cb-ruler"></div>
-          <div class="btns"><button class="btn primary" id="cb-cut">Cut here</button><button class="btn" id="cb-del">Remove the selected cut</button><button class="btn" id="cb-clear">Remove all cuts</button>
-            <span class="cbq">Split into <input type="number" id="cb-n" value="3" min="2" max="60" aria-label="number of equal parts"> equal parts <button class="btn" id="cb-eq" data-yours>Do it</button></span>
-            <span class="cbq">or cut every <input type="number" id="cb-s" value="50" min="8" max="300" aria-label="seconds per piece"> seconds <button class="btn" id="cb-ev" data-yours>Do it</button></span></div>
-          <p class="keys" style="margin:10px 0 0">Play the video or click the sound wave to move. Press <b>Cut here</b> where a clip should end and the next begin; drag an orange marker to move a cut. Keys: <kbd>Space</kbd> play or pause · <kbd>←</kbd> <kbd>→</kbd> one second (with <kbd>Shift</kbd> five) · <kbd>,</kbd> <kbd>.</kbd> a tenth of a second · <kbd>C</kbd> cut · <kbd>Delete</kbd> remove the selected cut</p>
-        </div>
-        <div class="card" style="padding:14px;margin-top:14px">
-          <h2 id="cb-count" style="font-size:15px;margin-bottom:8px"></h2>
-          <div id="cb-rows"></div>
-          <label class="check"><input type="checkbox" id="cb-label" checked> Show "Part 1", "Part 2"… on the videos, and "Part 2 next" at the end</label>
-          <div class="btns"><button class="btn primary" id="cb-make">Make the clips</button><button class="btn bad" id="cb-stop" onclick="stopRun()">Stop</button><button class="btn quiet" id="cb-drop">Delete this download</button></div>
-          <div class="bar indet" id="cb-bar" hidden><i></i></div><div class="pct" id="cb-pct" hidden></div>
-          <div class="note" id="cb-note">Nothing running.</div>
-        </div>
       </div>
-    </div>
-    <div id="view-track" hidden>
-      <div class="mainhead"><h2>What you posted, and what it earned</h2>
-        <div class="filters"><button class="chipbtn" id="b-views" onclick="refreshViews()">Refresh views</button><a class="chipbtn" href="/api/tracker.csv" style="text-decoration:none">Download as a spreadsheet</a></div></div>
-      <p class="keys">After you post a clip by hand, open that clip and use "Posted it? Log it". Views can be read automatically from public links; payouts and rejections you type in.</p>
-      <div class="totals" id="t-totals"></div>
-      <div class="card twrap"><table class="ttable"><thead><tr><th>Clip</th><th>Version</th><th>Campaign</th><th>Platform</th><th>Link</th><th>Status</th><th>Views</th><th>Paid ($)</th><th>Rejection reason or note</th><th></th></tr></thead><tbody id="t-rows"></tbody></table></div>
-      <div class="empty" id="t-empty" hidden><b>Nothing logged yet.</b>Make a clip's videos, post one by hand, then open the clip and use "Posted it? Log it".</div>
-    </div>
-    <div id="view-clips">
-    <div class="mainhead">
-      <h2><span class="step">2</span>Review the clips</h2>
-      <div class="filters" id="filters"></div>
-    </div>
-    <div class="sortrow">
+      <div id="videos-wrap" hidden><h2 class="sect">Your videos <small>click one to see its clips</small></h2><div class="videos" id="videos"></div></div>
+    </section>
+
+    <section class="page panelonly" id="page-live" hidden>
+      <div class="pagehead"><h1>Live channels</h1><span class="sub">Language: <b class="lang-mirror">English</b> · <a href="#" onclick="go('settings');return false">change</a></span></div>
+      <div id="tab-live" class="narrow"><div class="card"><div class="body">
+          <p class="help">Watches the streams while they are live and makes a draft clip each time something happens.</p>
+          <label class="f" for="o-channels">Channels, separated by spaces: Twitch names, Kick channels as kick.com/name, YouTube handles starting with @</label>
+          <input type="text" id="o-channels" placeholder="lacy xqc @youtubechannel">
+          <label class="check"><input type="checkbox" id="o-auto" onchange="act('/api/options',{watch_autostart:$('o-auto').checked})"> Start watching this list by itself when the program opens</label>
+          <p class="help" style="margin-top:4px">Creators who are not live yet are checked every half minute and clipped as soon as they go live. Add only creators you have a campaign or permission for.</p>
+          <label class="f">What should find the moments?</label>
+          <div class="modes" id="o-modes"></div>
+          <div class="btns"><button class="btn primary" id="b-start" onclick="startWatch()">Start watching</button><button class="btn bad" id="b-stop" onclick="act('/api/watch/stop',{})">Stop</button></div>
+          <div class="btns" style="align-items:center"><button class="btn" id="b-clipnow" onclick="clipNow()" disabled>Clip the last</button>
+            <select id="w-last" style="width:auto" aria-label="How many seconds to clip"><option value="15">15 seconds</option><option value="30" selected>30 seconds</option><option value="45">45 seconds</option><option value="60">60 seconds</option><option value="90">90 seconds</option></select></div>
+          <p class="help" style="margin-top:6px">Saw something chat did not react to? Press it right after the moment. The draft appears in a minute or two, at the top of the list.</p>
+          <div id="w-live"></div>
+          <div class="note" id="w-note">Not watching.</div>
+      </div></div></div>
+    </section>
+
+    <section class="page" id="view-clips">
+      <div class="pagehead"><h1>My clips</h1><span class="sub" id="scope"></span><span class="sp"></span>
+        <div class="panelonly"><div class="makebar"><button class="btn" id="b-ready" onclick="openReady()" title="Opens the folder on this computer where the finished videos are"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg>Open the videos folder</button>
+          <button class="btn bad" id="b-fstop" disabled onclick="stopAsk(true)" title="Stop making videos: now, or after the one being made">Stop</button>
+          <button class="btn primary" id="b-finish" onclick="act('/api/finish',{})">Make videos</button></div></div></div>
+      <div class="makestate panelonly"><div class="bar" id="f-bar" hidden><i></i></div><div class="pct" id="f-pct" hidden></div>
+        <div class="note" id="f-note" hidden>Nothing made yet in this session.</div><ul class="ready" id="f-ready"></ul></div>
+      <div class="listbar"><div class="filters" id="filters"></div><span class="sp"></span>
+        <input type="text" id="s-find" placeholder="Search titles and words" oninput="setArrange()" aria-label="Search the clips">
+        <button class="btn" id="b-filter" onclick="$('sortrow').hidden=!$('sortrow').hidden" title="Order, streamer, how it was found, when"><svg class="i" aria-hidden="true"><use href="#i-filter"/></svg>Sort and filter</button></div>
+      <div class="sortrow" id="sortrow" hidden>
       <label>Order <select id="s-sort" onchange="setArrange()"><option value="new">Newest first</option><option value="score">Best score first</option><option value="old">Oldest first</option></select></label>
       <label>Streamer <select id="s-who" onchange="setArrange()"><option value="">All</option></select></label>
       <label>Found by <select id="s-how" onchange="setArrange()"><option value="">Anything</option><option value="chat">Chat</option><option value="audio">Loud moment</option><option value="video">Fast action</option>
         <option value="said">Excited words</option><option value="ai">AI</option><option value="manual">Chosen by you</option></select></label>
       <label>Made <select id="s-when" onchange="setArrange()"><option value="">Any time</option><option value="1">Last hour</option><option value="24">Last 24 hours</option><option value="168">Last 7 days</option></select></label>
-      <input type="text" id="s-find" placeholder="Search the words, titles…" oninput="setArrange()" aria-label="Search the clips">
-      <button class="chipbtn" id="s-clear" hidden onclick="clearArrange()">Clear filters</button>
-      <span class="help" id="s-count" style="margin:0"></span>
-    </div>
-    <p class="keys" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><label for="z-pick">Show where an app covers the video:</label>
-      <select id="z-pick" style="width:auto;padding:3px 8px" onchange="setZones()"><option value="">Off</option><option value="tiktok">TikTok</option><option value="reels">Instagram Reels</option><option value="shorts">YouTube Shorts</option></select>
-      <span>(only on these previews, never in the video)</span></p>
-    <p class="keys">Keys: <kbd>J</kbd> <kbd>K</kbd> next and previous clip · <kbd>Space</kbd> play or pause · <kbd>A</kbd> approve · <kbd>R</kbd> reject</p>
-    <div class="clips" id="clips" data-filter="candidate"></div>
-    <div class="empty" id="empty" hidden></div>
-    </div>
+        <label>Show where an app covers the video <select id="z-pick" onchange="setZones()"><option value="">Off</option><option value="tiktok">TikTok</option><option value="reels">Instagram Reels</option><option value="shorts">YouTube Shorts</option></select></label>
+        <button class="btn" id="s-clear" hidden onclick="clearArrange()">Clear filters</button>
+        <span class="help" id="s-count" style="margin:0"></span>
+      </div>
+      <div class="clips" id="clips" data-filter="candidate"></div>
+      <div class="empty" id="empty" hidden></div>
+      <p class="keys" style="margin-top:18px">Click a video to play it. Keys: <kbd>J</kbd> <kbd>K</kbd> next and previous clip · <kbd>Space</kbd> play or pause · <kbd>A</kbd> approve · <kbd>R</kbd> reject · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close</p>
+    </section>
+
+    <section class="page panelonly" id="page-look" hidden>
+      <div class="pagehead"><h1>Look and branding</h1><span class="sub">Used for every clip made from now on. Clips already drafted get it when you press Make videos.</span></div>
+      <div class="cols">
+        <div>
+          <h2 class="sect">Captions</h2>
+          <div class="card"><div class="body">
+        <label class="f" for="o-cap" style="margin-top:0">Caption style</label>
+        <select id="o-cap" onchange="pickLook()"></select>
+        <div class="capprev" id="capprev" aria-hidden="true"></div>
+        <label class="f" for="o-anim">How the captions move</label>
+        <select id="o-anim" onchange="act('/api/options',{caption_animation:val('o-anim')})"></select>
+        <details class="sec" id="lookbox"><summary>Your own caption style <small>font, colours, size; save it as a profile</small></summary>
+          <label class="f" for="k-font">Font (one installed on this computer)</label>
+          <input type="text" id="k-font" list="k-fonts"><datalist id="k-fonts"><option>Arial Black</option><option>Impact</option><option>Segoe UI Black</option><option>Bahnschrift</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Georgia</option><option>Comic Sans MS</option><option>Franklin Gothic Heavy</option><option>Montserrat</option><option>Poppins</option></datalist>
+          <div class="three"><div><label class="f" for="k-size">Size</label><input type="number" id="k-size" min="40" max="160"></div>
+            <div><label class="f" for="k-outline">Outline</label><input type="number" id="k-outline" min="0" max="14"></div>
+            <div><label class="f" for="k-words">Words on screen</label><input type="number" id="k-words" min="1" max="6"></div></div>
+          <div class="two"><div><label class="f" for="k-text">Text colour</label><input type="color" id="k-text" style="height:38px;padding:2px"></div>
+            <div><label class="f" for="k-active">Colour of the spoken word</label><input type="color" id="k-active" style="height:38px;padding:2px"></div></div>
+          <label class="check"><input type="checkbox" id="k-upper"> ALL CAPITALS</label>
+          <div class="btns"><button class="btn" onclick="useLook()">Use this style</button><button class="btn" onclick="useLook(true)">Save as a profile…</button><button class="btn quiet" id="k-del" hidden onclick="delLook()">Delete this profile</button></div>
+          <p class="help" style="margin-top:6px">Clips already drafted get the new style when you press Make videos.</p>
+        </details>
+          </div></div>
+          <h2 class="sect">Template and opening</h2>
+          <div class="card"><div class="body">
+        <label class="switch"><input type="checkbox" id="o-opening" onchange="saveOpts()"><span><b>Eye-catching first seconds</b>Zoom-in, pop-in text, a whoosh and a progress bar.</span></label>
+        <details class="sec" id="tplbox" open><summary>Template and opening text <small>a card, a post, a news banner</small></summary>
+          <label class="f" for="t-tpl">Template</label>
+          <select id="t-tpl" onchange="saveFrame()"></select>
+          <div id="t-card" hidden>
+            <label class="f" for="t-bg">Behind the card</label>
+            <select id="t-bg" onchange="saveFrame()"></select>
+            <div class="two" id="t-cols" hidden><div><label class="f" for="t-c1">Colour</label><input type="color" id="t-c1" style="height:38px;padding:2px" onchange="saveFrame()"></div>
+              <div id="t-c2w"><label class="f" for="t-c2">Second colour</label><input type="color" id="t-c2" style="height:38px;padding:2px" onchange="saveFrame()"></div></div>
+            <div class="btns" id="t-img" hidden style="margin-top:8px"><button class="btn" onclick="$('t-imgfile').click()">Choose an image</button><span class="saved" id="t-imgname"></span></div>
+            <input type="file" id="t-imgfile" accept=".png,.jpg,.jpeg,.webp" hidden onchange="brandFile(this,'card')">
+          </div>
+          <div class="two" id="t-post" hidden><div><label class="f" for="t-name">Name on the post</label><input type="text" id="t-name" maxlength="40" placeholder="the streamer's name" onchange="saveFrame()"></div>
+            <div><label class="f" for="t-handle">Handle</label><input type="text" id="t-handle" maxlength="40" placeholder="@yourpage" onchange="saveFrame()"></div></div>
+          <label class="f" for="t-hook">Opening text stays for <b id="t-hookv"></b> seconds</label>
+          <input type="range" id="t-hook" min="2" max="60" step="1" oninput="$('t-hookv').textContent=this.value" onchange="act('/api/options',{hook_seconds:+this.value})">
+          <p class="help" style="margin-top:6px">The post, news and hook-box templates show the opening text for the whole clip. Clips already drafted get the template when you press Make videos, or use "Make this video's drafts again" on a clip.</p>
+        </details>
+          </div></div>
+        </div>
+        <div>
+          <h2 class="sect">Branding</h2>
+          <div class="card"><div class="body">
+        <details class="sec" id="brandbox" open><summary>Branding <small>your logo, an outro line, music</small></summary>
+          <label class="f">Logo or watermark</label>
+          <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-logofile').click()">Choose an image</button><span class="saved" id="g-logoname"></span><button class="btn quiet" id="g-logooff" hidden onclick="act('/api/options',{brand_logo:''})">Take it off</button></div>
+          <input type="file" id="g-logofile" accept=".png,.jpg,.jpeg,.webp,.gif" hidden onchange="brandFile(this,'logo')">
+          <div class="three"><div><label class="f" for="g-corner">Corner</label><select id="g-corner" onchange="saveBrand()"><option value="top-left">top left</option><option value="top-right">top right</option><option value="bottom-left">bottom left</option><option value="bottom-right">bottom right</option></select></div>
+            <div><label class="f" for="g-size">Size</label><input type="range" id="g-size" min="5" max="50" onchange="saveBrand()"></div>
+            <div><label class="f" for="g-op">See-through</label><input type="range" id="g-op" min="10" max="100" onchange="saveBrand()"></div></div>
+          <label class="f" for="g-outro">Outro line over the last seconds <small>(empty = none)</small></label>
+          <input type="text" id="g-outro" maxlength="60" placeholder="Follow for part 2" onchange="saveBrand()">
+          <label class="f">Music under the voice</label>
+          <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-musicfile').click()">Choose a sound file</button><span class="saved" id="g-musicname"></span><button class="btn quiet" id="g-musicoff" hidden onclick="act('/api/options',{brand_music:''})">Take it off</button></div>
+          <input type="file" id="g-musicfile" accept=".mp3,.m4a,.wav,.ogg,.aac,.flac" hidden onchange="brandFile(this,'music')">
+          <label class="f" for="g-vol">Music loudness</label><input type="range" id="g-vol" min="0" max="50" onchange="saveBrand()">
+          <label class="f" for="g-rise">Music grows louder over the last <b id="g-risev">0</b> seconds <small>(0 = stays level)</small></label>
+          <input type="range" id="g-rise" min="0" max="20" oninput="$('g-risev').textContent=this.value" onchange="saveBrand()">
+          <p class="help" style="margin-top:6px">Use only music you have the right to use: platforms mute or remove clips with other people's songs. Branding is added when a draft or a video is made; press Make videos to add it to clips already drafted.</p>
+        </details>
+          </div></div>
+          <h2 class="sect">Thumbnails</h2>
+          <div class="card"><div class="body">
+        <label class="f" for="o-thumb">Thumbnail for each clip <small>(a cover picture, made together with its videos)</small></label>
+        <select id="o-thumb" data-yours onchange="act('/api/options',{thumbnail:val('o-thumb')})"></select>
+        <p class="help" id="thumb-note" style="margin:6px 0 0"></p>
+        <details class="sec" id="thumb-more"><summary>What ChatGPT thumbnails look like <small id="thumb-sum"></small></summary>
+          <label class="switch"><input type="checkbox" id="o-face" onchange="act('/api/options',{thumbnail_face:this.checked})"><span><b>The streamer's face, big and excited</b>When the streamer is visible in the clip, their face is the main thing in the picture, with a shocked or excited look. Used when ChatGPT decides the picture itself.</span></label>
+          <label class="f" for="o-avoid">Things I do not want in thumbnails <small>(optional, in your own words)</small></label>
+          <textarea id="o-avoid" maxlength="500" style="min-height:58px" placeholder="For example: no guns, no blood, no half-naked people, no swear words, no red arrows"></textarea>
+          <div class="btns"><button class="btn" onclick="saveAvoid()">Save this list</button></div>
+          <p class="help" style="margin:6px 0 0">The list is used for every ChatGPT thumbnail, also the ones made from your own description. It is sent to OpenAI with the request. The free thumbnail is a real frame of the clip, so the list cannot change it.</p>
+        </details>
+          </div></div>
+          <h2 class="sect">Versions</h2>
+          <div class="card"><div class="body">
+        <label class="switch"><input type="checkbox" id="o-ab" onchange="saveOpts()"><span><b>A and B versions</b>Two versions of each clip with different opening text and title, to test which does better.</span></label>
+          </div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page panelonly" id="view-track" hidden>
+      <div class="pagehead"><h1>Posted and earnings</h1></div>
+      <div class="mainhead"><h2></h2>
+        <div class="filters"><button class="chipbtn" id="b-views" onclick="refreshViews()">Refresh views</button><a class="chipbtn" href="/api/tracker.csv" style="text-decoration:none">Download as a spreadsheet</a></div></div>
+      <p class="keys">After you post a clip by hand, open that clip and use "Posted it? Log it". Views can be read automatically from public links; payouts and rejections you type in.</p>
+      <div class="totals" id="t-totals"></div>
+      <div class="card twrap"><table class="ttable"><thead><tr><th>Clip</th><th>Version</th><th>Campaign</th><th>Platform</th><th>Link</th><th>Status</th><th>Views</th><th>Paid ($)</th><th>Rejection reason or note</th><th></th></tr></thead><tbody id="t-rows"></tbody></table></div>
+      <div class="empty" id="t-empty" hidden><b>Nothing logged yet.</b>Make a clip's videos, post one by hand, then open the clip and use "Posted it? Log it".</div>
+      <h2 class="sect">Campaign <small>checks every clip against a campaign's rules</small></h2>
+      <div class="card narrow"><div class="body">
+        <label class="f" for="o-camp">Campaign (checks every clip against its rules)</label>
+        <select id="o-camp" onchange="saveOpts()"></select>
+        <p class="help" id="camp-rules" style="margin:6px 0 0"></p>
+      </div></div>
+    </section>
+
+    <section class="page panelonly" id="page-settings" hidden>
+      <div class="pagehead"><h1>Settings</h1></div>
+      <div class="cols">
+        <div>
+          <h2 class="sect">Setup check <small id="h-sum"></small></h2>
+          <div class="card"><details id="healthbox" open><summary hidden><span id="h-badge"></span></summary><div class="body">
+          <div id="h-items"></div>
+          <div class="btns">
+            <button class="btn" id="b-hcheck" onclick="hAct('/api/health/check')">Run the full check</button>
+            <button class="btn" id="b-hrepair" data-yours onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. Continue?')">Repair</button>
+            <button class="btn primary" id="b-hupdate" hidden onclick="hAct('/api/health/update','Update takes the newest version from GitHub. Your clips, settings and keys are not touched. Continue?')">Update</button>
+          </div>
+          <div class="bar indet" id="h-bar" hidden><i></i></div><div class="pct" id="h-pct" hidden></div>
+          <div class="note" id="h-note" hidden></div>
+          </div></details></div>
+          <h2 class="sect">Language</h2>
+          <div class="card"><div class="body">
+        <details id="langbox" open><summary hidden>Language: <b id="lang-sum">English</b></summary>
+          <label class="f" for="l-speech">What the streamer speaks</label>
+          <select id="l-speech" onchange="saveLang()"><option value="en">English</option><option value="ur">Urdu</option><option value="hi">Hindi</option><option value="auto">Detect it (can guess wrong on mixed speech)</option></select>
+          <label class="f" for="l-script">Captions for Urdu or Hindi speech</label>
+          <select id="l-script" onchange="saveLang()"><option value="roman">Latin letters: "bhai ne kamaal kar diya" (best with Claude)</option><option value="native">Urdu or Hindi letters</option></select>
+          <label class="f" for="l-text">Opening text and titles written in</label>
+          <select id="l-text" onchange="saveLang()"><option value="Roman Urdu">Roman Urdu mixed with English</option><option>English</option><option value="Hinglish">Hinglish (Roman Hindi mixed with English)</option><option value="Urdu">Urdu letters</option><option value="Hindi">Hindi letters</option></select>
+          <label class="f" for="l-yt">Words of YouTube videos come from</label>
+          <select id="l-yt" onchange="saveLang()"><option value="auto">YouTube's own captions when it has them (seconds)</option><option value="off">Listening on this PC (minutes; try it if the captions are poor)</option></select>
+          <p class="help" style="margin-top:6px">Applies to clips made from now on. The narrator in explainer videos speaks English. Twitch, live streams and video files are always listened to on this PC.</p>
+        </details>
+          </div></div>
+        </div>
+        <div>
+          <h2 class="sect">AI for titles and ratings <small>optional</small></h2>
+          <div class="card"><div class="body">
+        <p class="help">Claude writes the opening text and titles, judges each clip, and can read a whole stream. Without it everything still works, with placeholder text.</p>
+        <label class="f" for="a-backend">How to reach Claude</label>
+        <select id="a-backend" data-yours onchange="saveAi()"></select>
+        <div id="a-auto">
+          <label class="f" for="a-prefer">When both work, use first</label>
+          <select id="a-prefer" onchange="saveAi()"></select>
+          <label class="switch"><input type="checkbox" id="a-fallback" data-yours onchange="saveAi()"><span><b>Use the other if the first fails</b>For example when your plan's limit is reached. This can move work onto your paid API key; the page says so when it happens.</span></label>
+        </div>
+        <div id="a-ways" style="margin-top:10px"></div>
+        <div class="two">
+          <div><label class="f" for="a-model">Model for clip text</label><select id="a-model" onchange="saveAi()"></select></div>
+          <div><label class="f" for="a-stream">Model for reading streams</label><select id="a-stream" onchange="saveAi()"></select></div>
+        </div>
+        <div class="note" id="a-note"></div>
+        <div class="note" id="a-local"></div>
+        <div class="btns"><button class="btn" id="b-aicheck" onclick="act2('/api/ai/check')">Check again</button>
+          <button class="btn" id="b-localai" data-yours hidden onclick="localAi()">Set up free local AI</button></div>
+          </div></div>
+        </div>
+      </div>
+    </section>
   </main>
 </div>
+<aside id="drawer" hidden aria-label="Activity log">
+  <header><b>Activity log</b><span class="saved">Problems are shown in red</span><button class="btn" onclick="actToggle(false)">Close</button></header>
+  <div class="body">
+    <h3>Watching live channels</h3><pre class="log" id="wlog"></pre>
+    <h3>Finding moments and making your own clips</h3><pre class="log" id="rlog"></pre><pre class="log" id="mlog" hidden></pre>
+    <h3>Making videos</h3><pre class="log" id="flog"></pre>
+    <h3>Setup, repair and updates</h3><pre class="log" id="hlog"></pre>
+  </div>
+</aside>
 <div class="modal" id="boxes" hidden>
   <div class="card">
     <h2>Face box and video box</h2>
@@ -633,7 +728,6 @@ kbd{background:rgba(255,255,255,.06)!important}
     <p class="help" style="margin-top:8px"><b>Cancel</b> keeps going. <b>Stop after this video</b> finishes the one being made, then stops. <b>Stop now</b> ends it in the middle; that one is not made. Videos already made are kept either way, and the clips that were not made stay approved.</p>
   </div>
 </div>
-<button id="helpbtn" onclick="helpToggle()" title="Ask how something works">? Ask</button>
 <div id="helpbox" hidden>
   <header><b>Ask about Stream Clipper</b><button class="btn quiet" style="margin:0;padding:4px 8px" onclick="helpClear()" title="Start a new chat">New chat</button><button class="x" style="position:static" onclick="helpToggle()" aria-label="Close help">×</button></header>
   <div id="helpmsgs"></div>
@@ -690,8 +784,8 @@ function toast(msg,err){if(err&&typeof HELP!=='undefined')HELP.said=String(msg);
   t.className=err?'err':'';t.style.display='block';clearTimeout(toastTimer);
   /* an explained error stays until it is closed: there is more to read, and its technical details can be opened */
   if(!p)toastTimer=setTimeout(()=>t.style.display='none',err?9000:2500)}
-let curTab='live', tabRunning=false;
-function tab(name){curTab=name;for(const n of ['live','vod','own']){$('tab-'+n).hidden=n!==name;$('t-'+n).className=n===name?'on':''}}
+let curTab='vod', tabRunning=false;
+function tab(name){if(name==='live'){go('live');return}go('new');sub(name)}
 function mode(){return (document.querySelector('[name=o-mode]:checked')||{}).value}
 /* A finished file's line ("READY ...He FAILED the jump.mp4") and ordinary INFO lines are not errors, whatever words a clip's title holds. */
 function isBad(l){return !/^(\d\d:\d\d:\d\d )?(READY|INFO) /.test(l)&&/ERROR|FAILED|NOT MADE|Traceback|Error:|fatal exception|STOPPED BY ITSELF/.test(l)}
@@ -825,7 +919,7 @@ async function act(url,body){
 async function localAi(){
   if(!confirm('Set up the free local AI on this computer?'+NL+NL+'It installs Ollama (a free program that runs AI models, about 1 GB) and downloads one model (about 2 GB). This takes a while. Progress shows under Setup check.'))return;
   const r=await send('/api/ai/local-setup'); if(r.error){toast(r.error,true);return}
-  $('healthbox').open=true; toast('Setting up the free local AI. Watch the progress under Setup check.'); show(r);
+  $('healthbox').open=true; go('settings'); toast('Setting up the free local AI. Watch the progress under Setup check.'); show(r);
 }
 async function clipNow(){
   const n=+val('w-last'), r=await send('/api/watch/clip-now',{seconds:n});
@@ -917,13 +1011,13 @@ const coverText=new Map();   /* a thumbnail description being typed, kept throug
 const coverOpen=new Set(), COVER_BY={frame:'Made from the clip',chatgpt:'Drawn by ChatGPT',prompt:'Drawn by ChatGPT from your description'};
 function cardHtml(c){
   /* a clip whose own record cannot be read: say so, and offer the one thing that can be done about it */
-  if(c.broken)return '<div style="grid-column:1/-1"><div class="cliperr"><b>This clip is damaged.</b> '+esc(c.error||'')+'</div><div style="margin-top:10px"><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+c.key+'\')">Delete</button></div></div>';
+  if(c.broken)return '<div class="tile" style="grid-column:1/-1"><div class="cliperr" style="white-space:normal"><b>This clip is damaged.</b> '+esc(c.error||'')+'</div><div style="margin-top:10px"><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+c.key+'\')">Delete</button></div></div>';
   const cv=c.cover||{}, k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
   const VN={'final.mp4':'A','final_b.mp4':'B','explained.mp4':'Explained A','explained_b.mp4':'Explained B','source.mp4':'Raw'};
   const tabs=(c.videos||[]).length>1||(c.videos||[]).includes('final.mp4')?'<div class="vtabs">'+(c.videos||[]).map(n=>'<button class="'+(n===c.video?'on':'')+'" onclick="showVid(\''+k+'\',\''+n+'\',this)">'+VN[n]+'</button>').join('')
     +(cv.made?'<button onclick="showCover(\''+k+'\',this)" title="This clip\'s thumbnail">Thumbnail</button>':'')
     +((c.videos||[]).includes('final.mp4')&&!(c.videos||[]).includes('final_b.mp4')?'<button onclick="makeB(\''+k+'\',this)" title="Render version B now so you can compare it">Make B preview</button>':'')+'</div>':'';
-  const vid=c.video?'<video controls preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+'"></video>'+tabs+'<small>'+shown+'</small>'
+  const vid=c.video?'<video'+(openKey===k?' controls':'')+' preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+'#t=1.5"></video>'+tabs+'<small>'+shown+'</small>'
     :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
   const pc=c.points>=70?'good':(c.points>=40?'':'meh');
   const chips='<span class="chip '+pc+'" title="One score from chat, sound, picture and AI. Higher is better."><b>Score '+c.points+'</b></span>'
@@ -938,9 +1032,32 @@ function cardHtml(c){
     +(c.exported?'<span class="chip good">Videos made</span>':'')
     +(cv.made?'<span class="chip good" title="'+esc(COVER_BY[cv.by]||'')+'">Thumbnail made</span>':'');
   const lay=[['','Automatic'],['split','Face on top, video below'],['crop','Video only, full height'],['split_under','Video on top, face below'],['blur','Whole picture on a blurred background'],['pip','Face in a corner over the video'],['circle','Face in a circle over the video']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
-  return '<div class="vid">'+vid+'</div><div class="info">'
-   +'<div class="chead"><h3>'+esc(c.channel||c.stream_title||'Your video')+'</h3>'+'<span class="newtag" title="Made in the last hour and not reviewed yet"'+(isNew(c)?'':' hidden')+'>NEW</span>'
-   +'<span class="when2" title="When this clip was made'+(c.decided_at?'. Decided '+esc(c.decided_at):'')+'">'+madeText(c.made_at)+'</span><span class="when">at '+clock(c.start_s)+' in the stream · '+Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s))+' s</span><span class="badge">'+STATUS_TEXT[place(c)]+'</span></div>'
+  const title=c.title||c.hook||String(c.transcript||'').slice(0,70)||'Untitled clip', who=c.channel||c.stream_title||'Your video', secs=Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s));
+  const where=place(c), isOpen=openKey===k;
+  const etabs=[['text','Text'],['versions','Versions']].concat(c.has_words?[['captions','Captions']]:[],[['trim','Trim and framing'],['thumb','Thumbnail',!!cv.error]],c.exported?[['posted','Posted']]:[]);
+  let tabNow=isOpen?(edTab.get(k)||'text'):'';if(isOpen&&!etabs.some(t=>t[0]===tabNow))tabNow='text';
+  const P=n=>' class="sec pane" data-tab="'+n+'"'+(tabNow===n?' open':'');
+  const decide=''
+   +(c.status!=='approved'?'<button class="btn ok" onclick="save(\''+k+'\',{status:\'approved\'})">Approve</button>':'')
+   +(c.status==='approved'&&!c.made?'<button class="btn ok" title="Make the videos of this one clip now, and leave the other approved clips for later" onclick="makeOne(\''+k+'\')">Make this clip\'s videos now</button>':'')
+   +(c.status==='approved'&&c.made?'<button class="btn" title="Make videos leaves finished clips alone. Press this if its file is gone from the videos folder, or you changed the caption look and want this clip made with the new one" onclick="makeOne(\''+k+'\',true)">Make its videos again</button>':'')
+   +(c.status==='approved'?'<button class="btn" title="Takes it out of Approved without mixing it into To review: it waits in the Pending list" onclick="save(\''+k+'\',{status:\'candidate\',held:true})">Move to Pending</button>':'')
+   +(c.status!=='candidate'||c.held?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\',held:false})">Back to review</button>':'')
+   +(c.status!=='rejected'?'<button class="btn bad" onclick="save(\''+k+'\',{status:\'rejected\'})">Reject</button>':'');
+  /* On the tile: the one or two things most people do next. Everything else is in the editor. */
+  const quick=where==='candidate'?'<button class="btn ok" title="Approve: its videos are made when you press Make videos" onclick="save(\''+k+'\',{status:\'approved\'})">'+ICON.check+'Approve</button><button class="btn icon bad" title="Reject" aria-label="Reject" onclick="save(\''+k+'\',{status:\'rejected\'})">'+ICON.x+'</button>'
+    :where==='pending'?'<button class="btn ok" onclick="save(\''+k+'\',{status:\'approved\'})">'+ICON.check+'Approve</button>'
+    :where==='approved'?'<button class="btn" title="Make the videos of this one clip now, and leave the other approved clips for later" onclick="makeOne(\''+k+'\')">Make now</button>'
+    :where==='rejected'?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\',held:false})">Back to review</button>':'';
+  return '<div class="edhead"><button class="btn" onclick="closeClip()" title="Back to the list (Esc). Changes are saved.">'+ICON.back+'Clips</button><h3>'+esc(title)+'</h3><span class="badge">'+STATUS_TEXT[where]+'</span>'
+   +'<span class="when">'+esc(who)+' · at '+clock(c.start_s)+' in the stream · '+secs+' s</span><span class="sp"></span>'+decide+'</div>'
+   +'<div class="vid">'+vid+'<span class="score num '+pc+'" title="One score from chat, sound, picture and AI. Higher is better.">'+c.points+'</span><span class="dur num">'+Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0')+'</span></div>'
+   +'<div class="tile"><button class="tt" onclick="openClip(\''+k+'\')" title="Open this clip to edit it">'+esc(title)+'</button>'
+   +'<div class="tm"><span class="who">'+esc(who)+'</span><span class="newtag" title="Made in the last hour and not reviewed yet"'+(isNew(c)?'':' hidden')+'>NEW</span>'
+   +'<span class="when2" title="When this clip was made'+(c.decided_at?'. Decided '+esc(c.decided_at):'')+'">'+madeText(c.made_at)+'</span></div>'
+   +(c.error?'<div class="tprob">Has a problem. Open it to read why.</div>':'')
+   +'<div class="ta">'+quick+'<button class="btn" onclick="openClip(\''+k+'\')" title="Text, captions, trim, framing, thumbnail, versions">'+ICON.edit+'Edit</button></div></div>'
+   +'<div class="info">'
    +'<div class="chips">'+chips+'</div>'
    +(c.ai_pick?'<div class="ai"><b>Why AI picked it:</b> '+esc(c.ai_pick)+'</div>':'')
    +(c.ai_judged&&c.copy_source==='plain'?'<div class="ai"><b>The opening text and titles below are placeholders,</b> because AI was not used: '+esc(c.copy_problem||'no reason recorded')+'. Type your own, or press "Write text with AI".</div>'
@@ -952,24 +1069,25 @@ function cardHtml(c){
    +((c.files||[]).length?'<div class="ai"><b>Finished file'+(c.files.length>1?'s':'')+' in the ready folder:</b> '+c.files.map(esc).join(' · ')+'</div>':'')
    +'<div class="said">'+(c.transcript?'“'+esc(c.transcript)+'”':'<span style="color:var(--muted)">No transcript yet.</span>')+'</div>'
    +(String(c.transcript||'').length>260?'<button class="more" onclick="this.previousElementSibling.classList.toggle(\'open\');this.textContent=this.textContent===\'Show all\'?\'Show less\':\'Show all\'">Show all</button>':'')
+   +'<div class="edtabs">'+etabs.map(t=>'<button class="'+(tabNow===t[0]?'on':'')+(t[2]?' flag':'')+'" data-tab="'+t[0]+'" onclick="edGo(\''+k+'\',\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>'
+   +'<details'+P('text')+'><summary>Text <small>opening text, title, description and hashtags</small></summary>'
    +'<div class="two"><div><label class="f">Opening text on the video (version A)</label><input type="text" name="hook" value="'+esc(c.hook)+'"></div>'
    +'<div><label class="f">Opening text, version B <small>(empty = same as A)</small></label><input type="text" name="hook_b" value="'+esc(c.hook_b)+'"></div></div>'
-   +'<details class="sec"'+(c.explainer||c.simple===false?' open':'')+'><summary>Versions to make <small>now: '+(c.simple===false?'the explainer only':(c.explainer?'the normal video and an explainer':'the normal video'))+'</small></summary>'
-   +'<label class="check"><input type="checkbox" name="simple"'+(c.simple!==false?' checked':'')+'> Make the normal video (the clip as it is, without a narrator)</label>'
-   +'<label class="check"><input type="checkbox" name="explainer"'+(c.explainer?' checked':'')+'> Make an explainer version (a narrator sets up the moment, then the clip plays)</label>'
-   +'<div class="two"><div><label class="f">What the narrator says (version A)</label><input type="text" name="intro" value="'+esc(c.intro)+'"></div>'
-   +'<div><label class="f">Narrator, version B <small>(empty = same as A)</small></label><input type="text" name="intro_b" value="'+esc(c.intro_b)+'"></div></div></details>'
-   +'<details class="sec"><summary>Upload text <small>title, description and hashtags to paste when you post</small></summary>'
    +'<div class="two"><div><label class="f">Title (version A)</label><input type="text" name="title" value="'+esc(c.title)+'"></div>'
    +'<div><label class="f">Title, version B</label><input type="text" name="title_b" value="'+esc(c.title_b)+'"></div></div>'
    +'<label class="f">Description</label><textarea name="description">'+esc(c.description)+'</textarea>'
    +'<label class="f">Hashtags (separated by spaces)</label><input type="text" name="tags" value="'+esc((c.tags||[]).join(' '))+'"></details>'
-   +(c.has_words?'<details class="sec" ontoggle="if(this.open)initWords(\''+k+'\')"><summary>Captions <small>fix a wrong word, or empty a box to remove it</small></summary>'
+   +'<details'+P('versions')+'><summary>Versions to make <small>now: '+(c.simple===false?'the explainer only':(c.explainer?'the normal video and an explainer':'the normal video'))+'</small></summary>'
+   +'<label class="check"><input type="checkbox" name="simple"'+(c.simple!==false?' checked':'')+'> Make the normal video (the clip as it is, without a narrator)</label>'
+   +'<label class="check"><input type="checkbox" name="explainer"'+(c.explainer?' checked':'')+'> Make an explainer version (a narrator sets up the moment, then the clip plays)</label>'
+   +'<div class="two"><div><label class="f">What the narrator says (version A)</label><input type="text" name="intro" value="'+esc(c.intro)+'"></div>'
+   +'<div><label class="f">Narrator, version B <small>(empty = same as A)</small></label><input type="text" name="intro_b" value="'+esc(c.intro_b)+'"></div></div></details>'
+   +(c.has_words?'<details'+P('captions')+' ontoggle="if(this.open)initWords(\''+k+'\')"><summary>Captions <small>fix a wrong word, or empty a box to remove it</small></summary>'
      +'<div class="words"></div><div class="btns"><button class="btn" onclick="saveWords(\''+k+'\')">Save captions</button>'
      +'<a class="btn" href="/api/clip/'+k+'/captions.srt" download>Download .srt</a><a class="btn" href="/api/clip/'+k+'/captions.vtt" download>Download .vtt</a>'
      +'<button class="btn" onclick="this.nextElementSibling.click()">Use a subtitle file…</button><input type="file" accept=".srt,.vtt,.txt" hidden onchange="subFile(this,\''+k+'\')"></div>'
      +'<p class="help" style="margin-top:6px">A subtitle file replaces these captions. Its times must count from the start of the clip.</p></details>':'')
-   +'<details class="sec" ontoggle="if(this.open)initTrim(\''+k+'\')"><summary>Fine-tune <small>where it starts and ends, framing, ad label</small></summary>'
+   +'<details'+P('trim')+' ontoggle="if(this.open)initTrim(\''+k+'\')"><summary>Trim and framing <small>where it starts and ends, framing, ad label</small></summary>'
    +'<div class="trim"></div>'
    +'<div class="three"><div><label class="f">Start (seconds into the stream)</label><input type="number" step="0.5" name="cut_start_s" value="'+esc(c.cut_start_s??c.start_s)+'"></div>'
    +'<div><label class="f">End</label><input type="number" step="0.5" name="cut_end_s" value="'+esc(c.cut_end_s??c.end_s)+'"></div>'
@@ -978,7 +1096,7 @@ function cardHtml(c){
    +(c.framing?'<div class="btns" style="margin-top:0"><button class="btn" onclick="openBoxes(\''+k+'\')">Set the face box and the video box</button>'
        +'<button class="btn" title="Draft every unfinished clip of this video again with the caption style, template and branding chosen now" onclick="remakeAll(\''+k+'\')">Make this video\'s drafts again</button></div>':'')
    +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
-   +'<details class="sec"'+(coverOpen.has(k)||cv.error?' open':'')+' ontoggle="this.open?coverOpen.add(\''+k+'\'):coverOpen.delete(\''+k+'\')"><summary>Thumbnail <small>a cover picture for Shorts, Reels and TikTok (optional)'+(cv.made?' · made':'')+(cv.error?' · <b style="color:var(--bad)">could not be made</b>':'')+'</small></summary>'
+   +'<details'+P('thumb')+' ontoggle="this.open?coverOpen.add(\''+k+'\'):coverOpen.delete(\''+k+'\')"><summary>Thumbnail <small>a cover picture for Shorts, Reels and TikTok (optional)'+(cv.made?' · made':'')+(cv.error?' · <b style="color:var(--bad)">could not be made</b>':'')+'</small></summary>'
    +(cv.made?'<img class="cover" alt="This clip\'s thumbnail" src="/media/'+k+'/cover.jpg?v='+cv.mtime+'"><p class="help" style="margin:0 0 6px">'+esc(COVER_BY[cv.by]||'Made')+(cv.at?' · '+esc(cv.at):'')+(cv.words&&cv.by!=='frame'?' · words on it: '+esc(cv.words):'')+'. '+(c.exported?'It is saved beside the finished video, with the same name.':'It is put beside the finished video, with the same name, when the videos are made.')+'</p>'
      :'<p class="help" style="margin-top:8px">No thumbnail yet. Nothing has to be made: this is an extra.</p>')
    +(cv.error?'<div class="cliperr"><b>The thumbnail could not be made:</b> '+esc(cv.error)+'</div>':'')
@@ -988,21 +1106,13 @@ function cardHtml(c){
    +'<textarea name="t_cover" maxlength="2000" style="min-height:64px" oninput="coverText.set(\''+k+'\',this.value)" placeholder="For example: the streamer shocked on the left, the bike upside down in the air on the right, big yellow text NO WAY">'+esc(coverText.has(k)?coverText.get(k):(cv.prompt||''))+'</textarea>'
    +'<div class="btns"><button class="btn" onclick="makeCover(\''+k+'\',\'prompt\',this)">Make it from my description</button>'
    +(cv.made?'<a class="btn" href="/media/'+k+'/cover.jpg" download="thumbnail.jpg">Download</a><button class="btn quiet" onclick="makeCover(\''+k+'\',\'none\',this)">Remove thumbnail</button>':'')+'</div></details>'
-   +(c.exported?'<details class="sec"><summary>Posted it? Log it <small>keeps views, payouts and rejections in the Tracker</small></summary>'
+   +(c.exported?'<details'+P('posted')+'><summary>Posted it? Log it <small>keeps views, payouts and rejections in the Tracker</small></summary>'
      +'<div class="three"><div><label class="f">Where</label><select name="t_platform"><option>YouTube Shorts</option><option>TikTok</option><option>Instagram Reels</option><option>Facebook Reels</option><option>Other</option></select></div>'
      +'<div><label class="f">Version</label><select name="t_version"><option>A</option><option>B</option><option>Explained A</option><option>Explained B</option></select></div>'
      +'<div><label class="f">Link to the post</label><input type="text" name="t_url" placeholder="https://..."></div></div>'
      +'<label class="f">Campaign (leave empty if none)</label><input type="text" name="t_campaign" value="'+esc(c.campaign)+'">'
      +'<div class="btns"><button class="btn" data-act="log" data-key="'+esc(k)+'">Add to the tracker</button></div></details>':'')
-   /* The buttons that decide about the clip come first and fit where the clip is now; the tools sit on their own line. */
-   +'<div class="acts">'
-   +(c.status!=='approved'?'<button class="btn ok" onclick="save(\''+k+'\',{status:\'approved\'})">Approve</button>':'')
-   +(c.status==='approved'&&!c.made?'<button class="btn ok" title="Make the videos of this one clip now, and leave the other approved clips for later" onclick="makeOne(\''+k+'\')">Make this clip\'s videos now</button>':'')
-   +(c.status==='approved'&&c.made?'<button class="btn" title="The green button leaves finished clips alone. Press this if its file is gone from the videos folder, or you changed the caption look and want this clip made with the new one" onclick="makeOne(\''+k+'\',true)">Make its videos again</button>':'')
-   +(c.status==='approved'?'<button class="btn" title="Takes it out of Approved without mixing it into To review: it waits in the Pending list" onclick="save(\''+k+'\',{status:\'candidate\',held:true})">Move to Pending</button>':'')
-   +(c.status!=='candidate'||c.held?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\',held:false})">Back to review</button>':'')
-   +(c.status!=='rejected'?'<button class="btn bad" onclick="save(\''+k+'\',{status:\'rejected\'})">Reject</button>':'')
-   +'<span class="brk"></span><div class="tools"><button class="btn" onclick="save(\''+k+'\')">Save changes</button>'
+   +'<div class="acts"><div class="tools"><button class="btn" onclick="save(\''+k+'\')">Save changes</button>'
    +'<button class="btn" onclick="rewrite(\''+k+'\',this)">Write text with AI</button>'
    +'<span class="saved"></span><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+k+'\')">Delete</button></div></div></div>';
 }
@@ -1011,15 +1121,16 @@ function busy(el){return el.dataset.dirty==='1'||[...el.querySelectorAll('video'
 function drawFilters(clips,shownList){
   const n={candidate:0,approved:0,pending:0,done:0,rejected:0};for(const c of clips){const p=place(c);n[p]=(n[p]||0)+1}
   $('filters').innerHTML=[['candidate','To review'],['approved','Approved'],['pending','Pending'],['done','Done'],['rejected','Rejected'],['all','All']].map(f=>
-    '<button class="chipbtn'+(filter===f[0]?' on':'')+'" onclick="setFilter(\''+f[0]+'\')">'+f[1]+'<i>'+(f[0]==='all'?clips.length:n[f[0]])+'</i></button>').join('');
-  if(filter==='rejected'&&n.rejected)$('filters').insertAdjacentHTML('beforeend','<button class="chipbtn" style="color:var(--bad);border-color:var(--bad)" onclick="delRejected('+n.rejected+')">Delete all rejected</button>');
-  if(filter==='approved'&&n.approved)$('filters').insertAdjacentHTML('beforeend','<button class="chipbtn" data-yours title="Takes every approved clip out of Make videos. They wait in the Pending list, not mixed into To review" onclick="holdApproved('+n.approved+')">Move all '+n.approved+' to Pending</button>');
+    '<button class="chipbtn'+(filter===f[0]?' on':'')+(['pending','rejected','all'].includes(f[0])?' minor':'')+'" onclick="setFilter(\''+f[0]+'\')">'+f[1]+'<i>'+(f[0]==='all'?clips.length:n[f[0]])+'</i></button>').join('');
+  if(filter==='rejected'&&n.rejected)$('filters').insertAdjacentHTML('beforeend','<button class="chipbtn act" style="color:var(--bad)" onclick="delRejected('+n.rejected+')">Delete all rejected</button>');
+  if(filter==='approved'&&n.approved)$('filters').insertAdjacentHTML('beforeend','<button class="chipbtn act" data-yours title="Takes every approved clip out of Make videos. They wait in the Pending list, not mixed into To review" onclick="holdApproved('+n.approved+')">Move all '+n.approved+' to Pending</button>');
+  $('n-count').textContent=n.candidate||'';$('n-count').dataset.n=n.candidate;drawVideos(clips);
   $('p-count').textContent=n.candidate+' to review · '+n.approved+' approved · '+(n.pending?n.pending+' pending · ':'')+n.done+' done';
-  if(HAS_PANEL)$('b-finish').textContent=n.approved?'Make videos for '+n.approved+' approved clip'+(n.approved>1?'s':''):'Make videos (approve a clip first)';
+  if(HAS_PANEL)$('b-finish').textContent=n.approved?'Make '+n.approved+' video'+(n.approved>1?'s':''):'Make videos';
   const shown=shownList.filter(c=>filter==='all'||place(c)===filter).length, em=$('empty');
   em.hidden=shown>0;
-  em.innerHTML=(clips.length&&shownList.length<clips.length&&(filter==='all'?clips.length:n[filter])>0)?'<b>No clip matches the filters.</b>Press Clear filters above the list.':clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',pending:'in Pending. A clip you take back from Approved with "Move to Pending" waits here',done:'finished yet. Approve a clip and press the green button',rejected:'rejected'}[filter]||'in this list')+'.'
-    :'<b>No clips yet.</b>'+(HAS_PANEL?'Start watching a live stream, or paste a finished stream, in step 1 on the left.':'Run find first.');
+  em.innerHTML=(clips.length&&shownList.length<clips.length&&(filter==='all'?clips.length:n[filter])>0)?'<b>No clip matches the filters.</b>Press Sort and filter, then Clear filters.':clips.length?'<b>Nothing here.</b>No clips are '+({candidate:'waiting for review',approved:'approved and waiting for their videos',pending:'in Pending. A clip you take back from Approved with "Move to Pending" waits here',done:'finished yet. Approve a clip and press Make videos',rejected:'rejected'}[filter]||'in this list')+'.'
+    :'<b>No clips yet.</b>'+(HAS_PANEL?'Paste a finished stream under New clips, or start watching under Live channels.':'Run find first.');
 }
 function setFilter(f){filter=f;$('clips').dataset.filter=f;loadClips()}
 let known=[];
@@ -1076,6 +1187,7 @@ async function loadClips(){
         if(e.target.closest&&e.target.closest('.words'))el.dataset.wdirty='1';el.dataset.dirty='1';const s=el.querySelector('.acts .saved');s.textContent='Unsaved changes';s.className='saved warn'});
       if(prev)prev.after(el);else box.prepend(el)}
     else if(sig(c)!==el.dataset.m&&!busy(el)){el.dataset.status=place(c);el.dataset.m=sig(c);el._c=c;el.innerHTML=cardHtml(c)}
+    else el._c=c;
     /* the clock on the card moves on without redrawing the card (a redraw would close fold-outs and rewind the video) */
     const w2=el.querySelector('.when2'), nt=el.querySelector('.newtag');if(w2)w2.textContent=madeText(c.made_at);if(nt)nt.hidden=!isNew(c);
     el.hidden=!fits(c,a)&&!busy(el);   /* a card you are typing in or watching is never hidden under you */
@@ -1085,7 +1197,7 @@ async function loadClips(){
   const order=clips.map(c=>domId(c.key)), have=[...box.children].map(e=>e.id);
   if(order.join()!==have.join()&&![...box.children].some(busy))for(const id of order)box.appendChild($(id));
   const shownNow=clips.filter(c=>fits(c,a)), filtering=!!(a.who||a.how||a.when||a.find);
-  $('s-clear').hidden=!filtering;$('s-count').textContent=filtering?shownNow.length+' of '+clips.length+' clips match':'';
+  $('s-clear').hidden=!filtering;if(a.who||a.how||a.when)$('sortrow').hidden=false;$('s-count').textContent=filtering?shownNow.length+' of '+clips.length+' clips match':'';
   drawFilters(clips,shownNow);
 }
 async function save(key,extra){
@@ -1109,6 +1221,7 @@ async function save(key,extra){
   el.dataset.dirty='';el.dataset.wdirty='';el.dataset.m='';  /* redraw from the saved state on the next load */
   if(document.activeElement)document.activeElement.blur();
   const v=el.querySelector('video');if(v)v.pause();
+  if(extra&&extra.status&&el.classList.contains('open'))closeClip(true);   /* decided: back to the list */
   toast(extra&&extra.held?'Moved to Pending':(extra&&extra.status?({approved:'Approved',rejected:'Rejected',candidate:'Moved back to review'}[s.status]):'Saved'));
   loadClips();
   return true;
@@ -1592,7 +1705,7 @@ function twAdd(){if(TW.a==null||TW.b==null)return;
   TW.picks.push([TW.a,TW.b,'']);TW.picks.sort((x,y)=>x[0]-y[0]);TW.a=TW.b=null;twDraw()}
 async function twMake(){
   const r=await send('/api/cut',{source:TW.url,ranges:TW.picks.map(p=>[p[0],p[1]])}); if(r.error){toast(r.error,true);return}
-  cbJob='pieces';cbWasRunning=true;show(r);toast('Making '+TW.picks.length+' clip'+(TW.picks.length>1?'s':'')+'. Progress shows in step 1; they appear under Clips.');TW.picks=[];twDraw();
+  cbJob='pieces';cbWasRunning=true;show(r);toast('Making '+TW.picks.length+' clip'+(TW.picks.length>1?'s':'')+'. They appear under My clips when they are ready; the Activity log shows the progress.');TW.picks=[];twDraw();
 }
 async function twAnswers(){
   const r=await send('/api/words/answers',{text:val('tw-ans'),duration_s:TW.dur}); if(r.error){toast(r.error,true);return}
@@ -1618,14 +1731,15 @@ function helpClear(){HELP.turns=[];HELP.chat++;HELP.busy=false;$('helpsend').dis
   +'<div class="hsug">'+HELP_STARTERS.map(q=>'<button type="button" data-q="'+esc(q)+'">'+esc(q)+'</button>').join('')+'</div>'}
 /* Where a thing sits, in words: the view, the step-1 tab, the box and any fold-out it is inside. */
 function helpWhere(el){
-  const out=[], view=el.closest('[id^="view-"]'), tabp=el.closest('[id^="tab-"]'), card=el.closest('.card'), clip=el.closest('.clip'), modal=el.closest('.modal');
-  if(view)out.push({clips:'Clips view',track:'Tracker view',board:'Cutting board view',words:'Transcript view'}[view.id.slice(5)]||view.id);
-  if(clip)out.push('on each clip\'s card (this is the first clip\'s)');
-  if(card&&!clip){const h=card.querySelector('h2');if(h)out.push(h.textContent.trim().replace(/\s+/g,' '))}
-  if(tabp)out.push('tab "'+({live:'Live streams',vod:'Finished stream',own:'Your own clip'}[tabp.id.slice(4)]||tabp.id)+'"');
-  for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details')){const s=d.querySelector('summary');if(s&&s!==el)out.push('inside the fold-out "'+s.textContent.trim().replace(/\s+/g,' ').slice(0,50)+'"')}
+  const out=[], page=el.closest('.page'), part=el.closest('#tab-vod,#tab-own,#view-board,#view-words'), card=el.closest('.card'), clip=el.closest('.clip'), modal=el.closest('.modal');
+  if(el.closest('#side'))out.push('menu on the left');
+  if(page)out.push('page "'+(PAGE_NAME[Object.keys(PAGES).find(k=>PAGES[k]===page.id)]||page.id)+'"');
+  if(part)out.push('tab "'+SUB_NAME[Object.keys(SUBS).find(k=>SUBS[k]===part.id)]+'"');
+  if(clip)out.push('on each clip\'s card (this is the first clip\'s)'+(el.closest('.info,.edhead')?', in its editor (press Edit on the clip)':''));
+  if(card&&!clip){let h=card.querySelector('h2');if(!h){let p=card.previousElementSibling;while(p&&!p.matches('.sect'))p=p.previousElementSibling;h=p}if(h&&h.textContent.trim())out.push(h.textContent.trim().replace(/\s+/g,' '))}
+  for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details')){const s=d.querySelector('summary');if(s&&s!==el&&!s.hidden)out.push((d.classList.contains('pane')?'under the tab "':'inside the fold-out "')+s.textContent.trim().replace(/\s+/g,' ').slice(0,50)+'"')}
   if(modal)out.push(modal.id==='stopbox'?'in the "Stop making videos?" window':'in the box editor window');
-  if(el.closest('.top'))out.push('top bar');
+  if(el.closest('#drawer'))out.push('in the Activity log panel');
   return out.join(' > ')||'on the page'}
 function helpLabel(el){
   let t='';const tag=el.tagName;
@@ -1665,7 +1779,7 @@ function helpTargets(){
     if(out.length>=400)break}
   return out}
 function helpState(){const s=last||{},h=s.health||{};
-  return {view:['clips','track','board','words'].find(v=>!$('view-'+v).hidden),tab:curTab,watching:s.watching?('yes: '+(s.channels||'')):false,running:!!s.running,finishing:!!s.finishing,
+  return {view:PAGE_NAME[curPage]+(curPage==='new'?' > '+SUB_NAME[curSub]:'')+(openKey?' > one clip open in the editor':''),tab:curTab,watching:s.watching?('yes: '+(s.channels||'')):false,running:!!s.running,finishing:!!s.finishing,
     progress:s.run_progress?(Math.floor(s.run_progress.percent)+'% '+s.run_progress.stage+' '+(s.run_progress.text||'')):'',setup:h.summary?h.summary.text:'',
     ai:s.ai?(s.ai.problem?('not available: '+s.ai.problem):'working')+((s.ai.local||{}).ready?', free local AI ready':''):'',clips:$('p-count').textContent,errors:errShown}}
 /* An older answer points at things by the keys it was given. Bring those keys back; a thing whose card was redrawn since
@@ -1787,10 +1901,14 @@ async function helpDo(box){
 /* Bring a thing into view: open its view, its tab and every fold-out around it. Returns the thing to highlight (the nearest visible one). */
 function helpReveal(el){
   if(!document.body.contains(el))return null;
-  const view=el.closest('[id^="view-"]');if(view&&view.hidden)view_(view.id.slice(5));
-  const tabp=el.closest('[id^="tab-"]');if(tabp&&tabp.hidden)tab(tabp.id.slice(4));
-  for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details'))if(!d.open&&d.querySelector('summary')!==el)d.open=true;
+  const page=el.closest('.page');if(page&&page.hidden)go(Object.keys(PAGES).find(k=>PAGES[k]===page.id));
+  const part=el.closest('#tab-vod,#tab-own,#view-board,#view-words');if(part&&part.hidden)sub(Object.keys(SUBS).find(k=>SUBS[k]===part.id));
+  if(el.closest('#sortrow'))$('sortrow').hidden=false;
+  if(el.closest('#drawer'))actToggle(true);
   const clip=el.closest('.clip');if(clip&&clip.offsetParent===null&&filter!=='all')setFilter('all');
+  if(clip&&el.closest('.info,.edhead')&&!clip.classList.contains('open')&&clip._c){const pane=el.closest('details.pane');openClip(clip._c.key,pane?pane.dataset.tab:'text')}
+  else if(clip&&clip.classList.contains('open')){const pane=el.closest('details.pane');if(pane&&!pane.open)edGo(clip._c.key,pane.dataset.tab)}
+  for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details'))if(!d.open&&!d.classList.contains('pane')&&d.querySelector('summary')!==el)d.open=true;
   let show=el;while(show&&show.offsetParent===null&&show.parentElement)show=show.parentElement;   /* hidden right now: point at what holds it */
   return (show===document.body||show===document.documentElement||show.id==='boxes')?null:show}
 function view_(n){view(n)}
@@ -1829,8 +1947,7 @@ function helpInit(){
 helpInit();
 
 /* ---------- tracker ---------- */
-function view(n){for(const x of ['clips','track','board','words']){$('view-'+x).hidden=n!==x;$('v-'+x).className=n===x?'on':''}
-  if(n!=='board')$('cb-video').pause();if(n==='track')loadTracker();if(n==='board')loadBoard()}
+function view(n){if(n==='clips'||n==='track')go(n);else{go('new');sub(n)}}
 async function send(url,body){
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
     if(!r.ok)return {error:await r.text()}; return await r.json()}
@@ -1889,8 +2006,10 @@ let cur=null;
 function shownCards(){return [...$('clips').children].filter(e=>e.offsetParent!==null)}
 function setCur(el){if(cur)cur.classList.remove('cur');cur=el||null;if(cur){cur.classList.add('cur');cur.scrollIntoView({block:'center',behavior:'smooth'})}}
 document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&$('boxes').hidden&&$('stopbox').hidden&&$('spot').hidden){if(!$('drawer').hidden){actToggle(false);return}if(openKey){closeClip();e.preventDefault();return}}
   if($('view-clips').hidden||!$('boxes').hidden||!$('stopbox').hidden||!$('spot').hidden||!$('helpbox').hidden||HELP.doing)return;   /* words meant for the chat must never approve or reject */
   if(e.ctrlKey||e.metaKey||e.altKey||(e.target.closest&&e.target.closest('input,textarea,select,button,summary,[contenteditable]')))return;
+  if(openKey)return;   /* in the editor the keys belong to what is being edited */
   const cards=shownCards(); if(cur&&!cards.includes(cur)){cur.classList.remove('cur');cur=null}
   const i=cards.indexOf(cur), k=e.key.toLowerCase();
   if(k==='j'||k==='arrowdown'){setCur(cards[Math.min(cards.length-1,i+1)]);e.preventDefault()}
@@ -1899,17 +2018,79 @@ document.addEventListener('keydown',e=>{
     const key=(cur._c&&cur._c.key)||cur.id.slice(2).replace('--','/'), next=cards[i+1]||cards[i-1]||null;
     if(cur._c&&cur._c.broken){toast('This clip is damaged and cannot be approved or rejected. Press Delete on its card to remove it.',true);e.preventDefault();return}
     save(key,{status:k==='a'?'approved':'rejected'});setCur(next);e.preventDefault()}
+  else if(cur&&(k==='enter'||k==='e')&&cur._c&&!cur._c.broken){openClip(cur._c.key);e.preventDefault()}
   else if(cur&&k===' '){const v=cur.querySelector('.vid video');if(v){v.paused?v.play().catch(()=>{}):v.pause()}e.preventDefault()}
 });
 async function clipLoop(){try{await loadClips()}catch(e){setErr('THE PAGE HIT A FAULT OF ITS OWN while drawing the clips ('+e+'). The program is still running. Reload the page; if this stays, report this line.')}
   setTimeout(clipLoop,8000)}
+
+/* ---------- pages: one at a time, chosen in the menu on the left ---------- */
+const ICON={};for(const n of ['check','x','edit','back'])ICON[n]='<svg class="i" aria-hidden="true"><use href="#i-'+n+'"/></svg>';
+const PAGES={new:'page-new',live:'page-live',clips:'view-clips',look:'page-look',track:'view-track',settings:'page-settings'};
+const PAGE_NAME={new:'New clips',live:'Live channels',clips:'My clips',look:'Look and branding',track:'Posted and earnings',settings:'Settings'};
+const SUBS={vod:'tab-vod',own:'tab-own',board:'view-board',words:'view-words'};
+const SUB_NAME={vod:'Find the best moments',own:'Pick the part myself',board:'Cutting board',words:'Search what was said'};
+let curPage='clips', curSub='vod';
+function go(p){
+  if(!PAGES[p]||(!HAS_PANEL&&p!=='clips'))p=HAS_PANEL?'new':'clips';
+  if(openKey)closeClip();
+  curPage=p;for(const k in PAGES){$(PAGES[k]).hidden=k!==p;const b=$('n-'+k);if(b)b.className=k===p?'on':''}
+  if(p!=='new')$('cb-video').pause();if(p==='track')loadTracker();if(p==='new'&&curSub==='board')loadBoard();
+  try{localStorage.setItem('page',p)}catch(e){}
+  window.scrollTo(0,0)}
+function sub(n){
+  if(!SUBS[n])n='vod';curSub=n;if(n==='vod'||n==='own')curTab=n;
+  for(const k in SUBS){$(SUBS[k]).hidden=k!==n;$((k==='board'||k==='words'?'v-':'t-')+k).className=k===n?'on':''}
+  $('videos-wrap').style.display=(n==='vod'||n==='own')?'':'none';
+  if(n!=='board')$('cb-video').pause();if(n==='board')loadBoard()}
+function actToggle(open){const d=$('drawer');d.hidden=open===undefined?!d.hidden:!open}
+/* The videos there are clips of, newest first, on the first page: one click shows that video's clips. */
+function drawVideos(clips){
+  const by=new Map();
+  for(const c of clips){const id=String(c.key).split('/')[0], g=by.get(id)||{who:c.channel||c.stream_title||'Your video',title:c.channel?(c.stream_title||''):'',n:{},t:0};
+    const p=place(c);g.n[p]=(g.n[p]||0)+1;g.t=Math.max(g.t,Date.parse(String(c.made_at||'').replace(' ','T'))||0);by.set(id,g)}
+  const list=[...by.values()].sort((x,y)=>y.t-x.t).slice(0,12);
+  const html=list.map(g=>'<button data-who="'+esc(g.who)+'" onclick="pickVideo(this.dataset.who)"><b>'+esc(g.who)+'</b><span>'+esc(g.title||'\u00a0')+'</span>'
+    +(g.n.candidate?'<i class="tag new">'+g.n.candidate+' to review</i>':'')+(g.n.approved?'<i class="tag">'+g.n.approved+' approved</i>':'')+(g.n.done?'<i class="tag ok">'+g.n.done+' done</i>':'')+'</button>').join('');
+  const box=$('videos');if(box._h!==html){box._h=html;box.innerHTML=html}
+  $('videos-wrap').hidden=!list.length}
+function pickVideo(who){go('clips');const s=$('s-who');if([...s.options].some(o=>o.value===who))s.value=who;setArrange();setFilter('candidate')}
+/* ---------- one clip opened as an editor: the same card, shown over the page with its sections as tabs ---------- */
+let openKey='';const edTab=new Map();
+function edGo(key,name){
+  const el=$(domId(key));if(!el)return;const panes=[...el.querySelectorAll('details.pane')];
+  if(!panes.some(d=>d.dataset.tab===name))name='text';edTab.set(key,name);
+  for(const d of panes)d.open=d.dataset.tab===name;
+  for(const b of el.querySelectorAll('.edtabs button'))b.classList.toggle('on',b.dataset.tab===name);
+  if(name==='trim')initTrim(key);if(name==='captions')initWords(key)}
+function openClip(key,tabName){
+  const el=$(domId(key));if(!el||(el._c&&el._c.broken))return;
+  if(curPage!=='clips')go('clips');if(openKey&&openKey!==key)closeClip();
+  openKey=key;el.classList.add('open');document.body.classList.add('editing');el.scrollTop=0;
+  const v=el.querySelector('.vid video');if(v){v.setAttribute('controls','');if(!v.dataset.begun){v.dataset.begun='1';v.currentTime=0}}
+  for(const o of document.querySelectorAll('#clips video'))if(o!==v)o.pause();
+  edGo(key,tabName||edTab.get(key)||'text')}
+function closeClip(decided){
+  const key=openKey, el=key&&$(domId(key));openKey='';document.body.classList.remove('editing');if(!el)return;
+  el.classList.remove('open');
+  const v=el.querySelector('.vid video');if(v){v.pause();v.removeAttribute('controls')}
+  for(const d of el.querySelectorAll('details.pane'))d.open=false;
+  if(!decided&&el.dataset.dirty==='1')save(key);   /* what was typed is not lost by going back */
+  if(cur)cur.classList.remove('cur');cur=el;el.classList.add('cur')}
+$('clips').addEventListener('click',e=>{
+  const v=e.target.closest&&e.target.closest('.vid video');if(!v)return;const el=v.closest('.clip');if(!el||el.classList.contains('open'))return;
+  for(const o of document.querySelectorAll('#clips video'))if(o!==v)o.pause();
+  if(v.paused){if(!v.dataset.begun){v.dataset.begun='1';v.currentTime=0}v.play().catch(()=>{})}else v.pause();
+  if(cur)cur.classList.remove('cur');cur=el;el.classList.add('cur')});
+$('clips').addEventListener('dblclick',e=>{const el=e.target.closest&&e.target.closest('.clip');if(el&&el._c&&!el.classList.contains('open')&&e.target.closest('.vid'))openClip(el._c.key)});
+setInterval(()=>{const t=$('lang-sum').textContent;for(const m of document.querySelectorAll('.lang-mirror'))if(m.textContent!==t)m.textContent=t},1500);
 $('scope').textContent=__TITLE__;
 if(HAS_PANEL){for(const id of ['m-sh','m-sm','m-ss','m-eh','m-em','m-es'])$(id).addEventListener('input',ownHint);ownHint()}
-if(HAS_PANEL)poll();else $('side').remove();
-if(!HAS_PANEL)document.querySelector('.layout').style.gridTemplateColumns='1fr';
+if(HAS_PANEL)poll();else document.body.classList.add('nopanel');
 try{$('z-pick').value=localStorage.getItem('zones')||''}catch(e){}
 try{const a=JSON.parse(localStorage.getItem('arrange')||'{}');if(['new','score','old'].includes(a.sort))$('s-sort').value=a.sort;if(a.how)$('s-how').value=a.how;if(a.when)$('s-when').value=a.when}catch(e){}
 setZones();
+{let first='clips';try{first=localStorage.getItem('page')||'new'}catch(e){}go(HAS_PANEL?first:'clips');sub('vod')}
 clipLoop();
 </script>
 </body>

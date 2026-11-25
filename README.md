@@ -66,7 +66,7 @@ The setup script downloads FFmpeg, TwitchDownloaderCLI and the face and voice mo
 uv run clipper review
 ```
 
-Open http://127.0.0.1:8765/ in your browser. The page has three steps: find moments (watch live channels, or paste a finished stream), review each draft clip (watch, edit, approve or reject), and make the finished videos.
+Open http://127.0.0.1:8765/ in your browser. The page has a menu on the left: New clips (paste a finished stream, or pick a part yourself), Live channels (watch channels while they are live), My clips (watch, edit, approve or reject each draft, then make the finished videos), Look and branding, Posted and earnings, and Settings.
 
 The same things from the terminal:
 
@@ -132,7 +132,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           354 unit tests (uv run python -m pytest -q)
+tests/           359 unit tests (uv run python -m pytest -q)
 ```
 
 ## Limits you should know about

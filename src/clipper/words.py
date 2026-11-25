@@ -49,7 +49,7 @@ def video_lines(url: str, cfg: Config) -> dict:
         lines, origin = read_rows(work / "stream_text.jsonl"), "the speech read on this PC"
     if not lines:
         raise ValueError("there is no transcript for this video yet. YouTube has no captions for it (or it is not a YouTube video). "
-                         "Run it once in the Finished stream tab with \"Let AI read the whole stream\" ticked; its words are kept and can be searched here afterwards")
+                         "Run it once under New clips, Find the best moments, with \"Let AI read the whole stream\" ticked; its words are kept and can be searched here afterwards")
     return {"url": source.url, "title": meta.get("title", ""), "channel": meta.get("channel", ""), "duration_s": float(meta.get("duration_s") or lines[-1]["e"]),
             "from": origin, "lines": lines}
 

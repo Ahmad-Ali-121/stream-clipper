@@ -546,7 +546,7 @@ class Control:
         from . import health
 
         if self.watching() or self.running() or self.finishing:
-            raise ValueError("something is still running (watching, a job in step 1, or making videos). An update replaces the program's "
+            raise ValueError("something is still running (watching live channels, finding moments, or making videos). An update replaces the program's "
                              "files and restarts it, which would cut that work off. Stop it or wait, then update")
 
         def work(say) -> None:

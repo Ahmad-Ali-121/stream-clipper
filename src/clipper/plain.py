@@ -46,7 +46,7 @@ RULES: list[tuple[str, str, str]] = [
      "Press the button again so the file is made again. Do not move or rename files inside the data folder; take finished videos only from the videos folder."),
     (r"was not found on path|run setup\.ps1",
      "A helper program that this step needs is not installed on this computer.",
-     "Open Setup check at the top of the left side: it says which one is missing and has a button to install it."),
+     "Open Settings: the Setup check there says which one is missing and has a button to install it."),
     # ---- the internet and the video sites ----
     (r"(codex|chatgpt|claude|anthropic|openai)[\s\S]{0,300}(\b429\b|too many requests)",
      "The AI service refused: the limit of your plan is reached for now, or the service is overloaded.",
@@ -98,7 +98,7 @@ RULES: list[tuple[str, str, str]] = [
     # ---- broken video files ----
     (r"moov atom not found|invalid data found when processing input|error opening input|could not find codec parameters",
      "The video file for this step is damaged or was only half downloaded.",
-     "Make the draft again (Fine-tune, then Save and make the draft again), so the video is fetched again. If it fails the same way, reject the clip."),
+     "Make the draft again (open the clip with Edit, then Trim and framing, then Make this video's drafts again), so the video is fetched again. If it fails the same way, reject the clip."),
     # ---- waiting too long ----
     (r"timed out after",
      "This step took far longer than it should and was stopped, so the program would not hang forever.",

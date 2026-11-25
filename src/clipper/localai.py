@@ -142,7 +142,7 @@ def why_not(cfg: Config) -> str:
     if not s["supported"]:
         return f"the free local AI is not used on this computer: {s['why']}"
     if not s["installed"]:
-        return "the free local AI is not set up (press 'Set up free local AI' in the Claude box)"
+        return "the free local AI is not set up (open Settings and press 'Set up free local AI' under AI)"
     if not s["has_model"]:
         return f"the free local AI has no model yet (press 'Set up free local AI' to download {s['model']})"
     return "the free local AI is installed but not answering"

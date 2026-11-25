@@ -127,13 +127,13 @@ def quick_checks(cfg: Config) -> list[dict]:
     works = [llm.BACKENDS[b] for b in llm.BACKENDS if checks[b]["ok"] is True]
     if ai_problem:
         out.append(_item("ai", "Claude (optional: writes text, reads streams)", "warn", ai_problem,
-                         "Optional. Either sign in to Claude Code, or put an API key in the .env file. See the Claude box."))
+                         "Optional. Either sign in to Claude Code, or put an API key in the .env file. See Settings, under AI."))
     elif works:
         out.append(_item("ai", "Claude (optional: writes text, reads streams)", "ok", "works: " + " and ".join(works)))
     else:
         broken = "; ".join(f"{llm.BACKENDS[b]}: {checks[b]['problem']}" for b in llm.BACKENDS if checks[b]["ok"] is False)
         out.append(_item("ai", "Claude (optional: writes text, reads streams)", "warn" if broken else "todo",
-                         broken or "set up, not tried yet", "Open the Claude box and press 'Check again'."))
+                         broken or "set up, not tried yet", "Open Settings and press 'Check again' under AI."))
     from . import localai
 
     la = localai.status(cfg)
@@ -144,7 +144,7 @@ def quick_checks(cfg: Config) -> list[dict]:
     else:
         out.append(_item("localai", "Free local AI (optional: writes clip text without Claude)", "ok" if works else "todo",
                          "this computer can run it; it is not set up" + (" (not needed while Claude works)" if works else ""),
-                         "" if works else "Open the Claude box and press 'Set up free local AI' (about 3 GB)."))
+                         "" if works else "Open Settings and press 'Set up free local AI' under AI (about 3 GB)."))
     upd = saved.get("update") or {}
     if upd.get("behind"):
         out.append(_item("update", "Program version", "warn", f"a newer version is available ({upd['behind']} change(s) behind)" + (f". {upd['why']}" if upd.get("why") else ""),

@@ -495,7 +495,7 @@ def delete_clip(d: Path) -> float:
                 log.warning("clip %s: %s could not be removed yet; it goes the next time this clip is deleted or cleaned up", d.name, moved.name)
     if busy:
         raise ClipInUse(f"this clip cannot be deleted right now: its file {busy[0]} is in use. A job is still working on it "
-                        "(press Stop in step 1, or wait for it to end), or its video is playing. Then delete it again.")
+                        "(press Stop where you started it, or wait for it to end), or its video is playing. Then delete it again.")
     import time as _time
 
     now = _time.strftime("%Y-%m-%d %H:%M:%S")
