@@ -8,7 +8,7 @@
 
 A template takes the 9:16 picture the layout made, places it in a box on a canvas of the same size, and draws the
 rest (boxes, circles, text) as subtitle shapes, so it costs almost nothing to render. Captions move into the
-video's box. The idea of such templates comes from other clipping tools (see the README); the drawings are our own.
+video's box.
 """
 
 from __future__ import annotations

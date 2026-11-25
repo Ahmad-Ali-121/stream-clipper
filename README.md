@@ -1,76 +1,174 @@
-# Stream Clipper
+<div align="center">
 
-Turn live streams into short vertical clips, with a person approving every one.
+<h1>Stream Clipper</h1>
 
-Stream Clipper watches Twitch chat for the moments where chat suddenly erupts, downloads only those few seconds, adds word-by-word captions, and shows you each draft on a local web page. You approve the good ones; it renders finished 9:16 videos and writes the title, description and hashtags to paste when you upload. It never posts anything itself.
+<p><b>Turn long live streams into short vertical clips.<br>The program finds the moments. You approve every one.</b></p>
 
-**New here? Read [GUIDE.md](GUIDE.md): install, daily use and troubleshooting in plain steps.** To check an install, work through [docs/testing-checklist.pdf](docs/testing-checklist.pdf).
+<p>
+<a href="https://github.com/Ahmad-Ali-121/stream-clipper/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Ahmad-Ali-121/stream-clipper?label=release&color=ff5a2b"></a>
+<img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-2b6cff">
+<img alt="Twitch, Kick and YouTube" src="https://img.shields.io/badge/works%20with-Twitch%20%C2%B7%20Kick%20%C2%B7%20YouTube-8a2be2">
+<img alt="Free to run" src="https://img.shields.io/badge/core-free%20to%20run-12c2a0">
+<a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-lightgrey"></a>
+</p>
 
-## What it does
+<p>
+<a href="https://github.com/Ahmad-Ali-121/stream-clipper/releases/latest/download/Stream-Clipper-Setup.exe"><b>Download for Windows</b></a>
+&nbsp;·&nbsp; <a href="GUIDE.md">User guide</a>
+&nbsp;·&nbsp; <a href="#install">Install</a>
+&nbsp;·&nbsp; <a href="#what-it-can-do">Features</a>
+</p>
 
-- **Finds moments from chat.** Counts chatters in 10-second slices and compares with the last five minutes. No AI, no key, almost no bandwidth.
-- **Optionally listens and looks too.** Modes B, C and D also measure loudness and on-screen motion from the stream's lowest-quality feed, to catch moments chat missed.
-- **Never downloads a whole stream.** Only the clip ranges are fetched, at full quality. For streams Twitch is not recording, a rolling copy of the last ten minutes of the live feed stands in for the recording.
-- **Listens to finished streams too.** `--signals B` (or the choice on the page) measures a finished stream's sound or picture and adds moments chat missed.
-- **AI can read a finished stream.** `--ai` turns all of its speech into text and has Claude pick moments from what was said (needs a Claude key; a few cents a stream).
-- **Works live or on finished streams, on Twitch, Kick and YouTube.** `watch` follows several live channels at once (Twitch names, Kick channels like `kick.com/name`, YouTube handles like `@channel`); `run` processes a finished Twitch or Kick stream or a YouTube recording with chat replay.
-- **Your own clips.** Give a YouTube, Twitch or Kick video link, or a video file such as a screen recording, with a start and an end; get one clip, or the range split into parts labelled "Part 1", "Part 2" on screen.
-- **Built-in help that can do it for you.** An **Ask** button answers questions about the program in plain words, in English or Roman Urdu, and can walk you through the steps. Tell it what to do ("start watching lacy", "make a clip from this link from 1:00 to 1:30") and it does the steps on the page while you watch. Approving, rejecting and deleting clips always stay yours.
-- **Kick, like Twitch.** Live Kick channels are watched (chat, hype meter, drafts, clip-the-last); finished Kick streams are searched from their chat replay, and work for your own clips and the cutting board.
-- **Templates and a background card.** The clip as a rounded card on a blur, a colour, a gradient or your image; inside a social post; under a breaking-news banner; or with the opening text in a box on top.
-- **Safe zones, moment mix, music riser.** See where TikTok, Reels and Shorts cover the video; lean the search towards action or dialogue; let the music grow louder at the end.
-- **Transcript search.** Search a video's words, click where a clip starts and ends, and make it. For people with no AI: the transcript in small parts with a ready prompt for any free chatbot, whose answers are read back as moments.
-- **Subtitle files.** Download a clip's captions as .srt or .vtt, or use your own subtitle file as its captions.
-- **Hype meter and go-live list.** While watching, each chat's heat against its own usual pace; the saved channel list can start by itself and clips each creator as soon as they go live.
-- **Six layouts.** Video only, face on top, face below, the whole picture on a blurred background, the face in a corner or in a circle over the video. Chosen per clip with a live preview.
-- **Caption movement and your own caption profiles.** The spoken word pops in, one big word at a time, or the line fills in; font, colours and size saved under your own names.
-- **Branding.** Your logo in a corner, an outro line over the last seconds, music under the voice.
-- **YouTube's own captions as the words.** For YouTube videos the words come from YouTube's captions when it has them: a clip's captions in seconds instead of minutes, and a whole stream's speech read at once. The speech model stays the fallback.
-- **Excited words as a signal.** "Oh my god", "no way", "arre yaar", "bhaago" (English, Hindi, Urdu, Roman or their own letters) raise a clip's score, and find moments in a YouTube video even when it has no chat.
-- **Clip the last 30 seconds.** While watching live, one button makes a draft of what just happened.
-- **Free local AI (optional).** On a computer that can run it, a small AI on the PC (Ollama) writes clip text when Claude cannot be reached. A computer too small for it never downloads it.
-- **A percentage on every job.** Downloads, finding moments, captions, text, drafts, final videos, the setup check and file copies show how far they are ("41% · Step 2 of 4: Downloading the clips · clip 3 of 8") and roughly how long is left.
-- **Cutting board.** Download the part of a video you chose once, then mark the cuts on a timeline with the sound wave, see how many clips that gives and how long each is, and make them.
-- **Face box and video box.** On any clip, drag two boxes over the stream picture to choose what is shown on top (the face) and below (the video); a small preview shows the result. Can be kept for a streamer's next clips.
-- **Urdu and Hindi streams.** Speech-to-text in Urdu or Hindi, captions in the language's own letters or in Latin letters ("bhai ne kamaal kar diya"), and opening text and titles in English, Roman Urdu, Hinglish, Urdu or Hindi.
-- **Frames the clip by itself.** Detects a full-screen camera or a small facecam over gameplay, and measures each streamer's facecam box from the picture.
-- **Captions.** Local Whisper speech-to-text, word-by-word highlighted captions burned in.
-- **A strong first three seconds.** Zoom-in, pop-in hook text, a whoosh and a progress bar.
-- **A/B versions.** Every approved clip comes out twice, with different hooks and titles, so you can test which performs better.
-- **Commentary formats.** A narrated "explained" version (free local voice) and a "top N moments" countdown.
-- **Upload text.** Hook, title, description and hashtags per platform. Hashtags come from what well-viewed YouTube Shorts on the topic use right now.
-- **Campaign briefs.** Optional rule files that check each clip (length, tags, disclosure) before you post.
-- **Uses your GPU when it has one.** NVIDIA, Intel or AMD video encoders are picked automatically. Speech-to-text on an NVIDIA card is optional: add `-Gpu` to the setup command (about 1 GB more). Everything also runs on a plain CPU.
+<img src="docs/screenshots/my-clips.png" alt="The My clips page: three draft clips with captions, each with Approve, Reject and Edit" width="900">
 
-Everything in the core works with no paid service. Optional keys add nicer text and voices:
+</div>
 
-| Add-on | Key in `.env` | What it adds | Rough cost |
-|---|---|---|---|
-| Claude | `ANTHROPIC_API_KEY`, or no key: the Claude Code command signed in with your own Claude plan (`llm.backend: claude-code`) | Writes hooks, titles, descriptions, narration; flags filler clips; can read a whole stream and pick moments | about $0.01 per clip with a key; with a plan it uses your usage limits |
-| ElevenLabs | `ELEVENLABS_API_KEY` | More natural narrator voice (set `voice.backend: elevenlabs`) | from $6 a month |
-| Groq | `GROQ_API_KEY` | Faster speech-to-text on their servers (untested) | about $0.04 per audio hour |
+## What it is
 
-## Quick start (Windows)
+Stream Clipper watches a stream's chat for the moments where chat suddenly erupts, downloads only those few seconds, frames them for a phone screen, burns in word-by-word captions, and shows you each draft on a page in your browser. You approve the good ones. It then makes the finished 9:16 videos and writes the title, description and hashtags for you to paste when you upload.
 
-**The easy way:** download [Stream-Clipper-Setup.exe](https://github.com/Ahmad-Ali-121/stream-clipper/releases/latest/download/Stream-Clipper-Setup.exe) and double-click it. It needs no Python or Git, and no administrator rights (one exception: on a PC without Microsoft's Visual C++ runtime, which captions need, Windows asks once to let Microsoft's own installer add it): it fetches [uv](https://docs.astral.sh/uv/) (which installs Python for this program only), portable Git if the PC has none, the program, and the video tools, and puts a shortcut on the desktop. On first start the program's **Set up** page takes you through the rest (the speech model, and signing in to Claude or ChatGPT if you want them). The installer is built from `installer/Setup.cs` with `installer/build.cmd` (the C# compiler that is part of Windows); it is not code-signed, so Windows shows a warning the first time.
+- **It runs on your own computer.** The page is local; nothing is uploaded anywhere.
+- **The core is free.** No paid service is needed. Paid add-ons are optional.
+- **It never posts for you.** It stops at finished files on your disk.
+- **It never downloads a whole stream.** Only the parts that become clips.
 
-**By hand:** needs [Git](https://git-scm.com/download/win) and [uv](https://docs.astral.sh/uv/getting-started/installation/), and about 5 GB of free disk.
+## How it works
+
+1. **Give it a stream.** Paste the link of a finished Twitch, Kick or YouTube stream, or let it watch channels while they are live. You can also pick the part yourself, or use a video file of your own.
+2. **Look through the drafts.** Each moment becomes a draft clip with captions. Play it, then approve or reject it. Keyboard keys make this quick.
+3. **Fix what needs fixing.** Move the start and end on the sound wave, change the framing, correct a caption word, rewrite the title.
+4. **Set your look and make the videos.** Caption style, template, logo and music are chosen once. Press **Make videos**: approved clips are rendered into a dated folder, each with a text file holding its title, description and hashtags. Uploading is yours to do.
+
+<p align="center">
+<img src="docs/screenshots/new-clips.png" alt="The New clips page with a box for the stream link" width="49%">
+<img src="docs/screenshots/editor-trim.png" alt="The clip editor: the sound wave with start and end handles" width="49%">
+<img src="docs/screenshots/editor-captions.png" alt="The clip editor: every caption word can be corrected" width="49%">
+<img src="docs/screenshots/look.png" alt="The Look and branding page: caption style, template, logo and music" width="49%">
+</p>
+
+## Install
+
+**Windows 10 or 11.** About 2 GB of free disk for the program and 5 GB or more for your clips.
+
+1. Download **[Stream-Clipper-Setup.exe](https://github.com/Ahmad-Ali-121/stream-clipper/releases/latest/download/Stream-Clipper-Setup.exe)** and double-click it.
+2. Keep the two folders it suggests, or choose your own, and press **Install**. It takes 5 to 20 minutes and needs the internet.
+3. Start **Stream Clipper** from the shortcut on your desktop. The **Set up** page takes you through the rest, one step per screen.
+
+<p align="center"><img src="docs/screenshots/setup.png" alt="The Set up page, one step per screen" width="760"></p>
+
+You do not need Python, Git or anything else first. Things to know:
+
+- **Windows shows a warning.** The installer is not signed with a paid certificate, so Windows shows a blue box, "Windows protected your PC". Press **More info**, then **Run anyway**.
+- **Windows may ask for permission once.** Captions need Microsoft's Visual C++ runtime. If the PC does not have it, Microsoft's own installer for it is fetched and Windows asks you to allow it. Press **Yes**. Nothing else is installed outside the two folders you chose.
+- **Smart App Control.** On Windows 11 with Smart App Control switched on, Windows blocks unsigned programs and offers no "Run anyway". Use the install by hand below instead.
+
+The installer fetches [uv](https://docs.astral.sh/uv/) (which installs Python for this program only), portable Git if the PC has none, the program, and the video tools. It is built from `installer/Setup.cs` with `installer/build.cmd`.
+
+<details>
+<summary><b>Install by hand, for people who use a terminal</b></summary>
+
+<br>
+
+Needs [Git](https://git-scm.com/download/win) and [uv](https://docs.astral.sh/uv/getting-started/installation/), and about 5 GB of free disk.
 
 ```powershell
 git clone https://github.com/Ahmad-Ali-121/stream-clipper.git
 ```
 
-Then open the `stream-clipper` folder and **double-click `Install-Stream-Clipper.cmd`**. It asks where to keep the clips, downloads what is needed, and puts a "Stream Clipper" shortcut on the desktop. Double-click that shortcut to start. (The same from a terminal: `powershell -ExecutionPolicy Bypass -File setup.ps1 -DataDir D:\clipper-data`.)
-
-The setup script downloads FFmpeg, TwitchDownloaderCLI and the face and voice models, installs the Python packages and runs the tests. Then:
+Then open the `stream-clipper` folder and **double-click `Install-Stream-Clipper.cmd`**. It asks where to keep the clips, downloads what is needed, and puts a "Stream Clipper" shortcut on the desktop. The same from a terminal:
 
 ```powershell
-uv run clipper review
+powershell -ExecutionPolicy Bypass -File setup.ps1 -DataDir D:\clipper-data
 ```
 
-Open http://127.0.0.1:8765/ in your browser. The page has a menu on the left: New clips (paste a finished stream, or pick a part yourself), Live channels (watch channels while they are live), My clips (watch, edit, approve or reject each draft, then make the finished videos), Look and branding, Posted and earnings, and Settings.
+The setup script downloads FFmpeg, TwitchDownloaderCLI and the face and voice models, installs the Python packages and runs the tests. Then start the program:
 
-The same things from the terminal:
+```powershell
+uv run clipper review --open
+```
+
+The page opens at http://127.0.0.1:8765/. The code is plain Python and FFmpeg, so it should run on macOS and Linux, but the setup script and all testing so far are Windows only.
+
+</details>
+
+**New here? Read [GUIDE.md](GUIDE.md):** install, daily use and troubleshooting in plain steps. To check an install, work through [docs/testing-checklist.pdf](docs/testing-checklist.pdf).
+
+## What it can do
+
+### Finding moments
+
+- **From chat.** Counts chatters in 10-second slices and compares with the last five minutes. No AI, no key, almost no bandwidth.
+- **From sound and picture too.** Optional modes also measure loudness and on-screen motion from the stream's lowest-quality feed, to catch moments chat missed. This works on finished streams as well.
+- **From what is said.** "Oh my god", "no way", "arre yaar", "bhaago" raise a clip's score, and find moments in a YouTube video even when it has no chat.
+- **AI can read a finished stream.** Turns all of its speech into text and has Claude pick moments from what was said (needs Claude; a few cents a stream with a key).
+- **Moment mix.** Lean the search towards action or towards dialogue.
+- **Never a whole stream.** Only the clip ranges are fetched, at full quality. For streams the platform is not recording, a rolling copy of the last ten minutes of the live feed stands in for the recording.
+
+### Live and finished streams
+
+- **Twitch, Kick and YouTube.** Watch several live channels at once, or process a finished stream from its link.
+- **Hype meter and go-live list.** While watching, each chat's heat against its own usual pace. The saved channel list can start by itself and clips each creator as soon as they go live.
+- **Clip the last 30 seconds.** While watching live, one button makes a draft of what just happened.
+
+### Your own clips
+
+- **Pick the part yourself.** Give a video link or a video file with a start and an end. Get one clip, or the range split into parts labelled "Part 1", "Part 2" on screen.
+- **Cutting board.** Download the part you chose once, mark the cuts on a timeline with the sound wave, see how many clips that gives and how long each is, and make them.
+- **Transcript search.** Search a video's words, click where a clip starts and ends, and make it. For people with no AI, the transcript comes in small parts with a ready prompt for any free chatbot, whose answers are read back as moments.
+
+### How the clip looks
+
+- **Frames itself.** Detects a full-screen camera or a small facecam over gameplay, and measures each streamer's facecam box from the picture.
+- **Six layouts.** Video only, face on top, face below, the whole picture on a blurred background, the face in a corner or in a circle over the video. Chosen per clip with a live preview.
+- **Face box and video box.** Drag two boxes over the stream picture to choose what is shown on top and below. Can be kept for a streamer's next clips.
+- **Captions.** Local speech-to-text, word-by-word highlighted captions burned in. The spoken word can pop in, show one big word at a time, or fill in the line. Font, colours and size can be saved under your own names.
+- **YouTube's own captions as the words.** For YouTube videos the words come from YouTube's captions when it has them, in seconds instead of minutes. The speech model stays the fallback.
+- **Subtitle files.** Download a clip's captions as .srt or .vtt, or use your own subtitle file as its captions.
+- **Templates and a background card.** The clip as a rounded card on a blur, a colour, a gradient or your image; inside a social post; under a breaking-news banner; or with the opening text in a box on top.
+- **A strong first three seconds.** Zoom-in, pop-in opening text, a whoosh and a progress bar.
+- **Branding.** Your logo in a corner, an outro line over the last seconds, music under the voice that can grow louder at the end.
+- **Safe zones.** See where TikTok, Reels and Shorts cover the video.
+
+### Text, versions and posting help
+
+- **Upload text.** Opening text, title, description and hashtags per platform. Hashtags come from what well-viewed YouTube Shorts on the topic use right now.
+- **A/B versions.** Every approved clip can come out twice, with different opening text and titles, to test which performs better.
+- **Commentary formats.** A narrated "explained" version (free local voice) and a "top N moments" countdown.
+- **Thumbnails.** A cover picture per clip, from a frame of the clip or made with your own ChatGPT plan.
+- **Posted and earnings.** Keep track of what you posted, its views and payouts.
+- **Campaign briefs.** Optional rule files that check each clip (length, tags, disclosure) before you post.
+
+### Languages
+
+- **Urdu and Hindi streams.** Speech-to-text in Urdu or Hindi, captions in the language's own letters or in Latin letters ("bhai ne kamaal kar diya"), and opening text and titles in English, Roman Urdu, Hinglish, Urdu or Hindi.
+
+### Help and comfort
+
+- **Built-in help that can do it for you.** The **Ask** button answers questions about the program in plain words, in English or Roman Urdu. Tell it what to do ("start watching this channel", "make a clip from this link from 1:00 to 1:30") and it does the steps on the page while you watch. Approving, rejecting and deleting clips always stay yours.
+- **A percentage on every job.** Downloads, finding moments, captions, text, drafts and final videos show how far they are and roughly how long is left.
+- **Setup check, Repair and Update.** The Settings page shows whether the computer is ready, fetches anything missing, and updates the program with one button.
+- **Uses your graphics card when it has one.** NVIDIA, Intel or AMD video encoders are picked automatically. Everything also runs on a plain processor.
+
+## Free core, optional add-ons
+
+Everything in the core works with no paid service. These are optional:
+
+| Add-on | How | What it adds | Rough cost |
+|---|---|---|---|
+| Claude | Sign in with your own Claude plan on the Set up page, or put `ANTHROPIC_API_KEY` in `.env` | Writes opening text, titles, descriptions and narration; flags filler clips; can read a whole stream and pick moments | With a plan it uses your plan's limits; with a key about $0.01 per clip |
+| ChatGPT | Sign in with your own ChatGPT plan on the Set up page | Makes thumbnails | Uses your plan's limits |
+| Free local AI | Set up page, on a computer that can run it (about 3 GB) | Writes clip text when Claude cannot be reached | Free |
+| ElevenLabs | `ELEVENLABS_API_KEY` in `.env` | A more natural narrator voice | from $6 a month |
+| Groq | `GROQ_API_KEY` in `.env` | Faster speech-to-text on their servers (untested) | about $0.04 per audio hour |
+
+Sign-ins happen in each company's own window. Stream Clipper never sees or stores your password.
+
+## For people who use a terminal
+
+<details>
+<summary><b>Commands</b></summary>
+
+<br>
 
 ```powershell
 uv run clipper watch lacy xqc          # asks: A chat, B chat+audio, C chat+video, D all
@@ -79,10 +177,6 @@ uv run clipper finish                  # render approved clips and write the upl
 ```
 
 Finished videos and their text files land in `<data folder>\ready\<date>\`.
-
-The code is plain Python and FFmpeg, so it should run on macOS and Linux, but the setup script and all testing so far are Windows only.
-
-## Commands
 
 | Command | What it does |
 |---|---|
@@ -96,7 +190,7 @@ The code is plain Python and FFmpeg, so it should run on macOS and Linux, but th
 | `finish [URL] [--brief FILE]` | Render approved clips (A and B versions, explainers) and export them with upload text |
 | `explain URL [--clips a,b]` | Narrated "explained" version of approved clips |
 | `top [URL] [--count 5] [--opener TEXT]` | "Top N moments" countdown video |
-| `write [URL] [--force]` | Write or refresh hooks, titles, hashtags and narration lines |
+| `write [URL] [--force]` | Write or refresh opening text, titles, hashtags and narration lines |
 | `tags SEED...` | Hashtags that well-viewed YouTube Shorts on a topic use right now |
 | `status URL` | List a stream's clips and what exists for each |
 | `hardware [--refresh]` | Show which GPU or CPU paths are in use |
@@ -105,16 +199,26 @@ The code is plain Python and FFmpeg, so it should run on macOS and Linux, but th
 | `find`, `fetch`, `transcribe`, `render`, `post` | The single stages of `run` and `finish` |
 | `check-brief BRIEF CLIP` | Check one clip's JSON against a campaign brief |
 
-Every setting lives in [config.yaml](config.yaml), with a comment on each line. Personal overrides go in `config.local.yaml`, keys in `.env`; neither is committed.
+Every setting lives in [config.yaml](config.yaml), with a comment on each line. Personal overrides go in `config.local.yaml`, keys in `.env`; neither is committed. Speech-to-text on an NVIDIA card is optional: add `-Gpu` to the setup command (about 1 GB more).
 
-## How a moment is found
+</details>
 
-1. Chat is read live over Twitch's public, anonymous, read-only chat connection (or downloaded for a finished stream).
+<details>
+<summary><b>How a moment is found</b></summary>
+
+<br>
+
+1. Chat is read live over the platform's public, anonymous, read-only chat connection (or downloaded for a finished stream).
 2. Messages are grouped into 10-second buckets. A bucket's score is its number of distinct chatters divided by the median of the previous five minutes. Bursts of hype words count as well, for chats that are always busy.
 3. In modes B to D, one FFmpeg process per channel reads the `audio_only` or `160p` feed, prints one loudness value a second and two motion values a second, and discards the feed. A bucket that stands far above the last five minutes becomes a moment even if chat stayed quiet. These are measurements, not a neural network.
 4. About a minute later the clip range (20 seconds before the peak to 10 after) is fetched from the stream's recording, transcribed, framed, captioned and rendered as a draft.
 
-## Layout of the code
+</details>
+
+<details>
+<summary><b>Layout of the code</b></summary>
+
+<br>
 
 ```
 src/clipper/
@@ -137,6 +241,8 @@ src/clipper/
 tests/           400 unit tests (uv run python -m pytest -q)
 ```
 
+</details>
+
 ## Limits you should know about
 
 - Chat spikes also happen for giveaways, greetings and raids. Expect filler among the drafts; that is what the review step is for.
@@ -144,7 +250,7 @@ tests/           400 unit tests (uv run python -m pytest -q)
 - On live YouTube streams moments come from chat only (no sound or picture detection yet), and a clip must be cut within about 15 minutes of its moment, which is how long YouTube keeps a live stream's pieces available.
 - Urdu and Hindi: the narrator in explainer videos speaks English only. Latin-letter captions need Claude.
 - A stream with recordings switched off costs about 3 GB of internet an hour to watch, and moments during advert breaks cannot be clipped.
-- Speech-to-text on an NVIDIA card (`setup.ps1 -Gpu`) is new and has had almost no testing. If it cannot be used, the processor is used instead.
+- Speech-to-text on an NVIDIA card is new and has had almost no testing. If it cannot be used, the processor is used instead.
 - The first clip or two of a new streamer may be framed slightly off until the facecam box has been measured twice.
 
 ## Use it responsibly
@@ -156,14 +262,10 @@ tests/           400 unit tests (uv run python -m pytest -q)
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep the core free to run, keep settings in `config.yaml`, add tests for logic (`uv run pytest -q`), and say in the pull request what you tested on a real stream.
+Issues and pull requests are welcome. Keep the core free to run, keep settings in `config.yaml`, add tests for logic (`uv run python -m pytest -q`), and say in the pull request what you tested on a real stream.
 
 ## Licence
 
 [MIT](LICENSE). FFmpeg, TwitchDownloaderCLI, yt-dlp, faster-whisper, Kokoro and YuNet are downloaded by the setup script under their own licences.
 
-Suggested repository topics: `twitch`, `clips`, `youtube-shorts`, `tiktok`, `ffmpeg`, `whisper`, `captions`, `video-editing`, `streaming`, `python`.
-
-## Credits
-
-Some ideas were learned from other open-source clippers and written again in our own code: taking the words from YouTube's own captions, scoring excited words, a "clip now" button and a free local AI come from [NeonClipping](https://github.com/iamajmeena/neonclipping) (MIT) and the projects it credits, such as PeakCut.
+<sub>The screenshots show a made-up demo video generated for this page, not a real stream.</sub>

@@ -6,7 +6,6 @@ and the total is squeezed to 0..10 like the other signals. It works on any timed
 whole stream (to find moments chat missed) and a clip's own captions (to score the clip).
 
 English, Hindi and Urdu, in Latin letters and in their own letters, because captions arrive in either.
-The idea of scoring exclamations comes from the open-source clipper NeonClipping; the list and code are our own.
 """
 
 from __future__ import annotations

@@ -7,8 +7,7 @@ the speech model stays the fallback (no captions, a live stream, a Twitch video,
 
 What comes back is the same shape the speech model gives: [{"start", "end", "word"}], seconds from the start of
 the video. Captions written by a person are preferred over automatic ones. Sound descriptions such as [Music]
-are left out. The idea of using the site's own captions is taken from the open-source clippers NeonClipping and
-PeakCut; the code here is our own.
+are left out.
 """
 
 from __future__ import annotations

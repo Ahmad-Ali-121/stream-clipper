@@ -7,8 +7,6 @@
     paste into any free chatbot by hand; the answers are pasted back and read as moments. Nothing is sent anywhere
     by this program.
   - ``to_srt`` / ``to_vtt`` / ``parse_subtitles``: a clip's captions as a subtitle file, and a subtitle file as captions.
-
-The transcript search and the chatbot parts are ideas from the open-source clipper NeonClipping; the code is our own.
 """
 
 from __future__ import annotations
