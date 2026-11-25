@@ -76,7 +76,7 @@ RULES: list[tuple[str, str, str]] = [
     # ---- AI services ----
     (r"not signed in|not logged in|logged out|please run /login|please log in|run codex login",
      "The AI program on this computer is not signed in any more.",
-     "Open Setup check: it shows which one is signed out and the one line to type to sign in again."),
+     "Open Set up in the menu: the Claude or ChatGPT step shows which one is signed out and has a Sign in button."),
     (r"usage limit reached|hit your usage limit|reached your usage limit|usage_limit|hit your limit|\blimit reached|limit will reset|"
      r"exceeded your current quota|quota exceeded|credit balance|"
      r"insufficient_quota|rate_limit_error|rate limit reached|overloaded",

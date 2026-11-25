@@ -89,8 +89,8 @@ def static_problem(cfg: Config, backend: str) -> str:
     """Why this connection cannot even be tried on this computer; "" when its pieces are in place."""
     if backend == "claude-code":
         if not shutil.which("claude"):
-            return ("the Claude Code command is not installed on this computer. Install Claude Code, run `claude` once in a terminal "
-                    "and sign in with your own Claude plan")
+            return ("Claude Code is not installed on this computer. Open Set up in the menu: its Claude step installs it and starts the "
+                    "sign-in with your own Claude plan")
         return ""
     load_env()
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -235,7 +235,7 @@ def _ask_claude_code_in(folder: Path, exe: str, cfg: Config, model: str, system:
         raise LlmUnavailable(f"Claude Code gave no usable answer (exit code {proc.returncode}): {tail or 'nothing was printed'}") from e
     if reply.get("is_error") or proc.returncode != 0:
         raise LlmUnavailable(f"Claude Code reported a problem: {str(reply.get('result') or reply.get('subtype') or proc.stderr)[:400]}. "
-                             "If it mentions signing in, run `claude` in a terminal and sign in; if it mentions a limit, your plan's usage limit is reached")
+                             "If it mentions signing in, open Set up in the menu and sign in to Claude again; if it mentions a limit, your plan's usage limit is reached")
     usage = reply.get("usage") or {}
     entry = {
         "time": time.strftime("%Y-%m-%d %H:%M:%S"), "service": "claude-code (your Claude plan, not billed per use)", "model": model, "what": what,

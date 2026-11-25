@@ -37,8 +37,8 @@ class CoverBusy(ValueError):
 
 _making: set[str] = set()
 _making_lock = __import__("threading").Lock()
-SETUP = ("Install it once: open a terminal, run  npm install -g @openai/codex  and then  codex login  "
-         "and sign in with your ChatGPT account. A paid ChatGPT plan is needed for pictures")
+SETUP = ("Open Set up in the menu: its ChatGPT step installs it and starts the sign-in with your ChatGPT account. "
+         "A paid ChatGPT plan is needed for pictures")
 
 _status: dict = {"at": 0.0, "value": None}
 
@@ -56,9 +56,9 @@ def codex_status(fresh: bool = False) -> dict:
             said = " ".join((proc.stdout + " " + proc.stderr).split())
             ok = "logged in" in said.lower() and "not logged in" not in said.lower()
             value = {"installed": True, "signed_in": ok,
-                     "text": ("Ready: " + said) if ok else f"Codex is installed but not signed in ({said[:200]}). Open a terminal and run  codex login"}
+                     "text": ("Ready: " + said) if ok else f"Codex is installed but not signed in ({said[:200]}). Open Set up in the menu and press Sign in to ChatGPT"}
         except ToolError as e:
-            value = {"installed": True, "signed_in": False, "text": f"Codex is installed but did not answer ({str(e)[:200]}). Open a terminal and run  codex login"}
+            value = {"installed": True, "signed_in": False, "text": f"Codex is installed but did not answer ({str(e)[:200]}). Open Set up in the menu and press Check again; if it stays, press Sign in to ChatGPT"}
     _status.update(at=time.time(), value=value)
     return value
 
@@ -280,7 +280,7 @@ def chatgpt_cover(d: Path, cfg: Config, prompt: str = "") -> Path:
                 log.warning("clip %s: ChatGPT did not end in time, but it had saved a picture; that picture is used", d.name)
             else:
                 _log_use(cfg, d, None, t0, f"failed: {str(e)[:200]}")  # it may have used the plan before it failed
-                raise ToolError(f"{e}. If it mentions signing in or a limit: run  codex login  in a terminal, or your ChatGPT plan's limit is reached") from e
+                raise ToolError(f"{e}. If it mentions signing in: open Set up in the menu and sign in to ChatGPT again. If it mentions a limit: your ChatGPT plan's limit is reached") from e
         tokens = re.search(r"tokens used\s*([\d,]+)", out_text)
         used = int(tokens.group(1).replace(",", "")) if tokens else None
         made = _pictures(work, frames)

@@ -8,7 +8,27 @@ You give it a Twitch stream. It finds the moments where chat went wild (and, if 
 
 ## Part 1: Install on a computer (once)
 
-You need a Windows PC with about 5 GB free. Do these in order.
+**The easy way: the installer.** Get **Stream-Clipper-Setup.exe** (from the program's page on GitHub, under Releases, or from whoever gave you the program) and double-click it. You do not need Python, Git or anything else first, and it does not ask for administrator rights.
+
+1. It shows two folders: where the program goes, and where your clips, downloads and models go (it suggests the drive with the most free space). Change them if you want, then press **Install**.
+2. It works through five steps and ticks each one: fetch **uv** (the small tool that installs Python for this program only), make sure **Git** is there (for the Update button), fetch the program, install Python and the program's parts (the longest step), download the video tools and models (about 300 MB). It takes 5 to 20 minutes and needs the internet.
+3. At the end a **Stream Clipper** shortcut is on your desktop. Leave **Start Stream Clipper now** ticked and press **Finish**.
+
+If a step fails (most often the internet dropped), the window says so in plain words and has a **Try again** button; it carries on where it stopped. The full log is in `install-log.txt` in the program folder.
+
+Windows may show a blue box, "Windows protected your PC", the first time: the installer is not signed with a paid certificate. Press **More info**, then **Run anyway**.
+
+**Then: the Set up page.** The first time the program starts, its **Set up** page opens by itself and takes you through what is left, one step per screen:
+
+1. **Video tools** (done by the installer; here in case something is missing).
+2. **Captions:** downloads the speech model (about 1.6 GB) and tries it on this computer.
+3. **Claude, for titles and ratings** (optional): **Install Claude Code**, then **Sign in to Claude**.
+4. **ChatGPT, for thumbnails** (optional): **Install Node.js first** if the PC has none, then **Install the ChatGPT tool**, then **Sign in to ChatGPT**.
+5. **Free AI on this computer** (optional, about 3 GB).
+
+Each step says what it is for and how big its download is, and has one button. **Skip this** leaves an optional step out; **Next** goes on; **Back** goes back. A sign-in button opens that company's own window and then your browser: you sign in there, with your own account. Stream Clipper never sees your password; it only asks the tool afterwards whether you are signed in, and the step turns green by itself. **Check again** (top right) asks every tool again at once. On the last screen press **Start using Stream Clipper**. The page stays in the menu as **Set up**, so anything skipped can be done later.
+
+**The other way, for people who use a terminal.** Do these in order.
 
 1. **Install three programs** from their websites (default options are fine):
    - Git: https://git-scm.com/download/win
@@ -33,7 +53,7 @@ You need a Windows PC with about 5 GB free. Do these in order.
 
    It prints the video encoder (NVIDIA, Intel or CPU) and whether speech runs on a GPU. Nothing to configure: it uses the fastest thing that works.
 
-The first time a clip is transcribed, the speech model (1.6 GB) downloads by itself.
+The speech model (1.6 GB) is downloaded when you press **Download and try it** on the Set up page's Captions step. If you skip that, it downloads the first time a clip is transcribed.
 
 **On an NVIDIA laptop**, speech on the GPU also needs NVIDIA's CUDA 12 and cuDNN 9 libraries installed. Without them it still works, on the CPU. This path has not been tested yet.
 
@@ -49,7 +69,7 @@ The clipper works with none of these. Create a file named `.env` in the `Clippin
 
 **Claude without an API key.** If you pay for a Claude plan (Pro or Max), the clipper can use it instead of an API key:
 
-1. Install Claude Code from https://claude.com/claude-code, open a terminal, run `claude` once and sign in with your own account.
+1. Open **Set up** in the menu, go to the **Claude** step, press **Install Claude Code**, then **Sign in to Claude** and sign in with your own account in the window and browser that open. (By hand instead: install Claude Code from https://claude.com/claude-code, open a terminal and run `claude auth login`.)
 2. Open the page and go to **Settings**. Under **AI for titles and ratings** it finds it by itself: it tries each connection for real and shows a green dot and "Works", or a red dot with the reason. With "Automatic" it uses your plan first and, if you allow it, your API key when the plan fails (it tells you when that happens). You can also fix the choice to one of the two.
 
 Nothing is billed per use, but each request counts towards your plan's usage limits, the same limits as your normal Claude chats. Reading a whole stream with a large model uses a lot of them. Every person does this on their own PC with their own account; the clipper only runs the `claude` command and never sees your sign-in. The same box chooses the model for clip text and for reading streams.
@@ -75,6 +95,7 @@ Open http://127.0.0.1:8765/ in your browser. The page has a menu on the left and
 - **My clips:** every clip as a tile with its video, score, length and title. This is where you review, edit and approve, and where **Make videos** is. The number beside it in the menu is how many clips wait for review.
 - **Look and branding:** the caption style, the template and opening text, your logo, outro line and music, the thumbnails, and the A and B versions. What you choose here is used for every clip made from now on.
 - **Posted and earnings:** what you posted, its views and what it earned (the tracker), and the campaign choice.
+- **Set up:** the step-by-step guide that installs what the program needs and signs you in to Claude and ChatGPT. It opens by itself the first time.
 - **Settings:** the **Setup check**, the AI connection, the language, and updates.
 - **Ask for help:** the help chat.
 
@@ -93,6 +114,7 @@ At the bottom of the menu are the status lines (setup, watching, how many clips)
 | Change a clip's text, captions, start and end, framing, thumbnail or versions | **My clips**, press **Edit** on the clip, then the tab with that name |
 | Caption style, template, logo, music, thumbnails for every clip, A and B versions | **Look and branding** |
 | Log a post, see views and earnings, choose a campaign | **Posted and earnings** (log a post from the clip's **Posted** tab) |
+| Install something that is missing, or sign in to Claude or ChatGPT | **Set up** |
 | Setup check, repair, update, the AI connection, the language | **Settings** |
 | See what the program is doing, or read an error in full | **Activity log**, at the bottom of the menu |
 | Stop something | The **Stop** button beside the button that started it; it is only there while that job runs |
@@ -174,7 +196,7 @@ With one of the two chosen, the thumbnail is made when you press **Make videos**
 - One at a time per clip: a second press while one is being made is refused with a message, so ChatGPT is never asked twice for the same picture.
 - What you typed as a description stays in the box if ChatGPT fails, so you can press again.
 
-**Setting up ChatGPT (once).** It works through Codex, OpenAI's command-line tool, signed in with your own ChatGPT account, the same way Claude works through Claude Code. In a terminal run `npm install -g @openai/codex`, then `codex login`, and sign in. The line under the choice on the Look and branding page says **ChatGPT: Ready** when it is linked, or what is missing. Pictures need a paid ChatGPT plan; they use the plan's allowance several times faster than text. Frames of the clip, its title and its words are sent to OpenAI when ChatGPT is used. Each use is written to `usage.jsonl` in the data folder. The program never reads Codex's sign-in files.
+**Setting up ChatGPT (once).** It works through Codex, OpenAI's command-line tool, signed in with your own ChatGPT account, the same way Claude works through Claude Code. Open **Set up** in the menu and go to the **ChatGPT** step: it installs Node.js if the PC has none, then the tool, then **Sign in to ChatGPT** opens the sign-in. (By hand instead: in a terminal run `npm install -g @openai/codex`, then `codex login`.) The line under the choice on the Look and branding page says **ChatGPT: Ready** when it is linked, or what is missing. Pictures need a paid ChatGPT plan; they use the plan's allowance several times faster than text. Frames of the clip, its title and its words are sent to OpenAI when ChatGPT is used. Each use is written to `usage.jsonl` in the data folder. The program never reads Codex's sign-in files.
 
 **If a thumbnail cannot be made** (not signed in, the plan's limit is reached, no internet), the clip's videos are still made. The reason is shown in red in the Activity log and in the clip's editor under Thumbnail (the tab gets a red dot), and it is not tried again by itself: press the button there when the problem is solved.
 
@@ -545,7 +567,7 @@ The most common ones and what they mean:
 - **"The disk is full"**: free space on the drive with the data folder.
 - **"A file could not be changed because another program has it open"**: close the video player or folder window showing it and press again.
 - **"The AI service refused: the limit of your plan is reached..."**: wait for the limit to reset or choose another AI under Setup check.
-- **"The AI program on this computer is not signed in any more"**: Setup check shows the one line to type.
+- **"The AI program on this computer is not signed in any more"**: open **Set up** in the menu; the Claude or ChatGPT step has a **Sign in** button.
 - **"The graphics card could not do this step"** or **"The computer ran out of memory"**: close games and other heavy programs and try again.
 - **"The video file for this step is damaged or was only half downloaded"**: make the draft again: open the clip with Edit, Trim and framing, Make this video's drafts again.
 - **"This step took far longer than it should and was stopped"**: check the internet and try again.

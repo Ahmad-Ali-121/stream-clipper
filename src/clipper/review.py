@@ -741,6 +741,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             actions = {"/api/options": "save", "/api/watch/start": "start_watch", "/api/watch/stop": "stop_watch", "/api/watch/clip-now": "clip_now",
                        "/api/finish": "start_finish", "/api/finish/stop": "stop_finish", "/api/ready/open": "open_ready", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check", "/api/ai/local-setup": "start_local_ai",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
+                       "/api/setup/install": "setup_install", "/api/setup/signin": "setup_signin", "/api/setup/refresh": "setup_refresh", "/api/setup/finish": "setup_finish",
                        "/api/restart": "restart"}
             if self.path.startswith("/api/brand/upload") and cfg is not None and control:
                 # Your logo or music file: kept under the data folder, then set as the one to use.
@@ -811,7 +812,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
                     name = actions[self.path]
-                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut", "clip_now", "start_finish", "stop_finish") else getattr(control, name)()
+                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut", "clip_now", "start_finish", "stop_finish", "setup_install", "setup_signin", "setup_finish") else getattr(control, name)()
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 if isinstance(result, dict) and "watching" in result:

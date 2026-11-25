@@ -330,6 +330,24 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
 #spottip{position:fixed;z-index:32;max-width:340px;padding:12px 14px;border-radius:var(--r2);background:var(--surface3);border:1px solid var(--line2);box-shadow:0 14px 40px rgba(0,0,0,.6);line-height:1.45}
 #spottip .btns{margin-top:10px}
 
+/* ---------- the setup guide ---------- */
+.suprog{display:flex;align-items:center;gap:0;margin:0 0 18px}
+.suprog button{all:unset;box-sizing:border-box;cursor:pointer;height:30px;min-width:30px;padding:0 9px;text-align:center;border:1px solid var(--line2);border-radius:var(--r);font:600 12.5px/28px var(--mono);color:var(--muted);background:var(--surface)}
+.suprog button+button{margin-left:22px;position:relative}
+.suprog button+button::before{content:"";position:absolute;left:-23px;top:14px;width:22px;height:1px;background:var(--line2)}
+.suprog button.ok{color:#7fdcb0;border-color:#27634a;background:var(--ok-soft)}
+.suprog button.on{color:var(--text);border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.suprog button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sukick{font:600 12px var(--ui);color:var(--muted);margin-bottom:4px}
+.sutitle{font:600 22px/1.25 var(--display)!important;margin-bottom:6px}
+.suwhat{color:var(--muted);max-width:62ch;margin-bottom:14px}
+.sustate{display:flex;gap:9px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--field)}
+.sustate .dot{margin-top:6px;background:var(--warn)}.sustate.done .dot{background:var(--ok)}.sustate.wait .dot{background:var(--faint)}
+.sustate.done{border-color:#27634a;background:var(--ok-soft)}
+.sunav{margin-top:16px}.sunav .sp{flex:1}
+.sulist{list-style:none;margin:0 0 4px;padding:0}
+.sulist li{display:grid;grid-template-columns:12px 1fr auto;gap:2px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}.sulist li:first-child{border-top:0}
+.sulist small{color:var(--muted)}
 /* ---------- small things ---------- */
 .tag{font-style:normal}
 .videos span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -357,6 +375,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
     </div>
     <div class="navsep"></div>
     <div class="navlist">
+      <button id="n-setup" onclick="go('setup')" title="Install what the program needs and sign in, one step at a time"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Set up<span class="count" id="n-setup-flag"></span></button>
       <button id="n-settings" onclick="go('settings')" title="Setup check, AI, language, updates"><svg class="i" aria-hidden="true"><use href="#i-gear"/></svg>Settings</button>
       <button id="helpbtn" onclick="helpToggle()" title="Ask how something works, or ask for it to be done"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg>Ask for help</button>
     </div>
@@ -630,6 +649,12 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
       </div></div>
     </section>
 
+    <section class="page panelonly" id="page-setup" hidden>
+      <div class="pagehead"><h1>Set up</h1><span class="sub">One step at a time. Nothing large is downloaded until you press its button.</span><span class="sp"></span>
+        <button class="btn" id="su-again" onclick="suRefresh()" title="Ask every tool again whether it is installed and signed in">Check again</button></div>
+      <div class="narrow" id="su-body"></div>
+    </section>
+
     <section class="page panelonly" id="page-settings" hidden>
       <div class="pagehead"><h1>Settings</h1></div>
       <div class="cols">
@@ -890,6 +915,7 @@ function show(s){
   if(!$('stopbox').hidden){if(!s.finishing)stopAsk(false);else stopText(s)}
   logTo('flog',s.finish_log);
   if(s.health)drawHealth(s.health);
+  suDraw(s);
   /* The newest red line of EACH log: one log's old error must not hide another log's new one. */
   const lastBad=a=>{a=(a||[]).filter(isBad);return a.length?[a[a.length-1]]:[]};
   const bad=[...new Set([...lastBad(s.watch_log),...lastBad(s.finish_log),...lastBad(s.run_log),...lastBad(s.health&&s.health.maint.lines)])], probs=[s.watch_problem,s.run_problem].filter(Boolean);
@@ -2026,8 +2052,8 @@ async function clipLoop(){try{await loadClips()}catch(e){setErr('THE PAGE HIT A 
 
 /* ---------- pages: one at a time, chosen in the menu on the left ---------- */
 const ICON={};for(const n of ['check','x','edit','back'])ICON[n]='<svg class="i" aria-hidden="true"><use href="#i-'+n+'"/></svg>';
-const PAGES={new:'page-new',live:'page-live',clips:'view-clips',look:'page-look',track:'view-track',settings:'page-settings'};
-const PAGE_NAME={new:'New clips',live:'Live channels',clips:'My clips',look:'Look and branding',track:'Posted and earnings',settings:'Settings'};
+const PAGES={new:'page-new',live:'page-live',clips:'view-clips',look:'page-look',track:'view-track',setup:'page-setup',settings:'page-settings'};
+const PAGE_NAME={new:'New clips',live:'Live channels',clips:'My clips',look:'Look and branding',track:'Posted and earnings',setup:'Set up',settings:'Settings'};
 const SUBS={vod:'tab-vod',own:'tab-own',board:'view-board',words:'view-words'};
 const SUB_NAME={vod:'Find the best moments',own:'Pick the part myself',board:'Cutting board',words:'Search what was said'};
 let curPage='clips', curSub='vod';
@@ -2035,7 +2061,7 @@ function go(p){
   if(!PAGES[p]||(!HAS_PANEL&&p!=='clips'))p=HAS_PANEL?'new':'clips';
   if(openKey)closeClip();
   curPage=p;for(const k in PAGES){$(PAGES[k]).hidden=k!==p;const b=$('n-'+k);if(b)b.className=k===p?'on':''}
-  if(p!=='new')$('cb-video').pause();if(p==='track')loadTracker();if(p==='new'&&curSub==='board')loadBoard();
+  if(p!=='new')$('cb-video').pause();if(p==='track')loadTracker();if(p==='new'&&curSub==='board')loadBoard();if(p==='setup'&&last)suDraw(last);
   try{localStorage.setItem('page',p)}catch(e){}
   window.scrollTo(0,0)}
 function sub(n){
@@ -2055,6 +2081,52 @@ function drawVideos(clips){
   const box=$('videos');if(box._h!==html){box._h=html;box.innerHTML=html}
   $('videos-wrap').hidden=!list.length}
 function pickVideo(who){go('clips');const s=$('s-who');if([...s.options].some(o=>o.value===who))s.value=who;setArrange();setFilter('candidate')}
+/* ---------- the setup guide: what this computer still needs, one step per screen ---------- */
+const SU={at:-1,skipped:new Set(),opened:false,fastUntil:0,timer:0};
+function suDraw(s){
+  const g=(s&&s.setup)||{}, steps=g.steps||[], flag=$('n-setup-flag'), left=(g.required_left||[]).length;
+  flag.textContent=left?'!':'';flag.dataset.n=left;
+  /* the first time the program is used the guide opens by itself; afterwards only when you choose it */
+  if(!SU.opened&&steps.length){SU.opened=true;if(!g.finished){const t=steps.findIndex(x=>x.state==='todo');SU.at=t>=0?t:Math.max(0,steps.findIndex(x=>x.state!=='done'));go('setup');return}}
+  if(curPage!=='setup')return;
+  const n=steps.length; if(SU.at<0)SU.at=steps.findIndex(x=>x.state!=='done');if(SU.at<0||SU.at>n)SU.at=n;
+  const at=SU.at, m=(s.health||{}).maint||{}, running=!!m.running;
+  let h='<div class="suprog" aria-label="Steps">'+steps.map((x,i)=>'<button class="'+(i===at?'on ':'')+(x.state==='done'?'ok':'')+'" onclick="suGo('+i+')" title="'+esc(x.title)+(x.state==='done'?': done':'')+'">'+(i+1)+'</button>').join('')
+    +'<button class="'+(at===n?'on':'')+'" onclick="suGo('+n+')">Finish</button></div>';
+  if(g.problem)h+='<div class="cliperr" style="white-space:normal">The guide could not be worked out: '+esc(g.problem)+'</div>';
+  if(at<n){
+    const x=steps[at], done=x.state==='done', signin=x.actions.some(a=>a.do==='signin');
+    h+='<div class="card"><div class="body"><div class="sukick">Step '+(at+1)+' of '+n+(x.optional?' · optional, you can skip it':'')+'</div><h2 class="sutitle">'+esc(x.title)+'</h2><p class="suwhat">'+esc(x.what)+'</p>'
+      +'<div class="sustate '+x.state+'"><span class="dot"></span><span>'+esc(x.detail)+'</span></div>'
+      +(x.actions.length?'<div class="btns">'+x.actions.map(a=>'<button class="btn primary big" data-yours'+(running?' disabled':'')+' onclick="suAct(\''+a.do+'\',\''+a.what+'\')">'+esc(a.label)+'</button>').join('')
+         +(signin?'':'<span class="saved">Download: '+esc(x.size)+'</span>')+'</div>':'')
+      +(signin?'<p class="help" style="margin-top:10px">A window opens and then your browser. Sign in there with your own account. This program never sees your password. When you are done, come back here: the step turns green by itself.</p>':'')
+      +(running?'<div class="bar indet"><i></i></div><div class="pct"><b>'+esc(m.name||'Working')+'</b> · '+esc((m.step||[])[2]||'working')+'</div><pre class="log">'+esc((m.lines||[]).slice(-7).join(NL))+'</pre>':'')
+      +'</div></div>'
+      +'<div class="btns sunav"><button class="btn"'+(at===0?' disabled':'')+' onclick="suGo('+(at-1)+')">Back</button><span class="sp"></span>'
+      +(!done&&x.optional?'<button class="btn" onclick="suSkip(\''+x.id+'\')">Skip this</button>':'')
+      +'<button class="btn'+(done?' primary':'')+'"'+(!done&&!x.optional?' disabled title="This step is needed before clips can be made"':'')+' onclick="suGo('+(at+1)+')">Next</button></div>';
+  }else{
+    h+='<div class="card"><div class="body"><div class="sukick">Finish</div><h2 class="sutitle">'+(left?'Almost there':'This computer is ready')+'</h2>'
+      +'<p class="suwhat">'+(left?'The steps marked below are still needed before clips can be made.':'You can change any of this later: Set up stays in the menu.')+'</p><ul class="sulist">'
+      +steps.map((x,i)=>'<li><span class="dot" style="background:'+(x.state==='done'?'var(--ok)':(x.optional?'var(--faint)':'var(--bad)'))+'"></span><span><b>'+esc(x.title)+'</b><br><small>'+esc(x.state==='done'?x.detail:(x.optional?'Skipped. '+x.detail:'Still needed. '+x.detail))+'</small></span>'
+        +(x.state==='done'?'':'<button class="btn" onclick="suGo('+i+')">Open</button>')+'</li>').join('')+'</ul>'
+      +'<div class="btns"><button class="btn primary big" onclick="suFinish()">Start using Stream Clipper</button></div></div></div>'
+      +'<div class="btns sunav"><button class="btn" onclick="suGo('+(n-1)+')">Back</button></div>';
+  }
+  const box=$('su-body');if(box._h!==h){box._h=h;box.innerHTML=h}
+  /* while a sign-in is awaited the tools are asked more often, so the step turns green soon after */
+  if(Date.now()<SU.fastUntil&&!SU.timer)SU.timer=setTimeout(async()=>{SU.timer=0;if(curPage==='setup'&&Date.now()<SU.fastUntil){const r=await send('/api/setup/refresh',{});if(!r.error)show(r)}},6000);
+}
+function suGo(i){SU.at=i;if(last)suDraw(last);window.scrollTo(0,0)}
+function suSkip(id){SU.skipped.add(id);suGo(SU.at+1)}
+async function suAct(what,thing){
+  const ok=await act('/api/setup/'+(what==='signin'?'signin':'install'),{what:thing});
+  if(ok&&what==='signin'){SU.fastUntil=Date.now()+5*60*1000;toast('A sign-in window opened. Sign in there, then come back here.')}
+  if(ok&&what==='install')SU.fastUntil=Date.now()+60*1000;
+  if(last)suDraw(last)}
+async function suRefresh(){const b=$('su-again');b.disabled=true;const r=await send('/api/setup/refresh',{});b.disabled=false;if(r.error){toast(r.error,true);return}show(r);toast('Checked again')}
+async function suFinish(){await act('/api/setup/finish',{skipped:[...SU.skipped]});go('new')}
 /* ---------- one clip opened as an editor: the same card, shown over the page with its sections as tabs ---------- */
 let openKey='';const edTab=new Map();
 function edGo(key,name){

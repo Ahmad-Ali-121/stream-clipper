@@ -82,7 +82,7 @@ def test_without_codex_the_reason_and_the_way_to_set_it_up_are_given(tmp_path, m
     monkeypatch.setattr(thumbs.shutil, "which", lambda name: None)
     thumbs._status.update(at=0.0, value=None)
     assert thumbs.codex_status(fresh=True)["installed"] is False
-    with pytest.raises(tools.ToolError, match="not installed.*codex login"):
+    with pytest.raises(tools.ToolError, match="not installed.*Open Set up in the menu"):
         thumbs.chatgpt_cover(_clip(tmp_path), _cfg(tmp_path))
     thumbs._status.update(at=0.0, value=None)
 

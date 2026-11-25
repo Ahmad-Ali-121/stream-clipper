@@ -338,7 +338,8 @@ class Control:
             "run_progress": self._progress(self.progress_path, self.running()),
             "finish_percent": self._progress(self.finish_progress_path, self.finishing),
             "ai": self._ai_status(),
-            "health": self._health_status(),
+            "health": (health := self._health_status()),
+            "setup": self._setup_status(health["items"]),
         }
 
     def _chatgpt(self) -> dict:
@@ -457,9 +458,12 @@ class Control:
             items = [{"id": "check", "name": "The setup check itself", "state": "bad", "detail": str(e), "fix": "Report this line."}]
         saved = read_json(self.cfg.data_dir / "health.json", {}) or {}
         stale = time.time() - float(saved.get("checked_at") or 0) > 24 * 3600
-        if stale and not self.health_started and not self.maint["running"]:
+        # Once per session, when the last check is more than a day old. Never on a computer where the speech model has
+        # not been tried at all: the first try downloads it (about 1.6 GB), and a download that size waits for the
+        # person's own press on the Set up page.
+        if stale and saved.get("speech") and not self.health_started and not self.maint["running"]:
             self.health_started = True
-            self.start_full_check()  # once per session, when nothing recent is known
+            self.start_full_check()
         # GitHub is asked at the start and then every half hour, so the Update button appears by itself soon after a
         # new version is published. It used to be asked once a day, with the full check.
         if time.time() - self.update_asked > 1800 and not self.maint["running"]:
@@ -479,6 +483,65 @@ class Control:
         upd = saved.get("update") or {}
         return {"items": items, "summary": health.summary(items), "maint": {**self.maint, "lines": self.maint["lines"][-200:]},
                 "can_update": bool(upd.get("can")), "launcher": bool(os.environ.get("CLIPPER_LAUNCHER"))}
+
+    # ---- the step-by-step setup guide ----
+
+    def _setup_status(self, items: list[dict]) -> dict:
+        from . import localai, setupguide
+
+        try:
+            return setupguide.status(self.cfg, items, localai.status(self.cfg))
+        except Exception as e:  # the guide must never take the page down with it
+            log.exception("the setup guide could not be worked out")
+            return {"steps": [], "finished": True, "skipped": [], "required_left": [], "data_dir": str(self.cfg.data_dir), "problem": f"{type(e).__name__}: {e}"}
+
+    def setup_install(self, raw: dict) -> dict:
+        """Install one thing the guide offers. Each is a press of the person's own; sizes are shown on the page first."""
+        from . import setupguide
+
+        what = str((raw or {}).get("what") or "")
+        if what == "tools":
+            return self.start_repair()
+        if what == "speech":
+            return self.start_full_check()
+        if what == "localai":
+            return self.start_local_ai()
+        steps = setupguide.install_commands(what)   # a clear ValueError for anything else
+        names = {"claude": "Install Claude Code", "node": "Install Node.js", "codex": "Install the ChatGPT tool"}
+
+        def work(say) -> None:
+            for n, (text, cmd) in enumerate(steps, 1):
+                say.step(n, len(steps), text)
+                code = self._run_logged(cmd, say, str(Path.home()))
+                if code != 0:
+                    raise ValueError(f"{text} ended with exit code {code}; the lines above say why. Check the internet connection and press the button again")
+            setupguide.forget()
+            setupguide.see_new_tools()
+            say("installed. " + ("Press Sign in next." if what in ("claude", "codex") else "Press the next button."))
+
+        return self._maintain(names[what], work)
+
+    def setup_signin(self, raw: dict) -> dict:
+        """Open a tool's own sign-in window. Nothing about the account is read here: afterwards the tool is asked yes or no."""
+        from . import setupguide
+
+        setupguide.open_signin(str((raw or {}).get("what") or ""))
+        return self.status()
+
+    def setup_refresh(self) -> dict:
+        from . import localai, setupguide, thumbs
+
+        setupguide.forget()
+        localai.status(self.cfg, fresh=True)
+        thumbs.codex_status(fresh=True)
+        return self.status()
+
+    def setup_finish(self, raw: dict) -> dict:
+        from . import setupguide
+
+        skipped = (raw or {}).get("skipped")
+        setupguide.finish(self.cfg, skipped if isinstance(skipped, list) else None)
+        return self.status()
 
     def _maintain(self, name: str, work) -> dict:
         with self._lock:

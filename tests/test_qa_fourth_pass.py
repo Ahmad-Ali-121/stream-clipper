@@ -142,7 +142,7 @@ def test_every_use_of_chatgpt_is_written_down_also_when_it_fails_or_says_nothing
     state = read_json(d / "clip.json")
     assert state["cover_by"] == "chatgpt" and state["cover_words"] == "" and (d / "cover.jpg").exists()
     mode["how"] = "fails"
-    with pytest.raises(tools.ToolError, match="usage limit reached.*codex login"):
+    with pytest.raises(tools.ToolError, match="usage limit reached.*open Set up in the menu and sign in to ChatGPT"):
         thumbs.make_cover(d, cfg, "chatgpt")
     used = [json.loads(line) for line in (tmp_path / "usage.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [u["result"][:6] for u in used] == ["made", "failed"] and used[0]["tokens"] == 1234

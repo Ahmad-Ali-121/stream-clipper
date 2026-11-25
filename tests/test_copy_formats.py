@@ -211,7 +211,7 @@ def test_claude_code_backend_explains_what_is_wrong(tmp_path, monkeypatch):
 
     cfg = _cli_cfg(tmp_path)
     monkeypatch.setattr(llm.shutil, "which", lambda name: None)
-    assert "Install Claude Code" in llm.why_unavailable(cfg)
+    assert "Open Set up in the menu" in llm.why_unavailable(cfg)  # the guide installs it and starts the sign-in
     with pytest.raises(llm.LlmUnavailable, match="is not installed"):
         llm.ask(cfg, "claude-haiku-5-5", "s", "u", {}, "t")
     monkeypatch.setattr(llm.shutil, "which", lambda name: "claude")
