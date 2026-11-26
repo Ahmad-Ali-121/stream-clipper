@@ -41,6 +41,14 @@ svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .navlist button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .navlist .count{margin-left:auto;font:600 11.5px/18px var(--mono);min-width:22px;text-align:center;padding:0 6px;border-radius:3px;background:var(--accent);color:var(--accent-ink)}
 .navlist .count:empty,.navlist .count[data-n="0"]{display:none}
+/* Set up still has something this computer needs: the menu entry itself is the warning (the page never opens by itself) */
+.navlist button.attn{color:var(--warn);background:var(--warn-soft);box-shadow:inset 0 0 0 1px rgba(224,165,58,.6);font-weight:600}
+.navlist button.attn:hover,.navlist button.attn.on{color:#f3c15f;background:#35290f}
+.navlist button.attn.on::before{background:var(--warn)}
+.navlist button.attn .count{background:var(--warn);color:#1c1403}
+.navlist button.attn svg.i{animation:attn 1.6s ease-in-out infinite}
+@keyframes attn{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.navlist button.attn svg.i{animation:none}}
 .navsep{height:1px;background:var(--line);margin:10px 8px}
 .navfill{flex:1;min-height:12px}
 .status{display:flex;flex-direction:column;gap:2px;padding:8px 2px 0;border-top:1px solid var(--line)}
@@ -60,6 +68,18 @@ main{min-width:0;padding:0 28px 80px}
 .narrow{max-width:760px}
 .cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
 @media (max-width:1100px){.cols{grid-template-columns:1fr}}
+/* Look and branding: the settings on the left, a phone showing the result on the right, always in view */
+.lookwrap{display:grid;grid-template-columns:minmax(0,1fr) 268px;gap:16px;align-items:start}
+.lookprev{position:sticky;top:12px}
+@media (max-width:1250px){.lookwrap{grid-template-columns:1fr}.lookprev{position:static;order:-1;max-width:420px}}
+#lk-tabs{display:flex;gap:4px;margin-bottom:10px}
+#lk-tabs button{flex:1;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:4px;height:26px;padding:0 4px;font-size:12px;cursor:pointer}
+#lk-tabs button.on{background:var(--surface3);border-color:var(--line2);color:var(--text)}
+#lk-phone{position:relative;aspect-ratio:9/16;background:#000;border:1px solid var(--line2);border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+#lk-phone img{width:100%;height:100%;object-fit:cover;display:block}
+#lk-phone.wait img{opacity:.35}
+#lk-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;color:var(--muted);font-size:12.5px;line-height:1.5}
+#lk-phone.wait #lk-empty{color:var(--text)}
 @media (max-width:860px){.app{grid-template-columns:1fr}.nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}.navlist{flex-direction:row;flex-wrap:wrap}.navlist button.on::before{display:none}.navfill,.navsep{display:none}.status{flex-direction:row;flex-wrap:wrap}main{padding:0 14px 60px}}
 body.nopanel .app{grid-template-columns:1fr}body.nopanel .nav,body.nopanel .panelonly{display:none!important}
 
@@ -220,6 +240,13 @@ body.editing #errbox{position:fixed;top:10px;left:50%;transform:translateX(-50%)
 .clip.open .vtabs{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-top:10px}
 .vtabs button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:4px;height:26px;padding:0 9px;font-size:12px;cursor:pointer}
 .vtabs button.on{background:var(--surface3);border-color:var(--line2);color:var(--text)}
+/* what of the stream's picture the clip shows: one click, under the player */
+.frow{display:none}
+.clip.open .frow{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px}
+.frow span{font-size:12px;color:var(--muted);margin-right:4px}
+.frow button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:4px;height:26px;padding:0 9px;font-size:12px;cursor:pointer}
+.frow button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--text)}
+.frow button:disabled{opacity:.55;cursor:default}
 .clip.open .info{display:block;min-width:0;max-width:860px}
 @media (max-width:820px){.clip.open{grid-template-columns:1fr;padding:0 14px 24px}.clip.open .vid{position:static;max-width:300px}}
 .badge{padding:0 8px;border-radius:3px;font:600 11.5px/22px var(--ui);background:var(--surface2);border:1px solid var(--line2);color:var(--muted);white-space:nowrap}
@@ -365,7 +392,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol><symbol id="i-live" viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.7"/><path d="M4.6 4.6a4.8 4.8 0 0 0 0 6.8M11.4 4.6a4.8 4.8 0 0 1 0 6.8"/></symbol><symbol id="i-grid" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></symbol><symbol id="i-look" viewBox="0 0 16 16"><path d="M2.5 5h5.6M11.4 5h2.1M2.5 11h2.1M7.9 11h5.6"/><circle cx="9.8" cy="5" r="1.6"/><circle cx="6.2" cy="11" r="1.6"/></symbol><symbol id="i-chart" viewBox="0 0 16 16"><path d="M3 13V8.5M8 13V3M13 13V6"/></symbol><symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.4"/><path d="M8 1.6v1.9M8 12.5v1.9M1.6 8h1.9M12.5 8h1.9M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M3.5 12.5l1.3-1.3M11.2 4.8l1.3-1.3"/></symbol><symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.7 1.6c-.6.4-1 .8-1 1.4M8 11.5v.1"/></symbol><symbol id="i-list" viewBox="0 0 16 16"><path d="M3 4.2h10M3 8h10M3 11.8h6"/></symbol><symbol id="i-check" viewBox="0 0 16 16"><path d="M3.2 8.6l3.1 3 6.5-7.2"/></symbol><symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol><symbol id="i-edit" viewBox="0 0 16 16"><path d="M2.8 13.2l.7-3L10.7 3l2.3 2.3-7.2 7.2z"/></symbol><symbol id="i-back" viewBox="0 0 16 16"><path d="M9.6 3.4L5 8l4.6 4.6"/></symbol><symbol id="i-folder" viewBox="0 0 16 16"><path d="M2.5 4.5h3.8L7.6 6h5.9v6.5h-11z"/></symbol><symbol id="i-filter" viewBox="0 0 16 16"><path d="M2.5 4h11M4.8 8h6.4M6.8 12h2.4"/></symbol></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol><symbol id="i-live" viewBox="0 0 16 16"><circle cx="8" cy="8" r="1.7"/><path d="M4.6 4.6a4.8 4.8 0 0 0 0 6.8M11.4 4.6a4.8 4.8 0 0 1 0 6.8"/></symbol><symbol id="i-grid" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></symbol><symbol id="i-look" viewBox="0 0 16 16"><path d="M2.5 5h5.6M11.4 5h2.1M2.5 11h2.1M7.9 11h5.6"/><circle cx="9.8" cy="5" r="1.6"/><circle cx="6.2" cy="11" r="1.6"/></symbol><symbol id="i-chart" viewBox="0 0 16 16"><path d="M3 13V8.5M8 13V3M13 13V6"/></symbol><symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.4"/><path d="M8 1.6v1.9M8 12.5v1.9M1.6 8h1.9M12.5 8h1.9M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M3.5 12.5l1.3-1.3M11.2 4.8l1.3-1.3"/></symbol><symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.7 1.6c-.6.4-1 .8-1 1.4M8 11.5v.1"/></symbol><symbol id="i-list" viewBox="0 0 16 16"><path d="M3 4.2h10M3 8h10M3 11.8h6"/></symbol><symbol id="i-check" viewBox="0 0 16 16"><path d="M3.2 8.6l3.1 3 6.5-7.2"/></symbol><symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.3l6.2 10.9H1.8z"/><path d="M8 6.7v3M8 11.6v.1"/></symbol><symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol><symbol id="i-edit" viewBox="0 0 16 16"><path d="M2.8 13.2l.7-3L10.7 3l2.3 2.3-7.2 7.2z"/></symbol><symbol id="i-back" viewBox="0 0 16 16"><path d="M9.6 3.4L5 8l4.6 4.6"/></symbol><symbol id="i-folder" viewBox="0 0 16 16"><path d="M2.5 4.5h3.8L7.6 6h5.9v6.5h-11z"/></symbol><symbol id="i-filter" viewBox="0 0 16 16"><path d="M2.5 4h11M4.8 8h6.4M6.8 12h2.4"/></symbol></svg>
 <div class="app">
   <nav class="nav panelonly" id="side" aria-label="Sections">
     <div class="brand">Stream Clipper</div>
@@ -411,7 +438,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
             <option value="video">Chat + picture (about 130 MB per stream hour)</option>
             <option value="all">Chat + sound + picture (about 130 MB per stream hour)</option>
           </select>
-          <label class="switch" style="margin-top:8px"><input type="checkbox" id="r-ai"><span><b>Let AI read the whole stream</b>Turns all the speech into text and has Claude pick moments from what was said. Slow on a processor (a 4-hour stream can take an hour) and costs a few cents. Needs a Claude key.</span></label>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="r-ai"><span><b>Let AI read the whole stream</b>Turns all the speech into text and has Claude pick moments from what was said. Slow on a processor (a 4-hour stream can take an hour). Needs Claude: your own Claude plan, signed in on the Set up page (it then uses your plan's limits), or a Claude key (a few cents a stream).</span></label>
           <label class="f" for="r-mix">What kind of moments</label>
           <select id="r-mix" onchange="act('/api/options',{moment_mix:val('r-mix')})"></select>
           <label class="f" for="r-top">How many clips</label>
@@ -550,6 +577,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
 
     <section class="page panelonly" id="page-look" hidden>
       <div class="pagehead"><h1>Look and branding</h1><span class="sub">Used for every clip made from now on. Clips already drafted get it when you press Make videos.</span></div>
+      <div class="lookwrap">
       <div class="cols">
         <div>
           <h2 class="sect">Captions</h2>
@@ -630,9 +658,20 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
           </div></div>
           <h2 class="sect">Versions</h2>
           <div class="card"><div class="body">
-        <label class="switch"><input type="checkbox" id="o-ab" onchange="saveOpts()"><span><b>A and B versions</b>Two versions of each clip with different opening text and title, to test which does better.</span></label>
+        <p class="help" style="margin:0"><b style="color:var(--text)">A and B versions are chosen on each clip now.</b> Open a clip with Edit, go to <b>Versions</b> and tick or untick <i>Make a version B too</i>. Version B is the same clip with the other opening text and title, to test which does better.</p>
           </div></div>
         </div>
+      </div>
+      <div class="lookprev">
+        <h2 class="sect">Preview <small>one of your clips with these choices</small></h2>
+        <div class="card"><div class="body">
+          <div id="lk-tabs"><button data-w="open" class="on" onclick="lookShow('open')" title="The first seconds: the opening text and the zoom">Start</button><button data-w="mid" onclick="lookShow('mid')" title="The middle: the captions">Middle</button><button data-w="end" onclick="lookShow('end')" title="The last second: the outro line">End</button></div>
+          <div id="lk-phone"><img id="lk-img" alt="A frame of one of your clips, drawn with the choices on this page" hidden><div id="lk-empty">The preview appears here.</div></div>
+          <p class="help" id="lk-note" style="margin:8px 0 0"></p>
+          <div class="btns" style="margin-top:8px"><button class="btn" id="lk-other" onclick="lookOther()" title="Show the same choices on another of your newest clips">Try another clip</button></div>
+          <p class="help" style="margin:8px 0 0">These are real frames, made the same way as the videos, so what you see is what you get. It follows every change on this page after a few seconds. Music cannot be shown.</p>
+        </div></div>
+      </div>
       </div>
     </section>
 
@@ -872,7 +911,7 @@ function show(s){
   $('b-aicheck').disabled=!!s.ai.checking; $('b-aicheck').textContent=s.ai.checking?'Checking…':'Check again';
   const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!r.checked&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
   for(const m of document.querySelectorAll('.mode'))m.classList.toggle('on',m.querySelector('input').checked);
-  $('o-ab').checked=s.ab_versions; $('o-opening').checked=s.opening;
+  $('o-opening').checked=s.opening;
   if(document.activeElement!==$('o-thumb'))$('o-thumb').value=s.thumbnail||'off';
   $('o-face').checked=s.thumbnail_face!==false;
   if(document.activeElement!==$('o-avoid')&&!avoidDirty)$('o-avoid').value=s.thumbnail_avoid||'';
@@ -943,9 +982,25 @@ function show(s){
 }
 async function act(url,body){
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(!r.ok){toast(await r.text(),true);return false} show(await r.json());return true}
+    if(!r.ok){toast(await r.text(),true);return false} show(await r.json());if(curPage==='look')lookSoon();return true}
   catch(e){toast('The program is not answering: '+e,true);return false}
 }
+/* ---------- Look and branding: the preview phone ---------- */
+const LK={n:0,busy:false,again:false,which:'open',timer:0,v:''};
+function lookSoon(){clearTimeout(LK.timer);LK.timer=setTimeout(lookDraw,900)}
+function lookShow(w){LK.which=w;for(const b of $('lk-tabs').children)b.classList.toggle('on',b.dataset.w===w);
+  if(LK.v){$('lk-img').src='/api/look/preview/'+w+'.jpg?v='+LK.v;$('lk-img').hidden=false;$('lk-empty').textContent=''}}
+function lookOther(){LK.n++;lookDraw()}
+async function lookDraw(){
+  if(curPage!=='look')return;
+  if(LK.busy){LK.again=true;return}
+  LK.busy=true;$('lk-phone').classList.add('wait');$('lk-empty').textContent='Making the preview… a few seconds';$('lk-other').disabled=true;
+  let r;try{const q=await fetch('/api/look/preview?n='+LK.n);r=q.ok?await q.json():{error:await q.text()}}catch(e){r={error:'The program is not answering: '+e}}
+  LK.busy=false;$('lk-phone').classList.remove('wait');$('lk-other').disabled=false;
+  if(r.error){LK.v='';$('lk-img').hidden=true;$('lk-empty').textContent=plainOf(r.error,true)||r.error;$('lk-note').textContent=''}
+  else{LK.v=r.v;lookShow(LK.which);$('lk-other').hidden=r.of<2;
+    $('lk-note').textContent='Your clip: '+r.title+'. Shown as if it were '+Math.round(r.seconds)+' seconds long, so the end comes quickly.'+(r.has_hook?'':' It has no opening text yet, so a placeholder is shown.')}
+  if(LK.again){LK.again=false;lookDraw()}}
 async function localAi(){
   if(!confirm('Set up the free local AI on this computer?'+NL+NL+'It installs Ollama (a free program that runs AI models, about 1 GB) and downloads one model (about 2 GB). This takes a while. Progress shows under Setup check.'))return;
   const r=await send('/api/ai/local-setup'); if(r.error){toast(r.error,true);return}
@@ -1014,7 +1069,7 @@ function saveLang(){
 function saveAi(){act('/api/options',{llm_backend:val('a-backend'),llm_prefer:val('a-prefer'),llm_fallback:$('a-fallback').checked,llm_model:val('a-model'),ai_model:val('a-stream')})}
 async function act2(url){if(await post(url))poll1()}
 async function poll1(){try{const r=await fetch('/api/options');if(r.ok)show(await r.json())}catch(e){}}
-function saveOpts(){const o={mode:mode(),ab_versions:$('o-ab').checked,opening:$('o-opening').checked};o.campaign=val('o-camp');act('/api/options',o)}
+function saveOpts(){const o={mode:mode(),opening:$('o-opening').checked};o.campaign=val('o-camp');act('/api/options',o)}
 async function poll(){
   let s=null;
   try{const r=await fetch('/api/options');if(r.ok)s=await r.json();else setErr('The page could not read the program state: '+r.status+' '+await r.text())}
@@ -1047,7 +1102,13 @@ function cardHtml(c){
   const tabs=(c.videos||[]).length>1||(c.videos||[]).includes('final.mp4')?'<div class="vtabs">'+(c.videos||[]).map(n=>'<button class="'+(n===c.video?'on':'')+'" onclick="showVid(\''+k+'\',\''+n+'\',this)">'+VN[n]+'</button>').join('')
     +(cv.made?'<button onclick="showCover(\''+k+'\',this)" title="This clip\'s thumbnail">Thumbnail</button>':'')
     +((c.videos||[]).includes('final.mp4')&&!(c.videos||[]).includes('final_b.mp4')?'<button onclick="makeB(\''+k+'\',this)" title="Render version B now so you can compare it">Make B preview</button>':'')+'</div>':'';
-  const vid=c.video?'<video'+(openKey===k?' controls':'')+' preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+(openKey===k?'':'#t=1.5')+'"></video>'+tabs+'<small>'+shown+'</small>'
+  /* The picture: fill the screen (some of a wide stream is cut off), or the whole picture with a blurred copy above and below. */
+  const fm=c.framing, whole=fm&&fm.layout==='blur', boxes=fm&&!whole&&fm.custom;
+  const frow=fm&&(c.videos||[]).includes('source.mp4')?'<div class="frow"><span>Picture:</span>'
+    +'<button class="'+(!whole&&!boxes?'on':'')+'" title="The program frames the clip itself: it fills the screen, with the face on top when it finds a facecam" onclick="quickFrame(\''+k+'\',\'auto\',this)">Automatic</button>'
+    +'<button class="'+(whole?'on':'')+'" title="Nothing is cut off: the whole stream picture in the middle, with a blurred, moving copy of it filling the space above and below" onclick="quickFrame(\''+k+'\',\'whole\',this)">Whole picture</button>'
+    +'<button class="'+(boxes?'on':'')+'" title="Draw yourself what is shown: a box for the face and a box for the video. The boxes keep the right shape by themselves" onclick="openBoxes(\''+k+'\')">Choose boxes…</button></div>':'';
+  const vid=c.video?'<video'+(openKey===k?' controls':'')+' preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+(openKey===k?'':'#t=1.5')+'"></video>'+tabs+'<small>'+shown+'</small>'+frow
     :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
   const pc=c.points>=70?'good':(c.points>=40?'':'meh');
   const chips='<span class="chip '+pc+'" title="One score from chat, sound, picture and AI. Higher is better."><b>Score '+c.points+'</b></span>'
@@ -1108,8 +1169,9 @@ function cardHtml(c){
    +'<div><label class="f">Title, version B</label><input type="text" name="title_b" value="'+esc(c.title_b)+'"></div></div>'
    +'<label class="f">Description</label><textarea name="description">'+esc(c.description)+'</textarea>'
    +'<label class="f">Hashtags (separated by spaces)</label><input type="text" name="tags" value="'+esc((c.tags||[]).join(' '))+'"></details>'
-   +'<details'+P('versions')+'><summary>Versions to make <small>now: '+(c.simple===false?'the explainer only':(c.explainer?'the normal video and an explainer':'the normal video'))+'</small></summary>'
+   +'<details'+P('versions')+'><summary>Versions to make <small>now: '+(c.simple===false?'the explainer only':(c.explainer?'the normal video and an explainer':'the normal video'))+(c.ab!==false?', each as A and B':', version A only')+'</small></summary>'
    +'<label class="check"><input type="checkbox" name="simple"'+(c.simple!==false?' checked':'')+'> Make the normal video (the clip as it is, without a narrator)</label>'
+   +'<label class="check"><input type="checkbox" name="ab"'+(c.ab!==false?' checked':'')+'> Make a version B too <small style="color:var(--muted)">(the same clip with the other opening text and title, to test which does better; this clip only)</small></label>'
    +'<label class="check"><input type="checkbox" name="explainer"'+(c.explainer?' checked':'')+'> Make an explainer version (a narrator sets up the moment, then the clip plays)</label>'
    +'<div class="two"><div><label class="f">What the narrator says (version A)</label><input type="text" name="intro" value="'+esc(c.intro)+'"></div>'
    +'<div><label class="f">Narrator, version B <small>(empty = same as A)</small></label><input type="text" name="intro_b" value="'+esc(c.intro_b)+'"></div></div></details>'
@@ -1124,6 +1186,10 @@ function cardHtml(c){
    +'<div><label class="f">End</label><input type="number" step="0.5" name="cut_end_s" value="'+esc(c.cut_end_s??c.end_s)+'"></div>'
    +'<div><label class="f">Framing</label><select name="layout">'+lay+'</select></div></div>'
    +'<p class="help" style="margin-top:6px">Can be set anywhere from '+esc(c.lo)+' to '+esc(c.hi)+' seconds. Framing now: '+esc(c.layout_reason||'not checked yet')+'.</p>'
+   +((c.videos||[]).includes('source.mp4')?'<div class="btns" style="margin-top:0;align-items:center"><span class="help" style="margin:0">Need more of the stream?</span>'
+       +'<button class="btn" title="Download 15 more seconds in front of what this clip has, so its start can be moved earlier" onclick="widen(\''+k+'\',15,0,this)">Add 15 s before</button>'
+       +'<button class="btn" title="Download 15 more seconds after what this clip has, so its end can be moved later" onclick="widen(\''+k+'\',0,15,this)">Add 15 s after</button>'
+       +'<button class="btn" title="Download 30 more seconds on each side" onclick="widen(\''+k+'\',30,30,this)">Add 30 s on both sides</button></div>':'')
    +(c.framing?'<div class="btns" style="margin-top:0"><button class="btn" onclick="openBoxes(\''+k+'\')">Set the face box and the video box</button>'
        +'<button class="btn" title="Draft every unfinished clip of this video again with the caption style, template and branding chosen now" onclick="remakeAll(\''+k+'\')">Make this video\'s drafts again</button></div>':'')
    +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
@@ -1135,6 +1201,8 @@ function cardHtml(c){
    +'<button class="btn" title="ChatGPT looks at the clip and decides the picture itself. Uses your ChatGPT plan; one to three minutes" onclick="makeCover(\''+k+'\',\'chatgpt\',this)">Let ChatGPT make it</button></div>'
    +'<label class="f">Or describe the picture yourself <small>(ChatGPT draws it; it still sees the clip)</small></label>'
    +'<textarea name="t_cover" maxlength="2000" style="min-height:64px" oninput="coverText.set(\''+k+'\',this.value)" placeholder="For example: the streamer shocked on the left, the bike upside down in the air on the right, big yellow text NO WAY">'+esc(coverText.has(k)?coverText.get(k):(cv.prompt||''))+'</textarea>'
+   +'<label class="f">Not wanted in this clip\'s thumbnail <small>(optional; added to your general list on the Look and branding page)</small></label>'
+   +'<input type="text" name="cover_avoid" maxlength="500" value="'+esc(c.cover_avoid||'')+'" placeholder="For example: no blood, do not show the other player\'s name, no red arrows">'
    +'<div class="btns"><button class="btn" onclick="makeCover(\''+k+'\',\'prompt\',this)">Make it from my description</button>'
    +(cv.made?'<a class="btn" href="/media/'+k+'/cover.jpg" download="thumbnail.jpg">Download</a><button class="btn quiet" onclick="makeCover(\''+k+'\',\'none\',this)">Remove thumbnail</button>':'')+'</div></details>'
    +(c.exported?'<details'+P('posted')+'><summary>Posted <small>log where you posted it; keeps views, payouts and rejections under Posted and earnings</small></summary>'
@@ -1238,12 +1306,12 @@ async function loadClips(){
 async function save(key,extra){
   const el=$(domId(key)), g=n=>el.querySelector('[name='+n+']');
   if(!el){toast('That clip is not on the page any more.',true);return false}
-  const all={hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,simple:g('simple').checked,
+  const all={hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,simple:g('simple').checked,ab:g('ab').checked,cover_avoid:g('cover_avoid').value.trim(),
     title:g('title').value,title_b:g('title_b').value,description:g('description').value,tags:g('tags').value,
     layout:g('layout').value,disclosure:g('disclosure').checked,cut_start_s:parseFloat(g('cut_start_s').value),cut_end_s:parseFloat(g('cut_end_s').value)};
   /* What the card showed when it was drawn. A field you did not touch is not sent: the card may be older than the clip
      (text written by AI since), and sending it all would put the old text back as if you had typed it. */
-  const c=el._c||{}, was={hook:c.hook||'',hook_b:c.hook_b||'',intro:c.intro||'',intro_b:c.intro_b||'',explainer:!!c.explainer,simple:c.simple!==false,title:c.title||'',title_b:c.title_b||'',
+  const c=el._c||{}, was={hook:c.hook||'',hook_b:c.hook_b||'',intro:c.intro||'',intro_b:c.intro_b||'',explainer:!!c.explainer,simple:c.simple!==false,ab:c.ab!==false,cover_avoid:c.cover_avoid||'',title:c.title||'',title_b:c.title_b||'',
     description:c.description||'',tags:(c.tags||[]).join(' '),layout:c.layout||'',disclosure:!!c.disclosure,cut_start_s:Number(c.cut_start_s??c.start_s),cut_end_s:Number(c.cut_end_s??c.end_s)};
   const body={};for(const k in all)if(all[k]!==was[k])body[k]=all[k];
   if(('cut_start_s' in body)!==('cut_end_s' in body)){body.cut_start_s=all.cut_start_s;body.cut_end_s=all.cut_end_s}
@@ -1302,7 +1370,7 @@ async function makeCover(key,how,btn){
   const box=btn.closest('details'), was=btn.textContent;
   for(const b of box.querySelectorAll('button'))b.disabled=true;
   btn.textContent=how==='frame'?'Making…':(how==='none'?'Removing…':'ChatGPT is drawing… one to three minutes');
-  let r;try{r=await fetch('/api/clip/'+key+'/cover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({how:how,prompt:text})})}
+  let r;try{r=await fetch('/api/clip/'+key+'/cover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({how:how,prompt:text,avoid:el.querySelector('[name=cover_avoid]').value})})}
   catch(e){toast('The program is not answering: '+e,true);for(const b of box.querySelectorAll('button'))b.disabled=false;btn.textContent=was;return}
   const bad=r.ok?'':await r.text();
   coverOpen.add(key); if(document.activeElement)document.activeElement.blur(); el.dataset.m='';
@@ -1349,6 +1417,31 @@ function showVid(key,name,btn){const el=$(domId(key)),v=el.querySelector('.vid v
 async function makeB(key,btn){btn.disabled=true;btn.textContent='Making B…';
   if(await post('/api/clip/'+key+'/render-b')){const el=$(domId(key));if(document.activeElement)document.activeElement.blur();if(el)el.dataset.m='';toast('Version B is ready');loadClips()}else{btn.disabled=false;btn.textContent='Make B preview'}}
 
+/* The picture of one clip, in one click: automatic framing, or the whole stream picture on a blurred copy of itself. */
+async function quickFrame(key,mode,btn){
+  const card=$(domId(key)), row=btn.parentElement, was=btn.textContent;
+  if(btn.classList.contains('on')&&mode==='whole')return;
+  if(card&&card.dataset.dirty==='1'&&!(await save(key)))return;   /* what was typed is saved first, so it is not lost when the card is redrawn */
+  for(const b of row.querySelectorAll('button'))b.disabled=true;btn.textContent='Making the draft again…';
+  const r=await send('/api/clip/'+key+'/framing',mode==='whole'?{layout:'blur',game:[0,0,1,1]}:{auto:true});
+  for(const b of row.querySelectorAll('button'))b.disabled=false;btn.textContent=was;
+  if(document.activeElement)document.activeElement.blur();if(card){card.dataset.m='';card.dataset.dirty=''}
+  if(r.error)toast((/^the boxes are saved/i.test(r.error)?'':'The picture was not changed: ')+r.error,true);
+  else toast(mode==='whole'?'This clip now shows the whole picture, with blur above and below. The draft is made again.':'Back to automatic framing. The draft is made again.');
+  loadClips()}
+/* More of the stream in front of or behind one clip, so its start or end can be dragged further out. */
+async function widen(key,before,after,btn){
+  const card=$(domId(key)), row=btn.parentElement, was=btn.textContent;
+  if(card&&card.dataset.dirty==='1'&&!(await save(key)))return;
+  /* Windows cannot replace a video file that a player still has open */
+  if(card)for(const v of card.querySelectorAll('video')){v.pause();v.removeAttribute('src');v.load()}
+  for(const b of row.querySelectorAll('button'))b.disabled=true;btn.textContent='Fetching… a minute or two';
+  const r=await send('/api/clip/'+key+'/widen',{before:before,after:after});
+  for(const b of row.querySelectorAll('button'))b.disabled=false;btn.textContent=was;
+  if(document.activeElement)document.activeElement.blur();if(card){card.dataset.m='';card.dataset.dirty=''}
+  if(r.error)toast('No more of the stream was added: '+r.error,true);
+  else toast('Added. The clip itself did not move: drag its start or end into the new part, then press Save changes.');
+  loadClips()}
 /* ---------- trimmer: drag the start and end over the sound wave ---------- */
 async function initTrim(key){
   const el=$(domId(key)), box=el.querySelector('.trim'), c=known.find(x=>x.key===key);
@@ -2074,8 +2167,8 @@ function go(p){
   if(!PAGES[p]||(!HAS_PANEL&&p!=='clips'))p=HAS_PANEL?'new':'clips';
   if(openKey)closeClip();
   for(const o of document.querySelectorAll('#clips video'))o.pause();
-  curPage=p;for(const k in PAGES){$(PAGES[k]).hidden=k!==p;const b=$('n-'+k);if(b)b.className=k===p?'on':''}
-  if(p!=='new')$('cb-video').pause();if(p==='track')loadTracker();if(p==='new'&&curSub==='board'){loadBoard();redrawSoon()}if(p==='setup'&&last)suDraw(last);
+  curPage=p;for(const k in PAGES){$(PAGES[k]).hidden=k!==p;const b=$('n-'+k);if(b)b.classList.toggle('on',k===p)}
+  if(p!=='new')$('cb-video').pause();if(p==='track')loadTracker();if(p==='look')lookSoon();if(p==='new'&&curSub==='board'){loadBoard();redrawSoon()}if(p==='setup'&&last)suDraw(last);
   try{localStorage.setItem('page',p)}catch(e){}
   window.scrollTo(0,0)}
 function sub(n){
@@ -2100,15 +2193,18 @@ function pickVideo(id){
   go('clips');onlyVid=id;$('s-who').value='';$('s-how').value='';$('s-when').value='';$('s-find').value='';
   setFilter(has('candidate')?'candidate':has('approved')?'approved':'all')}
 /* ---------- the setup guide: what this computer still needs, one step per screen ---------- */
-const SU={at:-1,skipped:new Set(),opened:false,fastUntil:0,timer:0,wait:''};
+const SU={at:-1,skipped:new Set(),fastUntil:0,timer:0,wait:''};
 function suDraw(s){
   const g=(s&&s.setup)||{}, steps=g.steps||[], flag=$('n-setup-flag'), left=(g.required_left||[]).length;
-  flag.textContent=left?'!':'';flag.dataset.n=left;
-  /* the first time the program is used the guide opens by itself; afterwards only when you choose it */
-  /* It opens by itself until it is finished, but only while something needed is missing or this browser has never shown it:
-     a person who looked and went on to work is not pulled back at every reload. */
-  if(!SU.opened&&steps.length){SU.opened=true;let seen=false;try{seen=localStorage.getItem('setupSeen')==='1';localStorage.setItem('setupSeen','1')}catch(e){}
-    if(!g.finished&&(left||!seen)){const t=steps.findIndex(x=>x.state==='todo');SU.at=t>=0?t:Math.max(0,steps.findIndex(x=>x.state!=='done'));go('setup');return}}
+  /* The guide never opens by itself, and nothing is downloaded until a step's own button is pressed (Ahmad, 2026-11-27).
+     While something the program needs is missing, the menu entry turns into a warning that says how many steps are left;
+     with only optional steps left it shows their number quietly. */
+  const nb=$('n-setup'), names=(g.required_left||[]).map(id=>(steps.find(x=>x.id===id)||{}).title||id).join(', ');
+  const opt=g.finished?0:steps.filter(x=>x.optional&&x.state==='todo'&&!(g.skipped||[]).includes(x.id)).length;
+  nb.classList.toggle('attn',left>0);nb.querySelector('use').setAttribute('href',left?'#i-warn':'#i-check');
+  flag.textContent=left?left+' to do':(opt?String(opt):'');flag.dataset.n=left||opt;
+  nb.title=left?'Needed before clips can be made: '+names+'. Open this page and press the button of each step. Nothing is downloaded before you press.'
+    :(opt?opt+' optional step'+(opt>1?'s':'')+' not done yet. ':'')+'Install what the program needs and sign in, one step at a time';
   if(curPage!=='setup')return;
   const box=$('su-body');
   /* before the program has answered there is nothing to say yet: never "This computer is ready" on no evidence */
@@ -2203,7 +2299,8 @@ if(HAS_PANEL)poll();else document.body.classList.add('nopanel');
 try{$('z-pick').value=localStorage.getItem('zones')||''}catch(e){}
 try{const a=JSON.parse(localStorage.getItem('arrange')||'{}');if(['new','score','old'].includes(a.sort))$('s-sort').value=a.sort;if(a.how)$('s-how').value=a.how;if(a.when)$('s-when').value=a.when}catch(e){}
 setZones();
-{let first='clips';try{first=localStorage.getItem('page')||'new'}catch(e){}go(HAS_PANEL?first:'clips');sub('vod')}
+/* The program opens where you were last, but never on Set up: that page is only opened by you. */
+{let first='clips';try{first=localStorage.getItem('page')||'new'}catch(e){}if(first==='setup')first='new';go(HAS_PANEL?first:'clips');sub('vod')}
 clipLoop();
 </script>
 </body>

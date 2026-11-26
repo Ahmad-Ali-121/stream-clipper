@@ -137,6 +137,12 @@ def _cmd_review(args: argparse.Namespace) -> int:
     from .work import read_json
 
     cfg = load_config(args.config)
+    # The page never downloads the speech model behind the person's back: it and every job it starts ask first (health.captions_blocked).
+    import os
+
+    from .health import ASK_FIRST
+
+    os.environ[ASK_FIRST] = "1"
     if args.url:
         _source, work = open_work(args.url, cfg)
         meta = read_json(work / "meta.json", {})

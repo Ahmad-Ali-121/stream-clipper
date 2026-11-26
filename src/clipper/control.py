@@ -750,8 +750,17 @@ class Control:
         if self.maint["running"] and self.maint.get("name") == "Update":
             raise ValueError("the program is being updated right now and restarts when that is done. Wait for it, then press this again")
 
+    def _captions_first(self) -> None:
+        """Stop a job at its first second, with where to go, instead of letting it download the speech model by itself later."""
+        from . import health
+
+        stop = health.captions_blocked(self.cfg)
+        if stop:
+            raise ValueError(stop)
+
     def start_watch(self, raw: dict) -> dict:
         self._not_updating()
+        self._captions_first()
         opts = clean_options({k: raw[k] for k in ("mode", "channels") if k in raw})
         names = opts.get("watch", {}).get("channels") or list(self.cfg.watch.channels)
         if not names:
@@ -844,6 +853,7 @@ class Control:
         from .sources import parse_source
 
         self._not_updating()
+        self._captions_first()
 
         source = parse_source(str(raw.get("url") or ""))  # a clear ValueError for anything that is not a video link
         top = int(raw.get("top") or 8)
@@ -905,6 +915,8 @@ class Control:
         """Make clips from the pieces marked on the cutting board (the same as ``clipper cut --range``)."""
         import re
 
+        self._captions_first()
+
         from .pipeline import check_segments
         from .work import read_json
 
@@ -926,6 +938,7 @@ class Control:
         from .sources import parse_source
 
         self._not_updating()
+        self._captions_first()
         source = parse_source(str(raw.get("source") or ""))
         if raw.get("ranges"):
             # Several separate stretches picked from the transcript or from a chatbot's answers: each its own clip.

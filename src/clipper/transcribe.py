@@ -58,7 +58,11 @@ def load_model(cfg: Config, name: str | None = None):
     t = cfg.transcribe
     name = name or t.model
     from . import hw
+    from .health import captions_blocked
 
+    stop = captions_blocked(cfg, name)   # before anything is tried: the trial below is what would download it
+    if stop:
+        raise ToolError(stop)
     hw.add_nvidia_dirs()
     device, compute_type = hw.whisper_device(cfg)
     if device == "cuda" and t.device == "auto":

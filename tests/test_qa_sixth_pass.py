@@ -47,7 +47,7 @@ def test_the_page_keeps_what_was_found_by_using_it():
         # a clip starts from its beginning
         "(openKey===k?'':'#t=1.5')", "function playTile(v){",
         # the setup guide
-        "if(!g.finished&&(left||!seen)){", "Checking this computer", "if(await act('/api/setup/finish',{skipped:[...SU.skipped]}))go('new')",
+        "nb.classList.toggle('attn',left>0)", "Checking this computer", "if(await act('/api/setup/finish',{skipped:[...SU.skipped]}))go('new')",
         "if(lg.textContent!==t&&!(sel&&!sel.isCollapsed&&lg.contains(sel.anchorNode)))lg.textContent=t",
         "if(!w||w.state==='done'){SU.wait='';SU.fastUntil=0}",
         # the Activity log opens at its newest lines

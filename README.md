@@ -52,7 +52,7 @@ Stream Clipper watches a stream's chat for the moments where chat suddenly erupt
 
 1. Download **[Stream-Clipper-Setup.exe](https://github.com/Ahmad-Ali-121/stream-clipper/releases/latest/download/Stream-Clipper-Setup.exe)** and double-click it.
 2. Keep the two folders it suggests, or choose your own, and press **Install**. It takes 5 to 20 minutes and needs the internet.
-3. Start **Stream Clipper** from the shortcut on your desktop. The **Set up** page takes you through the rest, one step per screen.
+3. Start **Stream Clipper** from the shortcut on your desktop and click **Set up** in the menu (it shows a warning sign while something is missing). It takes you through the rest, one step per screen, and downloads nothing until you press a step's button.
 
 <p align="center"><img src="docs/screenshots/setup.png" alt="The Set up page, one step per screen" width="760"></p>
 
@@ -124,6 +124,8 @@ The page opens at http://127.0.0.1:8765/. The code is plain Python and FFmpeg, s
 - **Captions.** Local speech-to-text, word-by-word highlighted captions burned in. The spoken word can pop in, show one big word at a time, or fill in the line. Font, colours and size can be saved under your own names.
 - **YouTube's own captions as the words.** For YouTube videos the words come from YouTube's captions when it has them, in seconds instead of minutes. The speech model stays the fallback.
 - **Subtitle files.** Download a clip's captions as .srt or .vtt, or use your own subtitle file as its captions.
+- **See it before you make it.** The Look and branding page shows real frames of one of your own clips with the choices you make, a few seconds after each change.
+- **More of the stream, later.** Add 15 or 30 seconds before or after a clip that starts too late or ends too early.
 - **Templates and a background card.** The clip as a rounded card on a blur, a colour, a gradient or your image; inside a social post; under a breaking-news banner; or with the opening text in a box on top.
 - **A strong first three seconds.** Zoom-in, pop-in opening text, a whoosh and a progress bar.
 - **Branding.** Your logo in a corner, an outro line over the last seconds, music under the voice that can grow louder at the end.
@@ -238,7 +240,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           400 unit tests (uv run python -m pytest -q)
+tests/           417 unit tests (uv run python -m pytest -q)
 ```
 
 </details>

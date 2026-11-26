@@ -72,6 +72,16 @@ def supported(cfg: Config) -> tuple[bool, str]:
     return True, ""
 
 
+def facts(cfg: Config) -> str:
+    """What was measured to decide, in words, so the page can show the person why: "16 GB of memory, 8 processor threads"."""
+    from .work import read_json
+
+    vram = int((read_json(cfg.data_dir / "hardware.json", {}) or {}).get("vram_mb") or 0)
+    card = f", an NVIDIA card with {vram / 1024:.0f} GB" if vram else ""
+    shown = _ram_gb() * 1e9 / 2**30   # counted the way Windows does: a "16 GB" PC shows the 15.x GB Windows calls usable, not 17
+    return f"{shown:.1f} GB of memory, {os.cpu_count() or 1} processor threads{card}"
+
+
 def program() -> str:
     """Where the Ollama program is, or ""."""
     found = shutil.which("ollama")
@@ -98,7 +108,7 @@ def status(cfg: Config, fresh: bool = False) -> dict:
     tags = _tags()
     model = cfg.llm.local_model
     have = bool(tags) and any(t == model or t.split(":")[0] == model.split(":")[0] and ":" not in model for t in tags)
-    out = {"supported": ok, "why": why, "installed": bool(program()), "running": tags is not None, "model": model, "has_model": have,
+    out = {"supported": ok, "why": why, "facts": facts(cfg), "installed": bool(program()), "running": tags is not None, "model": model, "has_model": have,
            "ready": tags is not None and have and cfg.llm.local != "off"}
     _seen.update(at=time.time(), value=out)
     return out

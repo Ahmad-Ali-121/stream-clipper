@@ -2,7 +2,7 @@
 #   powershell -ExecutionPolicy Bypass -File setup.ps1 -DataDir D:\clipper-data
 # -DataDir is where tools, models, recordings and clips live (use the drive with the most space).
 # Downloads: FFmpeg (about 115 MB), TwitchDownloaderCLI (about 50 MB), a face model and a voice model (about 120 MB).
-# The Whisper speech model (about 1.6 GB) downloads by itself on the first transcribe.
+# The Whisper speech model (about 1.6 GB) is downloaded by the Set up page's Captions step (from a terminal: by itself on the first transcribe).
 
 # Add -Gpu on a PC with an NVIDIA card to also install NVIDIA's libraries (about 1 GB), so speech-to-text runs on the card.
 # Add -NoShortcut to skip the "Stream Clipper" shortcut on the desktop.

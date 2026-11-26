@@ -40,7 +40,7 @@ def test_nothing_was_lost_in_the_move():
         "o-channels", "o-auto", "o-modes", "b-start", "b-stop", "b-clipnow", "w-last", "w-live", "r-url", "r-sig", "r-ai", "r-mix", "r-top", "b-run", "b-runstop",
         "m-src", "m-file", "m-toend", "b-board", "b-ownstop", "m-split", "b-own", "cb-video", "cb-cut", "cb-make", "tw-url", "tw-get", "tw-make", "tw-ans",
         # the look
-        "o-ab", "o-opening", "o-thumb", "o-face", "o-avoid", "o-cap", "o-anim", "k-font", "t-tpl", "t-hook", "g-logofile", "g-outro", "g-musicfile", "o-camp",
+        "o-opening", "o-thumb", "o-face", "o-avoid", "o-cap", "o-anim", "k-font", "t-tpl", "t-hook", "g-logofile", "g-outro", "g-musicfile", "o-camp",
         # reviewing and making
         "filters", "clips", "empty", "s-sort", "s-who", "s-how", "s-when", "s-find", "z-pick", "b-finish", "b-fstop", "b-ready", "f-bar", "f-note",
         # setup, AI, language, the tracker, the logs

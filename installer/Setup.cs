@@ -350,7 +350,7 @@ namespace StreamClipperSetup
             head.Text = "Stream Clipper is installed";
             bool link = false;
             try { link = File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Stream Clipper.lnk")); } catch { }
-            string rest = "The first time it starts, its Set up page takes you through the last steps (captions, and signing in to Claude or ChatGPT if you want them).";
+            string rest = "In the program, click Set up in the menu for the last steps (captions, and signing in to Claude or ChatGPT if you want them). It shows a warning sign while something is missing.";
             sub.Text = test ? "Test run: no shortcut was made and the program is not started." :
                 link ? "A shortcut called Stream Clipper is on your desktop. " + rest :
                        "Windows did not let a shortcut be put on your desktop. Start the program with Stream-Clipper.cmd in " + App + ". " + rest;

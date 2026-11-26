@@ -608,6 +608,129 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
     return count
 
 
+MAX_FETCH_S = 600.0  # the most of a stream one clip keeps on disk: ten minutes
+WIDEN_MAX_S = 120.0  # the most that is added to one side at a time
+
+
+def merge_words(old: list[dict], new: list[dict], shift: float, old_len: float) -> list[dict]:
+    """The captions of a clip whose video was made longer.
+
+    ``old`` are the words it had (with whatever the person corrected), ``new`` the words of the longer video. The old
+    video now starts ``shift`` seconds into the new one and lasts ``old_len``. Inside that stretch the old words are
+    kept, moved to their new times; only before and after it the new words are taken.
+    """
+    a, b = shift, shift + old_len
+    kept = [{**w, "start": round(float(w["start"]) + shift, 3), "end": round(float(w["end"]) + shift, 3)} for w in old]
+    if not kept:
+        return list(new)
+    first, last = kept[0]["start"], kept[-1]["end"]
+    head = [w for w in new if float(w["end"]) <= min(a + 0.05, first)]
+    tail = [w for w in new if float(w["start"]) >= max(b - 0.05, last)]
+    return head + kept + tail
+
+
+def widen_clip(d: Path, cfg: Config, before: float = 0.0, after: float = 0.0) -> dict:
+    """Download more of the stream around one clip: ``before`` seconds earlier and ``after`` seconds later than it has.
+
+    The clip itself does not move: its start and end stay where they are, there is only more room to drag them into.
+    The captions already there are kept (with any corrections); the added seconds are listened to and their words joined on.
+    The new video replaces the old one only when everything worked, so a failed download costs nothing.
+    """
+    import os
+
+    from .transcribe import caption_script, transcribe_file
+
+    try:
+        before, after = max(0.0, float(before or 0)), max(0.0, float(after or 0))
+    except (TypeError, ValueError):
+        raise ValueError("how many seconds to add must be a number") from None
+    if before <= 0 and after <= 0:
+        raise ValueError("say how many seconds to add before or after")
+    if before > WIDEN_MAX_S or after > WIDEN_MAX_S:
+        raise ValueError(f"at most {WIDEN_MAX_S:.0f} seconds can be added to one side at a time")
+    state = read_json(d / "clip.json")
+    work = d.parent.parent
+    if not done(d / "source.mp4") or "fetch_start_s" not in state:
+        raise ValueError("this clip has no downloaded video yet, so there is nothing to add to")
+    meta = read_json(work / "meta.json", {}) or {}
+    old_a = float(state["fetch_start_s"])
+    old_len = float(state.get("source_duration_s") or (float(state.get("fetch_end_s", state["end_s"])) - old_a))
+    old_b = old_a + old_len
+    part = work / "ranges" / str(state.get("range_id") or "-") / "range.mp4"
+    info = read_json(part.with_name("range.json"), {}) if state.get("range_id") else {}
+    from_part = bool(info.get("ready")) and done(part)
+    if meta.get("no_vod") and not from_part:
+        raise ValueError("this clip comes from a live stream that is not being recorded. The seconds around it were only kept for a few "
+                         "minutes while it was live, so there is nothing left to add")
+    new_a, new_b = max(0.0, old_a - before), old_b + after
+    total = float(meta.get("duration_s") or 0)
+    if total and not meta.get("is_live"):
+        new_b = min(new_b, total)
+    if from_part:
+        base = float(info["start_s"])
+        new_a, new_b = max(base, new_a), min(base + float(info["duration_s"]), new_b)
+    if new_a >= old_a - 0.5 and new_b <= old_b + 0.5:
+        raise ValueError("there is nothing more to add on that side: the clip's video already reaches the "
+                         + ("edge of the part you downloaded for the cutting board" if from_part else "start or the end of the video"))
+    if new_b - new_a > MAX_FETCH_S:
+        raise ValueError(f"a clip keeps at most {MAX_FETCH_S / 60:.0f} minutes of the stream; this would be {(new_b - new_a) / 60:.1f}. "
+                         "Make a new clip of the part you want instead (New clips, Pick the part myself)")
+    if free_gb(cfg.data_dir) < MIN_FREE_GB:
+        raise PipelineError(f"less than {MIN_FREE_GB:.0f} GB free on {cfg.data_dir.anchor}; delete old work folders before fetching more")
+    source = parse_source(str(state.get("vod_url") or meta.get("url") or ""))
+    tmp = d / "source.wide.mp4"
+    remove(tmp)
+    t0 = time.monotonic()
+    log.info("clip %s: fetching more of the stream: %.0fs before and %.0fs after what it has", d.name, old_a - new_a, new_b - old_b)
+    try:
+        if from_part:
+            from .sources import local_source
+
+            fetch_range(local_source(part), new_a - base, new_b - base, tmp, cfg)
+        else:
+            fetch_range(source, new_a, new_b, tmp, cfg)
+        seen = probe(tmp, cfg)
+        new_len = float(seen["duration_s"])
+        if new_len < old_len + 1:
+            raise ToolError(f"the download came back no longer than before ({new_len:.0f} s): that part of the stream cannot be fetched (any more)")
+        # the words of the longer video: YouTube's own captions when it has them, else the speech model listens
+        words = None
+        if source.platform == "youtube" and not from_part:
+            from . import ytcaptions
+
+            whole = ytcaptions.video_words(source.url, work, cfg)
+            here = ytcaptions.window(whole, new_a, new_a + new_len) if whole else None
+            if here:
+                words = caption_script(here, cfg)
+        if words is None:
+            from .fetch import ensure_sound
+
+            ensure_sound(tmp, cfg)
+            words = transcribe_file(tmp, cfg)
+        had = read_json(d / "words.json", []) if (d / "words.json").exists() else []
+        words = merge_words(had, words, old_a - new_a, old_len)
+        # only now is anything of the clip touched
+        for attempt in range(8):
+            try:
+                os.replace(tmp, d / "source.mp4")
+                break
+            except PermissionError:
+                if attempt == 7:
+                    raise ValueError("the clip's video is open somewhere (playing on the page, or another job is using it). "
+                                     "Pause it, wait a moment and press the button again; nothing was changed") from None
+                time.sleep(0.4)
+    except BaseException:
+        remove(tmp)
+        raise
+    write_json(d / "words.json", words)
+    remove(d / "wave.json")  # the sound wave of the trimmer belongs to the old video
+    state = update_clip(d / "clip.json", {"fetch_start_s": new_a, "fetch_end_s": new_a + new_len, "source_duration_s": round(new_len, 2),
+                                          "fetch_seconds": round(time.monotonic() - t0, 1), "transcript": " ".join(w["word"] for w in words)})
+    log.info("clip %s: its video now covers %.0f to %.0f seconds of the stream (was %.0f to %.0f), in %.0fs",
+             d.name, new_a, new_a + new_len, old_a, old_b, state["fetch_seconds"])
+    return state
+
+
 def stage_render(url: str, cfg: Config, only: list[str] | None = None, force: bool = False, approved_only: bool = False,
                  failed: list[str] | None = None) -> list[Path]:
     """Render final.mp4 for each selected clip that has a source."""
@@ -681,7 +804,7 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
     todo = [(work, d) for work in works for d in select_clips(work, status="approved")]
     for _work, d in todo:
         st = read_json(d / "clip.json", {})
-        if not isinstance(st.get("exports"), dict) and (known := known_exports(st, cfg.render.ab_versions)):
+        if not isinstance(st.get("exports"), dict) and (known := known_exports(st, wants_ab(st, cfg))):
             update_clip(d / "clip.json", {"exports": known})  # exported by an older version: note where its files are
     if only:
         todo = [(work, d) for work, d in todo if (work.name, d.name) == tuple(only)]
@@ -699,7 +822,7 @@ def stage_finish(cfg: Config, url: str | None = None, brief_path: str | None = N
     for _work, d in todo:
         try:
             st = read_json(d / "clip.json")
-            if not isinstance(st.get("exports"), dict) and (known := known_exports(st, cfg.render.ab_versions)):
+            if not isinstance(st.get("exports"), dict) and (known := known_exports(st, wants_ab(st, cfg))):
                 update_clip(d / "clip.json", {"exports": known})  # exported by an older version: note where its files are
             jobs = plan_clip(d, st, cfg, brief, again=d in redo)[1]
             if not jobs and st.get("made_all") is False:
@@ -795,7 +918,7 @@ def plan_clip(d: Path, state: dict, cfg: Config, brief, again: bool = False) -> 
     """
     if not done(d / "source.mp4"):
         raise ToolError("approved, but its video was never downloaded (the draft failed). Reject it on the review page")
-    ab = cfg.render.ab_versions
+    ab = wants_ab(state, cfg)
     # A render made before the opening effects were switched on (or off) no longer matches the settings.
     fresh = (not done(d / "final.mp4") or bool(state.get("opening_used")) != bool(cfg.render.opening)
              # a render with another caption look or other branding is stale too (older drafts only recorded the style's name)
@@ -858,7 +981,7 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
         step("completing the draft")
         state = prepare_clip(d, state, cfg)
     state = write_clip_copy(d, state, cfg)  # no-op unless its text was written without AI and AI is reachable now
-    ab = cfg.render.ab_versions
+    ab = wants_ab(state, cfg)
     fresh, jobs = plan_clip(d, state, cfg, brief, again=again)
     known = known_exports(state, ab)
     if not isinstance(state.get("exports"), dict) and known:
@@ -916,6 +1039,13 @@ def _finish_clip(work: Path, d: Path, cfg: Config, brief, results: list[tuple[Pa
         from .thumbs import export_cover
 
         export_cover(d, Path(now["exported"]))  # the thumbnail sits beside the main video, under the same name
+
+
+def wants_ab(state: dict, cfg: Config) -> bool:
+    """Whether this clip comes out twice, as versions A and B. Each clip chooses for itself (``ab`` in its clip.json,
+    the tick box in its editor); a clip that never chose follows render.ab_versions."""
+    own = state.get("ab")
+    return bool(cfg.render.ab_versions if own is None else own)
 
 
 def known_exports(state: dict, ab: bool) -> dict[str, str]:

@@ -20,7 +20,7 @@ Windows may show a blue box, "Windows protected your PC", the first time: the in
 
 A new or freshly reset computer often lacks the **Microsoft Visual C++ runtime**, a free part of Windows that captions need. The installer notices and adds it by itself during the last step: it fetches Microsoft's own installer for it (about 25 MB, from Microsoft's address, and it is run only after Windows confirms that Microsoft signed the file), and Windows then asks **"Do you want to allow this app to make changes to your device?"** for Microsoft Visual C++. Press **Yes**. The question can be hiding behind the installer window or blinking on the taskbar. This is the only thing installed outside the two folders and the only time permission is asked. If you press **No**, the install still finishes but captions cannot work yet; the **Set up** page's Video tools step then says the runtime is missing and its **Install the video tools** button asks again, and so does **Repair** under Settings, Setup check. On a computer where you cannot give that permission (no administrator password), ask whoever looks after the computer to install https://aka.ms/vs/17/release/vc_redist.x64.exe once.
 
-**Then: the Set up page.** The first time the program starts, its **Set up** page opens by itself and takes you through what is left, one step per screen. It keeps opening by itself only while a needed step (Video tools, Captions) is still missing; once you have seen it and only optional steps are left, it stays in the menu and waits for you:
+**Then: the Set up page.** The program never opens this page by itself and never downloads anything large without your own press. It opens on **New clips** (or where you were last). While something the program needs is still missing, the **Set up** entry in the menu on the left turns into a warning: amber, with a warning triangle and how many steps are left, for example **1 to do**. Click it. The page takes you through what is left, one step per screen:
 
 1. **Video tools** (done by the installer; here in case something is missing).
 2. **Captions:** downloads the speech model (about 1.6 GB) and tries it on this computer.
@@ -55,7 +55,7 @@ Each step says what it is for and how big its download is, and has one button. *
 
    It prints the video encoder (NVIDIA, Intel or CPU) and whether speech runs on a GPU. Nothing to configure: it uses the fastest thing that works.
 
-The speech model (1.6 GB) is downloaded when you press **Download and try it** on the Set up page's Captions step. Captions is a needed step (Next stays grey until it is done); if you leave the page without doing it, the model downloads the first time a clip is transcribed instead.
+The speech model (1.6 GB) is downloaded when you press **Download and try it** on the Set up page's Captions step. Captions is a needed step (Next stays grey until it is done). If you leave the page without doing it, nothing is downloaded behind your back: when you then press **Find the best moments**, **Start watching** or make your own clip, the program does not start and says *Captions are not set up on this computer yet*, with where to go. (Only someone who types the commands in a terminal gets the model downloaded by itself on the first clip, with a line that says so.)
 
 **On an NVIDIA laptop**, speech on the GPU also needs NVIDIA's CUDA 12 and cuDNN 9 libraries installed. Without them it still works, on the CPU. This path has not been tested yet.
 
@@ -95,9 +95,9 @@ Open http://127.0.0.1:8765/ in your browser. The page has a menu on the left and
 - **New clips:** make clips from a finished stream, a video link or a file on this PC. Four tabs: **Find the best moments** (paste a link, press the button, the program picks the moments), **Pick the part myself** (you give the start and the end), **Cutting board** (cut a downloaded part into pieces) and **Search what was said** (find a moment by its words). Under them, **Your videos** lists the videos you have clips of, newest first; click one to see only that video's clips on My clips (a line under the filters says so, and **Clear filters** shows all clips again).
 - **Live channels:** type channel names, pick A, B, C or D, press **Start watching**. **Stop** ends it. **Clip the last** makes a clip of what just happened.
 - **My clips:** every clip as a tile with its video, score, length and title. This is where you review, edit and approve, and where **Make videos** is. The number beside it in the menu is how many clips wait for review.
-- **Look and branding:** the caption style, the template and opening text, your logo, outro line and music, the thumbnails, and the A and B versions. What you choose here is used for every clip made from now on.
+- **Look and branding:** the caption style, the template and opening text, your logo, outro line and music, and the thumbnails. What you choose here is used for every clip made from now on. A **Preview** on the right of the page shows one of your own clips with these choices: three real frames (**Start** with the opening text, **Middle** with the captions, **End** with the outro line), made the same way as the videos, so you do not have to make a video to see the result. It follows every change a few seconds later; **Try another clip** shows the same choices on another of your newest clips. Music cannot be shown. With no clip made yet, the preview says so.
 - **Posted and earnings:** what you posted, its views and what it earned (the tracker), and the campaign choice.
-- **Set up:** the step-by-step guide that installs what the program needs and signs you in to Claude and ChatGPT. It opens by itself the first time.
+- **Set up:** the step-by-step guide that installs what the program needs and signs you in to Claude and ChatGPT. It never opens by itself. While a needed step (Video tools, Captions) is missing, its menu entry is an amber warning with the number of steps left; with only optional steps left it shows their number quietly.
 - **Settings:** the **Setup check**, the AI connection, the language, and updates.
 - **Ask for help:** the help chat.
 
@@ -114,7 +114,8 @@ At the bottom of the menu are the status lines (setup, watching, how many clips)
 | Watch, approve, reject or edit clips | **My clips** |
 | Make the finished videos | **My clips**, button **Make videos** (top right) |
 | Change a clip's text, captions, start and end, framing, thumbnail or versions | **My clips**, press **Edit** on the clip, then the tab with that name |
-| Caption style, template, logo, music, thumbnails for every clip, A and B versions | **Look and branding** |
+| Caption style, template, logo, music, thumbnails for every clip, and a preview of how a clip looks with them | **Look and branding** |
+| Whether one clip gets a version B, and what its thumbnail must leave out | The clip's **Edit**, tabs **Versions** and **Thumbnail** |
 | Log a post, see views and earnings, choose a campaign | **Posted and earnings** (log a post from the clip's **Posted** tab) |
 | Install something that is missing, or sign in to Claude or ChatGPT | **Set up** |
 | Setup check, repair, update, the AI connection, the language | **Settings** |
@@ -131,7 +132,8 @@ At the bottom of the menu are the status lines (setup, watching, how many clips)
 - **Text:** the opening text on the video, the title, description and hashtags to paste when you post. **Write text with AI** is under the tabs.
 - **Versions:** the normal video, the explainer version, and what the narrator says.
 - **Captions:** correct a word or empty its box to remove it, press **Save captions**. A subtitle file can replace them.
-- **Trim and framing:** drag the two handles over the sound wave to set where it starts and ends, choose the framing, **Set the face box and the video box**, the ad label, and **Make this video's drafts again**.
+- **Trim and framing:** drag the two handles over the sound wave to set where it starts and ends, choose the framing, **Set the face box and the video box**, the ad label, and **Make this video's drafts again**. **Need more of the stream?** has three buttons (**Add 15 s before**, **Add 15 s after**, **Add 30 s on both sides**): they download more of the stream around the clip, so you can drag its start or end further out. The clip itself does not move and its captions are kept; the added seconds get their captions too. It takes a minute or two. It cannot be done for a clip from a live stream that was not being recorded, and a clip keeps at most ten minutes of the stream.
+- **Picture** (under the player): **Automatic** lets the program frame the clip; **Whole picture** shows the whole stream picture in the middle with a blurred, moving copy of it above and below, so nothing is cut off; **Choose boxes…** lets you draw what is shown. One click, and the draft is made again.
 - **Thumbnail:** make a cover picture from the clip, or let ChatGPT draw it.
 - **Posted:** (on a finished clip) log where you posted it.
 
@@ -196,6 +198,7 @@ With one of the two chosen, the thumbnail is made when you press **Make videos**
 - **What ChatGPT thumbnails look like** is a fold-out under the Thumbnail choice on the Look and branding page, with two things:
   - **The streamer's face, big and excited** (ticked at the start): when the streamer is visible in the clip (a face camera, or filmed directly), their face is the main thing in the picture, with a shocked or excited look that fits the moment. If no real face is in the clip, none is invented. It is used when ChatGPT decides the picture itself, not when you describe the picture yourself.
   - **Things I do not want in thumbnails**: write them in your own words (for example: no guns, no blood, no half-naked people, no red arrows) and press **Save this list**. Every ChatGPT thumbnail made from then on leaves them out, also the ones made from your own description. The list is sent to OpenAI with the request. It cannot change the free thumbnail, which is a real frame of the clip. Thumbnails that were made before are not changed; make them again with the button on the clip.
+  - **For one clip only:** in the clip's **Edit**, **Thumbnail** tab, **Not wanted in this clip's thumbnail** adds things for that clip alone. ChatGPT gets your general list and then this one. It is saved with the clip.
 - A thumbnail you made by hand is kept: **Make videos** does not replace it.
 - One at a time per clip: a second press while one is being made is refused with a message, so ChatGPT is never asked twice for the same picture.
 - What you typed as a description stays in the box if ChatGPT fails, so you can press again.
@@ -330,7 +333,7 @@ Tick **Start watching this list by itself when the program opens** and the progr
 
 ### Layouts: what the clip shows
 
-Open the clip with **Edit** and go to **Trim and framing**. **Framing** has seven choices (Automatic, which lets the program decide, and the six below), and **Set the face box and the video box** shows each one live:
+Open the clip with **Edit** and go to **Trim and framing**. **Framing** has seven choices (Automatic, which lets the program decide, and the six below), and **Set the face box and the video box** shows each one live. The two commonest are one click under the player, in the **Picture** row: **Automatic** and **Whole picture**. In the box editor the two boxes always keep the shape the finished video shows them in: you change a box's size by its corner and its height follows its width, so a box can never be stretched out of shape:
 
 | Layout | What you get |
 |---|---|
@@ -386,7 +389,7 @@ While watching live, the Live channels page has **Clip the last** with a length 
 
 For a computer with no Claude plan or key. A small AI runs on the PC itself and writes the opening text, title and a rating, so clips do not get placeholder text.
 
-- The program checks by itself whether the PC can run it (about 8 GB of memory, 4 processor threads). A PC that cannot never downloads anything for it; Settings says so under AI.
+- The program checks by itself whether the PC can run it. It reads three things from Windows: how much memory is installed (about 8 GB is needed), how many processor threads there are (4 are needed), and whether there is an NVIDIA card with 4 GB or more (then the first two do not matter). The Set up page's step shows what it measured. When you press the button it also wants 8 GB free on the drive with your clips. It does not time the computer or try the model first, so a PC that only just passes can be slow. A PC that cannot never downloads anything for it; Settings says so under AI.
 - A PC that can shows **Set up free local AI** on the Settings page, under AI. One press installs Ollama and a model, about 3 GB in all; progress shows under Setup check on the same page.
 - Claude is always used first when it works. The local AI is the fallback, and its text is redone by Claude when Claude is back.
 - Claude Code is called once per job and leaves no chats behind in your Claude app. Turning captions into Latin letters now uses the small, fast model (about four times quicker, a fraction of your plan's usage), with almost the same result.
@@ -465,7 +468,7 @@ The choice applies to clips made from then on. Set it back to English before wat
    ```powershell
    uv run clipper finish --brief briefs/lacy-gta-marathon.yaml
    ```
-   Every approved clip comes out as two videos for A/B testing: `..._A.mp4` and `..._B.mp4`. They are the same moment with different opening text and titles. Post A and B on different accounts or platforms and see which gets more views; never send both to the same campaign. Clips you ticked also get `..._explained_A.mp4` and `..._explained_B.mp4` (different narration line and animation). To get one version only, set `ab_versions: false` in `config.yaml`.
+   Every approved clip comes out as two videos for A/B testing: `..._A.mp4` and `..._B.mp4`. They are the same moment with different opening text and titles. Post A and B on different accounts or platforms and see which gets more views; never send both to the same campaign. Clips you ticked also get `..._explained_A.mp4` and `..._explained_B.mp4` (different narration line and animation). Whether a clip gets a version B is chosen on the clip itself: **Edit**, **Versions**, tick or untick **Make a version B too**. It is ticked for new clips (to have it unticked for new clips, set `ab_versions: false` in `config.yaml`).
 4. **Upload.** Open `D:\clipper-data\ready\` and today's date folder. Each `.mp4` is named after the clip's title and has a `.txt` with the same name beside it, with the title, description and hashtags for YouTube, TikTok, Instagram and Facebook. Upload the video, paste the text. For a campaign, submit the post link on the campaign site straight away.
 5. **Stop watching** with Ctrl+C in the first terminal. Starting it again later carries on.
 
@@ -487,7 +490,7 @@ uv run clipper run https://www.twitch.tv/videos/123456789 --top 8 --signals B
 
 This reads the stream's lowest-quality version once to measure it (about 100 MB per stream hour for sound, 130 MB with picture) and saves none of it. You get the 8 best chat moments, each marked where sound or picture agree, plus up to 4 moments that only sound or picture found.
 
-**Let AI read the stream.** Add `--ai` (or switch on "Let AI read the whole stream" on the page). The whole stream's speech is turned into text and Claude picks moments from what was said, which finds funny lines that chat and loudness miss. It needs a Claude key in `.env`. On a processor it reads about 8 times faster than the stream plays, so a 4-hour stream takes about half an hour; it costs about a cent per stream with the default model. If you stop it, the next run carries on where it stopped.
+**Let AI read the stream.** Add `--ai` (or switch on "Let AI read the whole stream" on the page). The whole stream's speech is turned into text and Claude picks moments from what was said, which finds funny lines that chat and loudness miss. It needs Claude, either way the program reaches it: your own Claude plan signed in on the **Set up** page (the Claude step), or a Claude key in `.env`. The Claude Desktop app itself cannot be used by other programs; the Set up page installs Claude Code, which uses the same account and plan. On a processor it reads about 8 times faster than the stream plays, so a 4-hour stream takes about half an hour. With a plan it uses your plan's limits; with a key it costs about a cent per stream with the default model. If you stop it, the next run carries on where it stopped.
 
 Then do steps 2 to 4 above. This also works with a YouTube stream recording, if that video has chat replay.
 
@@ -537,12 +540,16 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | "less than 2 GB free" | Run `uv run clipper clean`, or delete old folders in `D:\clipper-data\work` |
 | "live ... but Twitch is not recording this broadcast" | Not an error. The streamer has recordings (VODs) switched off, so the watcher keeps the last 10 minutes of the live stream on disk and cuts clips from that. It uses about 3 GB of internet an hour for that channel, the first minute is lost to Twitch's opening advert, and moments during advert breaks are lost. To skip such streams instead, set `buffer_when_no_vod: false` under `watch:` in `config.yaml` |
 | "no chat replay" | That video cannot be scored from chat. Use a live watch instead |
-| A clip is framed wrong | Open the clip with Edit, go to Trim and framing, change Framing (or set the boxes) and save; then press Make videos again |
+| A clip is framed wrong, or too much of the stream picture is cut off | Open the clip with Edit. Under the player, **Picture**: press **Whole picture** to show everything with blur above and below, or **Choose boxes…** to draw what is shown. The draft is made again at once |
+| The clip starts too late or ends too early and the handles will not go further | Edit, **Trim and framing**, **Need more of the stream?**: press **Add 15 s before** or **Add 15 s after**, wait a minute or two, then drag the handle into the new part and press Save changes |
+| "this clip comes from a live stream that is not being recorded" when adding seconds | The seconds around that clip were only kept for a few minutes while the stream was live and are gone. Nothing can be added to it |
 | "an NVIDIA card was found but speech-to-text cannot run on it" | Not an error: speech-to-text runs on the processor instead (slower, same result). To use the card, run the setup command again with `-Gpu` added at the end. It downloads NVIDIA's libraries (about 1 GB) and then says whether the card works. If it still cannot, update the NVIDIA driver and run `uv run clipper hardware --refresh` |
 | A red box at the top of the page | The watcher stopped by itself, or the program is not answering. The red and yellow lines in the **Activity log** (bottom of the menu), and the terminal window, say why. A clip that could not be made says so on its tile and shows its own reason in red in its editor |
 | The program closes or says "access violation" when captions are made | The computer's Microsoft Visual C++ runtime is too old. Install the x64 version from https://aka.ms/vs/17/release/vc_redist.x64.exe, restart, and try again. `uv run clipper doctor` shows the installed version |
 | "Windows' C++ runtime (msvcp140.dll) is missing", or "Could not find module ... ctranslate2.dll (or one of its dependencies)", or the installer stops at **Download the video tools and models** with "Tests failed" on a new computer | The computer does not have the Microsoft Visual C++ runtime, a free part of Windows that many programs share and that a new or freshly reset PC often lacks. Captions (speech-to-text) need it. The program adds it by itself: press **Try again** in the installer, or **Install the video tools** on the **Set up** page, or **Repair** under Settings, Setup check, and press **Yes** when Windows asks to allow Microsoft Visual C++. If that does not work (no administrator password, the download is blocked, or the copy was fetched before 26 November 2026 and has no such step), download Microsoft's own installer from https://aka.ms/vs/17/release/vc_redist.x64.exe (about 25 MB), run it, restart the computer, then press **Try again** or **Check again**. Nothing already downloaded is fetched again |
 | Windows says "Smart App Control blocked an app that may be unsafe" when the installer is opened | Smart App Control is a Windows 11 protection that blocks programs not signed with a paid certificate, and this installer is not signed. There is no "Run anyway" button for it. Either install the other way, from a terminal (Part 1, **The other way, for people who use a terminal**), or turn Smart App Control off in Windows Security, App & browser control, Smart App Control settings. Know first that Windows does not let you turn it back on without resetting Windows; that choice is yours |
+| "Captions are not set up on this computer yet" when you start a job | The speech model (about 1.6 GB) has not been downloaded, and the program does not fetch something that size without being asked. Open **Set up** in the menu, go to the **Captions** step, press **Download and try it**, wait for it to turn green, then start the job again |
+| The **Set up** entry in the menu is amber with a warning triangle | Something the program needs is missing (Video tools or Captions). Hover over it to read which, or click it: the page shows the step and its button. Nothing is downloaded until you press that button |
 | Captions miss words | Normal on very noisy moments. The larger model is already the default |
 | Too many clips with nothing in them in mode B, C or D | Raise `audio_level` or `video_level` under `watch:` in `config.yaml` |
 | Anything else | Open an issue on the project's GitHub page, or open Claude Code in this folder and describe it |

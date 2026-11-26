@@ -415,7 +415,26 @@ def _corner_xy(corner: str, top: int, bottom: int, side: int = 40) -> tuple[str,
     return x, y
 
 
-def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str = "final.mp4", hook: bool = True, variant: str = "a") -> Path:
+PREVIEW_SECONDS = 14.0  # the preview treats the clip as this short, so its last seconds (the outro line) come quickly
+PREVIEW_HOOK = "YOUR OPENING TEXT"
+
+
+def preview_stills(clip_dir: Path, cfg: Config, out_dir: Path) -> dict[str, Path]:
+    """Three frames of one clip exactly as its video would look with the settings as they are now: {"open", "mid", "end"}.
+
+    Made by the renderer itself (same layout, captions, template, logo, opening effects), only without sound and
+    without writing a video, so it takes a few seconds instead of a minute. Nothing of the clip is changed."""
+    import threading
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with _render_locks_guard:
+        lock = _render_locks.setdefault(str(clip_dir.resolve()), threading.Lock())
+    with lock:
+        return _render_clip(clip_dir, cfg, True, still={"out": out_dir})
+
+
+def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str = "final.mp4", hook: bool = True, variant: str = "a",
+                 still: dict | None = None):
     """Render one clip. ``out_name``/``hook`` let other formats (top-moments videos)
     render a variant, e.g. the clip body without the hook text, beside the normal final.mp4.
 
@@ -424,19 +443,23 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
     r = cfg.render
     state = read_json(clip_dir / "clip.json")
     out = clip_dir / out_name
-    stem = Path(out_name).stem
-    if done(out) and not force:
+    stem = "preview" if still else Path(out_name).stem
+    if done(out) and not force and not still:
         return out
     if not done(clip_dir / "source.mp4"):
         raise ToolError(f"clip {clip_dir.name}: source.mp4 is missing; run fetch first")
     ffmpeg = find_tool("ffmpeg", cfg.data_dir)
     offset, duration = cut_window(state)
+    if still:
+        duration = min(duration, PREVIEW_SECONDS)
     r, layout = _layout_for(state, cfg)
 
     words = words_from_json(read_json(clip_dir / "words.json", []), offset_s=offset)
     words = [w for w in words if w.start < duration]
     overlays: list[Overlay] = []
     hook_text = (state.get("hook_b") or state.get("hook")) if variant == "b" else state.get("hook")
+    if still and not hook_text:
+        hook_text = PREVIEW_HOOK  # a clip with no opening text yet still shows where it goes
     if hook and hook_text:
         overlays.append(Overlay(hook_text, 0.0, min(r.hook_seconds, duration), "HookB" if variant == "b" else "Hook", pop=r.opening))
     credit = credit_text(state)
@@ -511,6 +534,32 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
                   f"{last}[mark]overlay={x}:{y}:shortest=1[v3]")
         last = "[v3]"
         extra += 1
+
+    if still:
+        # The picture is complete here; the rest of this function is sound and the video file. Three frames are taken
+        # in one pass: early (opening text, zoom), the middle (captions), and the last second (the outro line).
+        fps = int(r.fps)
+        at = {"open": min(1.4, duration * 0.2), "mid": duration * 0.5, "end": max(0.0, duration - 1.0)}
+        picks = sorted({max(0, int(t * fps)) for t in at.values()})
+        if len(picks) < 3:
+            raise ToolError(f"clip {clip_dir.name} is too short to preview")
+        sel = "+".join(f"eq(n\\,{n})" for n in picks)
+        try:
+            run([ffmpeg, "-y", "-hide_banner", "-v", "error"] + inputs
+                + ["-filter_complex", graph + f";{last}select='{sel}',scale=540:-2[pv]", "-map", "[pv]", "-an", "-fps_mode", "vfr", "-frames:v", "3",
+                   "-q:v", "4", str(Path(still["out"]) / "frame_%d.jpg")],
+                cwd=clip_dir, timeout_s=180, what=f"preview of clip {clip_dir.name}")
+        finally:
+            (clip_dir / f"{stem}.ass").unlink(missing_ok=True)
+        made = {}
+        for i, name in enumerate(sorted(at, key=at.get), 1):
+            f = Path(still["out"]) / f"frame_{i}.jpg"
+            if not done(f):
+                raise ToolError(f"the preview of clip {clip_dir.name} produced no picture")
+            target = Path(still["out"]) / f"{name}.jpg"
+            os.replace(f, target)
+            made[name] = target
+        return made
 
     from .fetch import ensure_sound
 

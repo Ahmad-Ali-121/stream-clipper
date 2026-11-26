@@ -131,7 +131,7 @@ def test_finishing_is_remembered_and_the_page_has_the_guide(tmp_path):
     got = setupguide.status(cfg, READY, NO_LOCAL)
     assert got["finished"] is True and got["skipped"] == ["codex", "localai"]
     page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
-    for piece in ('id="n-setup" onclick="go(\'setup\')"', 'id="page-setup"', "function suDraw(s){", "if(!g.finished&&(left||!seen)){", "Checking this computer", "function suSkip(id){",
+    for piece in ('id="n-setup" onclick="go(\'setup\')"', 'id="page-setup"', "function suDraw(s){", "nb.classList.toggle('attn',left>0)", "Checking this computer", "function suSkip(id){",
                   "'/api/setup/'+(what==='signin'?'signin':'install')", "This program never sees your password", "Start using Stream Clipper"):
         assert piece in page, piece
     server = (Path(clipper.__file__).parent / "review.py").read_text(encoding="utf-8")

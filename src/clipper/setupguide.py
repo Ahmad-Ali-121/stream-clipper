@@ -162,7 +162,7 @@ def _flags(cfg: Config) -> dict:
 
 
 def finish(cfg: Config, skipped: list[str] | None = None) -> None:
-    """The person has been through the guide: it does not open by itself any more."""
+    """The person has been through the guide: its menu entry stops counting the optional steps they left out."""
     flags = _flags(cfg)
     flags.update(finished=True, finished_at=time.strftime("%Y-%m-%d %H:%M:%S"))
     if skipped is not None:
@@ -234,7 +234,9 @@ def status(cfg: Config, health_items: list[dict], local_ai: dict, fresh: bool = 
     elif not local_ai.get("supported"):
         la_state, la_detail, la_acts = "done", f"Not used on this computer: {local_ai.get('why', 'it cannot run it')}. Nothing is downloaded.", []
     else:
-        la_state, la_detail, la_acts = "todo", "This computer can run it. It is not set up.", [{"do": "install", "what": "localai", "label": "Set up free local AI"}]
+        measured = f": it has {local_ai['facts']} (it needs about 8 GB and 4 threads, or an NVIDIA card with 4 GB)" if local_ai.get("facts") else ""
+        la_state, la_detail, la_acts = ("todo", f"This computer can run it{measured}. It is not set up.",
+                                        [{"do": "install", "what": "localai", "label": "Set up free local AI"}])
     steps.append({"id": "localai", "title": "Free AI on this computer", "optional": True, "size": "about 3 GB",
                   "what": "A free AI that runs on this PC and writes clip text when Claude cannot be reached. Slower and plainer than Claude.",
                   "state": la_state, "detail": la_detail, "actions": la_acts})

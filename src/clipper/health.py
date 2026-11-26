@@ -14,6 +14,7 @@ Each check is {"id", "name", "state", "detail", "fix"} where state is:
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -165,10 +166,26 @@ def summary(items: list[dict]) -> dict:
     return {"bad": bad, "warn": warn, "todo": todo, "text": text}
 
 
-def speech_model_there(cfg: Config) -> bool:
+ASK_FIRST = "CLIPPER_ASK_FIRST"  # set by the page's program (clipper review) for itself and every job it starts
+NEED_CAPTIONS = ("Captions are not set up on this computer yet: the speech model (about 1.6 GB) has not been downloaded, and a download "
+                 "that size never starts without your own press. Open Set up in the menu, go to the Captions step and press "
+                 "'Download and try it'. Then start this again. Nothing was started.")
+
+
+def captions_blocked(cfg: Config, name: str | None = None) -> str:
+    """Why a job started from the page must not load the speech model now ("" when it may).
+
+    Loading a model that is not on the computer downloads it. From a terminal that is said loudly and done; from the
+    page, where the person only pressed "Find the best moments", it is refused and they are sent to the Set up page."""
+    if not os.environ.get(ASK_FIRST) or cfg.transcribe.backend != "local" or speech_model_there(cfg, name):
+        return ""
+    return NEED_CAPTIONS
+
+
+def speech_model_there(cfg: Config, name: str | None = None) -> bool:
     """Whether the speech model is on this computer already. Loading it when it is not downloads it (about 1.6 GB
     for the default one), and a download that size is only started by the person's own press."""
-    name = str(cfg.transcribe.model)
+    name = str(name or cfg.transcribe.model)
     try:
         if Path(name).exists():
             return True

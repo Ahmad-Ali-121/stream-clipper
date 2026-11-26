@@ -18,7 +18,7 @@ from .work import FileInUse, clip_dirs, read_json, remove, write_json
 log = logging.getLogger(__name__)
 
 EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "simple", "held", "disclosure", "layout", "facecam", "game", "face_corner", "face_size",
-            "cut_start_s", "cut_end_s",
+            "cut_start_s", "cut_end_s", "ab", "cover_avoid",
             "title", "title_b", "description", "tags", "notes"}
 TEXT_FIELDS = ("hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags")
 
@@ -115,6 +115,47 @@ def _framing(state: dict, cfg) -> dict | None:
         return None
 
 
+_preview_lock = __import__("threading").Lock()
+
+
+def look_preview(works: list[Path], cfg, n: int = 0) -> dict:
+    """Frames for the Look and branding page: one of the person's own clips drawn with the settings as they are now.
+
+    ``n`` picks among the newest clips that have their video and captions (0 = the newest). The frames are made again
+    only when the look, the clip or the clip's text changed since the last time."""
+    import hashlib
+
+    from .render import look_signature, preview_stills
+
+    found = []
+    for w in works:
+        for d in clip_dirs(w):
+            try:
+                if (d / "source.mp4").exists() and (d / "words.json").exists():
+                    found.append(((d / "clip.json").stat().st_mtime, d))
+            except OSError:
+                continue
+    if not found:
+        raise ValueError("There is no clip to show yet. Make one clip (New clips), then this preview shows your own video with these choices.")
+    found.sort(key=lambda x: x[0], reverse=True)
+    found = found[:12]
+    d = found[n % len(found)][1]
+    state = read_json(d / "clip.json")
+    out = Path(cfg.data_dir) / "tmp" / "look-preview"
+    r = cfg.render
+    key = hashlib.sha256(repr((look_signature(cfg), bool(r.opening), r.hook_seconds, str(d), (d / "clip.json").stat().st_mtime_ns,
+                               (d / "source.mp4").stat().st_mtime_ns, (d / "words.json").stat().st_mtime_ns)).encode()).hexdigest()[:16]
+    with _preview_lock:  # one at a time: a second request waits and then finds the pictures already made
+        mark = out / "key.txt"
+        fresh = mark.exists() and mark.read_text(encoding="utf-8") == key and all((out / f"{x}.jpg").exists() for x in ("open", "mid", "end"))
+        if not fresh:
+            mark.unlink(missing_ok=True)
+            preview_stills(d, cfg, out)
+            mark.write_text(key, encoding="utf-8")
+    return {"v": key, "clip": f"{d.parent.parent.name}/{d.name}", "title": state.get("title") or state.get("hook") or d.name, "of": len(found),
+            "has_hook": bool(state.get("hook")), "seconds": float(__import__("clipper.render", fromlist=["PREVIEW_SECONDS"]).PREVIEW_SECONDS)}
+
+
 def clip_view(d: Path, weights: dict | None = None, brief=None, cfg=None) -> dict:
     """What the page needs to draw one clip."""
     from . import scoring
@@ -140,6 +181,9 @@ def clip_view(d: Path, weights: dict | None = None, brief=None, cfg=None) -> dic
         framing=_framing(c, cfg), said=float((c.get("signals") or {}).get("said") or 0), words_from=c.get("words_from") or "",
         campaign=brief.name if brief else "", campaign_issues=_campaign_issues(c, brief), ai_judged=bool(c.get("copy_at")), exported=bool(c.get("exported")),
         lo=c.get("fetch_start_s", c["start_s"]), hi=c.get("fetch_end_s", c["end_s"]),
+        # two choices that belong to the clip: whether it comes out as A and B, and what its thumbnail must leave out
+        ab=bool((cfg.render.ab_versions if cfg is not None else True) if c.get("ab") is None else c.get("ab")),
+        cover_avoid=str(c.get("cover_avoid") or ""),
         # Changes whenever the clip's data or its draft video changes, so the page knows to redraw it.
         mtime=int(max((d / n).stat().st_mtime for n in ("clip.json", video) if n) * 1000),
     )
@@ -196,7 +240,8 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
         if body["layout"] in ("pip", "circle"):
             edit.update(face_corner=body.get("face_corner") or "top-right", face_size=body.get("face_size") or 0.36)
         state = apply_edit(work, d.name, edit)
-        state["layout_auto"], state["layout_reason"] = False, "boxes set by you"
+        state["layout_auto"] = False
+        state["layout_reason"] = "the whole picture, chosen by you" if body["layout"] == "blur" else "boxes set by you"
         write_json(d / "clip.json", state)
         if body.get("streamer") and channel:
             layout_mod.save_framing(channel, {**state, "source": [state.get("source_width"), state.get("source_height")]}, cfg)
@@ -271,6 +316,10 @@ def _apply_edit(work: Path, cid: str, edit: dict) -> dict:
             edit[name] = clean_box(edit[name], label)
         elif name in edit:
             edit[name] = None
+    if "ab" in edit:
+        edit["ab"] = bool(edit["ab"])
+    if "cover_avoid" in edit:
+        edit["cover_avoid"] = " ".join(str(edit["cover_avoid"] or "").split())[:500]
     if isinstance(edit.get("tags"), str):  # the page sends hashtags as one line of text
         edit["tags"] = ["#" + t.lstrip("#") for t in re.split(r"[\s,]+", edit["tags"]) if t.strip("#")]
     try:
@@ -667,6 +716,23 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     log.error("downloaded part %s: its sound could not be read: %s", d.name, e, exc_info=True)
                     return self._send(500, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(data).encode(), "application/json")
+            if self.path.split("?")[0] == "/api/look/preview" and cfg is not None:
+                from .tools import ToolError
+
+                try:
+                    n = int((re.search(r"[?&]n=(\d{1,3})", self.path) or [0, 0])[1])
+                    return self._send(200, json.dumps(look_preview(list(by_name.values()), control.reload() if control else cfg, n)).encode(), "application/json")
+                except (ValueError, ToolError) as e:
+                    return self._send(400, str(e).encode("utf-8", "replace"), "text/plain")
+                except Exception as e:
+                    log.error("the preview for the Look and branding page could not be made: %s", e, exc_info=True)
+                    return self._send(500, f"{type(e).__name__}: {e}".encode("utf-8", "replace"), "text/plain")
+            m = re.fullmatch(r"/api/look/preview/(open|mid|end)\.jpg", self.path.split("?")[0])
+            if m and cfg is not None:
+                f = Path((control.cfg if control else cfg).data_dir) / "tmp" / "look-preview" / f"{m.group(1)}.jpg"
+                if not f.exists():
+                    return self._send(404, b"no preview has been made yet", "text/plain")
+                return self._send(200, f.read_bytes(), "image/jpeg")
             m = re.fullmatch(r"/media/([A-Za-z0-9_-]+)/([0-9a-z]+)/cover\.jpg", self.path.split("?")[0])
             if m and m.group(1) in by_name:
                 f = by_name[m.group(1)] / "clips" / m.group(2) / "cover.jpg"
@@ -957,6 +1023,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     remove(d / "cover.jpg")
                     update_clip(d / "clip.json", {}, drop=("cover_by", "cover_at", "cover_words", "cover_prompt", "cover_error", "cover_error_mode"))
                     return self._send(200, b"{}", "application/json")
+                if "avoid" in body:  # what this one clip's picture must leave out, kept with the clip for its next thumbnail too
+                    update_clip(d / "clip.json", {"cover_avoid": " ".join(str(body.get("avoid") or "").split())[:500]})
                 try:
                     thumbs.make_cover(d, control.cfg if control else cfg, str(body.get("how") or ""), str(body.get("prompt") or ""))
                 except (ValueError, ToolError) as e:
@@ -1000,6 +1068,35 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
 
                 threading.Thread(target=remake_all, daemon=True, name="remake-all").start()
                 return self._send(200, json.dumps({"clips": len(todo)}).encode(), "application/json")
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/widen", self.path)
+            if m and m.group(1) in by_name and cfg is not None:
+                # More of the stream before or after this clip, so its start or end can be moved further out.
+                from .pipeline import PipelineError, widen_clip
+                from .render import render_clip
+                from .tools import ToolError
+
+                d = by_name[m.group(1)] / "clips" / m.group(2)
+                if not (d / "clip.json").exists():
+                    return self._send(404, b"no such clip", "text/plain")
+                use = control.cfg if control else cfg
+                try:
+                    body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", "0")), 2000)) or b"{}")
+                    state = widen_clip(d, use, body.get("before") or 0, body.get("after") or 0)
+                except (ValueError, TypeError, KeyError, ToolError, PipelineError) as e:
+                    log.error("clip %s: no more of the stream could be added: %s", d.name, e)
+                    return self._send(400, str(e).encode("utf-8", "replace"), "text/plain")
+                except Exception as e:
+                    log.error("clip %s: no more of the stream could be added: %s", d.name, e, exc_info=True)
+                    return self._send(500, f"{type(e).__name__}: {e}".encode("utf-8", "replace"), "text/plain")
+                try:  # the draft is made again from the new video, so the two never disagree
+                    for name in RENDERS:
+                        remove(d / name)
+                    render_clip(d, use)
+                except Exception as e:
+                    log.error("clip %s: more of the stream was added, but its draft could not be made again: %s", d.name, e, exc_info=not isinstance(e, ValueError))
+                    return self._send(400, ("the seconds were added, but the draft could not be made again: " + str(e)
+                                            + ". Press \"Make this video's drafts again\" on the clip").encode("utf-8", "replace"), "text/plain")
+                return self._send(200, json.dumps({"lo": state["fetch_start_s"], "hi": state["fetch_end_s"]}).encode(), "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/framing", self.path)
             if m and m.group(1) in by_name and cfg is not None:
                 d = by_name[m.group(1)] / "clips" / m.group(2)
