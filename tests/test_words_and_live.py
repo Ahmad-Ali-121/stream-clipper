@@ -79,7 +79,7 @@ def test_the_hype_meter_follows_chat_against_its_own_usual_pace():
     steady = [(now - 600 + i * 6, i * 3) for i in range(101)]  # 30 messages a minute for ten minutes
     assert hype(steady, now) == {"percent": 25, "label": "quiet", "per_minute": 30}
     burst = steady[:-5] + [(now - 24 + i * 6, 285 + (i + 1) * 20) for i in range(5)]  # then 200 a minute
-    assert hype(burst, now)["label"] == "peak hype" and hype(burst, now)["percent"] == 100
+    assert hype(burst, now)["label"] == "at its busiest" and hype(burst, now)["percent"] == 100
     assert hype([], now)["percent"] == 0 and hype([(now - 20, 0), (now, 30)], now)["percent"] == 75  # no "usual" yet: a fixed scale
 
 

@@ -22,10 +22,10 @@ from .config import RenderSettings
 TEMPLATES = {
     "none": "No template: the video fills the screen",
     "card": "Card: the video as a rounded card on a background",
-    "xpost": "Post (light): name, handle and the opening text above the video",
+    "xpost": "Post (light): your name, account name and the opening text above the video",
     "xpost_dark": "Post (dark)",
     "news": "Breaking news: a banner with the opening text as the headline",
-    "hookbox": "Hook box: the opening text on top for the whole clip",
+    "hookbox": "Text box: the opening text stays on top for the whole clip",
 }
 CARD_BACKGROUNDS = {"blur": "A blurred copy of the video", "color": "One colour", "gradient": "Two colours blending", "image": "Your own image"}
 # Where the video sits on the 1080 x 1920 canvas (x, y, width, height) and how round its corners are.

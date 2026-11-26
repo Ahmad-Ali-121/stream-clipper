@@ -400,7 +400,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
       <button id="n-new" onclick="go('new')" title="Make clips from a finished stream, a video link or a file"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>New clips</button>
       <button id="n-live" onclick="go('live')" title="Watch channels while they are live and clip them as it happens"><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live channels</button>
       <button id="n-clips" onclick="go('clips')" title="Review, edit and approve your clips, and make the videos"><svg class="i" aria-hidden="true"><use href="#i-grid"/></svg>My clips<span class="count" id="n-count"></span></button>
-      <button id="n-look" onclick="go('look')" title="Caption style, template, logo, music, thumbnails"><svg class="i" aria-hidden="true"><use href="#i-look"/></svg>Look and branding</button>
+      <button id="n-look" onclick="go('look')" title="How your clips look: captions, template, your logo, music, cover pictures"><svg class="i" aria-hidden="true"><use href="#i-look"/></svg>Look and branding</button>
       <button id="n-track" onclick="go('track')" title="What you posted, its views and what it earned"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg>Posted and earnings</button>
     </div>
     <div class="navsep"></div>
@@ -428,17 +428,17 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
       <div class="pagehead"><h1>New clips</h1><span class="sub">Language: <b class="lang-mirror">English</b> · <a href="#" onclick="go('settings');return false">change</a></span></div>
       <div class="tabs"><button id="t-vod" class="on" onclick="sub('vod')">Find the best moments</button><button id="t-own" onclick="sub('own')">Pick the part myself</button><button id="v-board" onclick="sub('board')">Cutting board</button><button id="v-words" onclick="sub('words')">Search what was said</button></div>
       <div id="tab-vod" class="narrow"><div class="card"><div class="body">
-          <p class="help">Paste the link of a stream that has ended. Its chat replay is scored, its sound and picture can be measured too, and only the best moments are downloaded and turned into drafts.</p>
+          <p class="help">Paste the link of a stream that has ended. The program reads the saved chat to see where viewers got excited. It can also check the sound and the picture. Only the best moments are downloaded. Each one becomes a draft: a first version of the clip that you can watch and change.</p>
           <label class="f" for="r-url">Link to the finished stream (Twitch, YouTube or Kick)</label>
           <input type="text" id="r-url" placeholder="https://www.twitch.tv/videos/1234567890  or a YouTube or Kick video link">
-          <label class="f" for="r-sig">What should find the moments?</label>
+          <label class="f" for="r-sig">How should the program find the moments?</label>
           <select id="r-sig">
             <option value="chat">Chat only (fastest, almost no internet)</option>
-            <option value="audio" selected>Chat + sound (about 100 MB per stream hour)</option>
-            <option value="video">Chat + picture (about 130 MB per stream hour)</option>
-            <option value="all">Chat + sound + picture (about 130 MB per stream hour)</option>
+            <option value="audio" selected>Chat + sound (uses about 100 MB of internet per hour of stream)</option>
+            <option value="video">Chat + picture (uses about 130 MB of internet per hour of stream)</option>
+            <option value="all">Chat + sound + picture (uses about 130 MB of internet per hour of stream)</option>
           </select>
-          <label class="switch" style="margin-top:8px"><input type="checkbox" id="r-ai"><span><b>Let AI read the whole stream</b>Turns all the speech into text and has Claude pick moments from what was said. Slow on a processor (a 4-hour stream can take an hour). Needs Claude: your own Claude plan, signed in on the Set up page (it then uses your plan's limits), or a Claude key (a few cents a stream).</span></label>
+          <label class="switch" style="margin-top:8px"><input type="checkbox" id="r-ai"><span><b>Let AI read the whole stream</b>The program writes down everything that is said, and Claude picks the best moments from those words. This is slow on most computers (a 4-hour stream can take an hour). It needs Claude: either your own Claude plan, signed in on the Set up page (it then counts towards your plan's usage limit), or a paid Claude key, also called an API key (a few cents a stream).</span></label>
           <label class="f" for="r-mix">What kind of moments</label>
           <select id="r-mix" onchange="act('/api/options',{moment_mix:val('r-mix')})"></select>
           <label class="f" for="r-top">How many clips</label>
@@ -449,7 +449,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
       </div></div></div>
       <div id="tab-own" class="narrow" hidden><div class="card"><div class="body">
           <p class="help">Pick the part of a video yourself. Works with a YouTube, Twitch or Kick video link, or a video file on this PC such as a screen recording. No chat is needed.</p>
-          <label class="f" for="m-src">Video link, or the path of a video file</label>
+          <label class="f" for="m-src">Video link, or a video file on this PC (type where it is, or press the button below)</label>
           <input type="text" id="m-src" placeholder="YouTube, Twitch or Kick video link, or D:\Videos\recording.mp4">
           <div class="btns" style="margin-top:6px"><button class="btn" onclick="$('m-file').click()">Choose a file from this PC</button><span class="saved" id="m-up"></span></div>
           <input type="file" id="m-file" accept="video/*,.mkv,.mp4,.mov,.webm,.avi" hidden onchange="uploadFile(this)">
@@ -461,7 +461,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
           </div>
           <label class="check"><input type="checkbox" id="m-toend" onchange="ownHint()"> Until the end of the video</label>
           <div class="btns"><button class="btn primary" id="b-board" onclick="getRange()">Download this part and open the cutting board</button><button class="btn bad" id="b-ownstop" onclick="stopRun()">Stop</button></div>
-          <p class="help" style="margin-top:8px">The part is downloaded once. Then you play it, mark the cuts on a timeline, see how many clips that gives, and make them.</p>
+          <p class="help" style="margin-top:8px">The part is downloaded once. Then you play it and mark where to cut on a bar under the video. You see how many clips that gives, and then you make them.</p>
           <details class="sec"><summary>Or make clips straight away <small>without the cutting board</small></summary>
           <label class="f" for="m-split">One clip, or several parts?</label>
           <select id="m-split" onchange="ownHint()"><option value="one">One clip</option><option value="count">Split into a number of parts</option><option value="secs">Split into parts of a set length</option></select>
@@ -515,10 +515,10 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
         <div class="card" style="padding:14px;margin-top:14px">
           <h2 style="font-size:15px;margin-bottom:6px">Your picks</h2>
           <p class="help" id="tw-sel">Click a line to mark where a clip starts, then a later line for where it ends.</p>
-          <div class="btns" style="margin-top:0"><button class="btn" id="tw-add" onclick="twAdd()" disabled>Add this stretch to my picks</button><button class="btn quiet" onclick="TW.a=TW.b=null;twDraw()">Clear the marks</button></div>
+          <div class="btns" style="margin-top:0"><button class="btn" id="tw-add" onclick="twAdd()" disabled>Add this part to my picks</button><button class="btn quiet" onclick="TW.a=TW.b=null;twDraw()">Clear the marks</button></div>
           <div id="tw-picks"></div>
           <div class="btns"><button class="btn primary" id="tw-make" onclick="twMake()" disabled>Make these clips</button></div>
-          <details class="sec"><summary>No AI set up? Use any free chatbot <small>the transcript in small parts, each with a ready prompt</small></summary>
+          <details class="sec"><summary>No AI set up? Use any free chatbot <small>the words of the video in small parts, each with a ready question for the chatbot</small></summary>
             <p class="help" style="margin-top:8px">A chatbot given a whole stream only reads the start. So: copy one part, paste it into any chatbot (ChatGPT, Gemini, Claude…), copy its answer, and paste all the answers into the box below. Nothing is sent anywhere by this program.</p>
             <div id="tw-parts" class="btns" style="margin-top:0"></div>
             <label class="f" for="tw-ans">Paste the chatbot's answers here</label>
@@ -534,17 +534,17 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
     <section class="page panelonly" id="page-live" hidden>
       <div class="pagehead"><h1>Live channels</h1><span class="sub">Language: <b class="lang-mirror">English</b> · <a href="#" onclick="go('settings');return false">change</a></span></div>
       <div id="tab-live" class="narrow"><div class="card"><div class="body">
-          <p class="help">Watches the streams while they are live and makes a draft clip each time something happens.</p>
-          <label class="f" for="o-channels">Channels, separated by spaces: Twitch names, Kick channels as kick.com/name, YouTube handles starting with @</label>
+          <p class="help">Watches the streams while they are live and makes a draft (a first version of a clip) each time something exciting happens.</p>
+          <label class="f" for="o-channels">Channels, separated by spaces: Twitch names, Kick channels as kick.com/name, YouTube channel names starting with @</label>
           <input type="text" id="o-channels" placeholder="lacy xqc @youtubechannel">
-          <label class="check"><input type="checkbox" id="o-auto" onchange="act('/api/options',{watch_autostart:$('o-auto').checked})"> Start watching this list by itself when the program opens</label>
-          <p class="help" style="margin-top:4px">Creators who are not live yet are checked every half minute and clipped as soon as they go live. Add only creators you have a campaign or permission for.</p>
-          <label class="f">What should find the moments?</label>
+          <label class="check"><input type="checkbox" id="o-auto" onchange="act('/api/options',{watch_autostart:$('o-auto').checked})"> Start watching this list automatically when the program opens</label>
+          <p class="help" style="margin-top:4px">Channels that are not live yet are checked every half minute. Clipping starts as soon as they go live. Add only creators whose campaign you joined (a campaign is a paid clipping job), or who gave you permission.</p>
+          <label class="f">How should the program find the moments?</label>
           <div class="modes" id="o-modes"></div>
           <div class="btns"><button class="btn primary" id="b-start" onclick="startWatch()">Start watching</button><button class="btn bad" id="b-stop" onclick="act('/api/watch/stop',{})">Stop</button></div>
           <div class="btns" style="align-items:center"><button class="btn" id="b-clipnow" onclick="clipNow()" disabled>Clip the last</button>
             <select id="w-last" style="width:auto" aria-label="How many seconds to clip"><option value="15">15 seconds</option><option value="30" selected>30 seconds</option><option value="45">45 seconds</option><option value="60">60 seconds</option><option value="90">90 seconds</option></select></div>
-          <p class="help" style="margin-top:6px">Saw something chat did not react to? Press it right after the moment. The draft appears in a minute or two, at the top of the list.</p>
+          <p class="help" style="margin-top:6px">Saw something good that the chat did not react to? Press Clip the last right after it happens. The draft appears in a minute or two, at the top of the list in My clips.</p>
           <div id="w-live"></div>
           <div class="note" id="w-note">Not watching.</div>
       </div></div></div>
@@ -556,7 +556,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
           <button class="btn bad" id="b-fstop" disabled onclick="stopAsk(true)" title="Stop making videos: now, or after the one being made">Stop</button>
           <button class="btn primary" id="b-finish" onclick="act('/api/finish',{})">Make videos</button></div></div></div>
       <div class="makestate panelonly"><div class="bar" id="f-bar" hidden><i></i></div><div class="pct" id="f-pct" hidden></div>
-        <div class="note" id="f-note" hidden>Nothing made yet in this session.</div><ul class="ready" id="f-ready"></ul></div>
+        <div class="note" id="f-note" hidden>Nothing made yet since the program was started.</div><ul class="ready" id="f-ready"></ul></div>
       <div class="listbar"><div class="filters" id="filters"></div><span class="sp"></span>
         <input type="text" id="s-find" placeholder="Search titles and words" oninput="setArrange()" aria-label="Search the clips">
         <button class="btn" id="b-filter" onclick="$('sortrow').hidden=!$('sortrow').hidden" title="Order, streamer, how it was found, when"><svg class="i" aria-hidden="true"><use href="#i-filter"/></svg>Sort and filter</button></div>
@@ -576,7 +576,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
     </section>
 
     <section class="page panelonly" id="page-look" hidden>
-      <div class="pagehead"><h1>Look and branding</h1><span class="sub">Used for every clip made from now on. Clips already drafted get it when you press Make videos.</span></div>
+      <div class="pagehead"><h1>Look and branding</h1><span class="sub">Used for every clip made from now on. Clips that already have a draft get it when you press Make videos.</span></div>
       <div class="lookwrap">
       <div class="cols">
         <div>
@@ -587,24 +587,24 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
         <div class="capprev" id="capprev" aria-hidden="true"></div>
         <label class="f" for="o-anim">How the captions move</label>
         <select id="o-anim" onchange="act('/api/options',{caption_animation:val('o-anim')})"></select>
-        <details class="sec" id="lookbox"><summary>Your own caption style <small>font, colours, size; save it as a profile</small></summary>
+        <details class="sec" id="lookbox"><summary>Your own caption style <small>font, colours, size; save it under a name to use again</small></summary>
           <label class="f" for="k-font">Font (one installed on this computer)</label>
           <input type="text" id="k-font" list="k-fonts"><datalist id="k-fonts"><option>Arial Black</option><option>Impact</option><option>Segoe UI Black</option><option>Bahnschrift</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Georgia</option><option>Comic Sans MS</option><option>Franklin Gothic Heavy</option><option>Montserrat</option><option>Poppins</option></datalist>
           <div class="three"><div><label class="f" for="k-size">Size</label><input type="number" id="k-size" min="40" max="160"></div>
-            <div><label class="f" for="k-outline">Outline</label><input type="number" id="k-outline" min="0" max="14"></div>
-            <div><label class="f" for="k-words">Words on screen</label><input type="number" id="k-words" min="1" max="6"></div></div>
+            <div><label class="f" for="k-outline">Outline thickness</label><input type="number" id="k-outline" min="0" max="14"></div>
+            <div><label class="f" for="k-words">Words shown at once</label><input type="number" id="k-words" min="1" max="6"></div></div>
           <div class="two"><div><label class="f" for="k-text">Text colour</label><input type="color" id="k-text" style="height:38px;padding:2px"></div>
             <div><label class="f" for="k-active">Colour of the spoken word</label><input type="color" id="k-active" style="height:38px;padding:2px"></div></div>
           <label class="check"><input type="checkbox" id="k-upper"> ALL CAPITALS</label>
-          <div class="btns"><button class="btn" onclick="useLook()">Use this style</button><button class="btn" onclick="useLook(true)">Save as a profile…</button><button class="btn quiet" id="k-del" hidden onclick="delLook()">Delete this profile</button></div>
-          <p class="help" style="margin-top:6px">Clips already drafted get the new style when you press Make videos.</p>
+          <div class="btns"><button class="btn" onclick="useLook()">Use this style</button><button class="btn" onclick="useLook(true)">Save this style…</button><button class="btn quiet" id="k-del" hidden onclick="delLook()">Delete this saved style</button></div>
+          <p class="help" style="margin-top:6px">Clips that already have a draft get the new style when you press Make videos.</p>
         </details>
           </div></div>
           <h2 class="sect">Template and opening</h2>
           <div class="card"><div class="body">
-        <label class="switch"><input type="checkbox" id="o-opening" onchange="saveOpts()"><span><b>Eye-catching first seconds</b>Zoom-in, pop-in text, a whoosh and a progress bar.</span></label>
+        <label class="switch"><input type="checkbox" id="o-opening" onchange="saveOpts()"><span><b>Eye-catching first seconds</b>The picture zooms in, the opening text pops up, a short whoosh sound plays, and a thin bar shows how far the clip has played.</span></label>
         <details class="sec" id="tplbox" open><summary>Template and opening text <small>a card, a post, a news banner</small></summary>
-          <label class="f" for="t-tpl">Template</label>
+          <label class="f" for="t-tpl">Template (a ready-made design around the video)</label>
           <select id="t-tpl" onchange="saveFrame()"></select>
           <div id="t-card" hidden>
             <label class="f" for="t-bg">Behind the card</label>
@@ -615,32 +615,32 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
             <input type="file" id="t-imgfile" accept=".png,.jpg,.jpeg,.webp" hidden onchange="brandFile(this,'card')">
           </div>
           <div class="two" id="t-post" hidden><div><label class="f" for="t-name">Name on the post</label><input type="text" id="t-name" maxlength="40" placeholder="the streamer's name" onchange="saveFrame()"></div>
-            <div><label class="f" for="t-handle">Handle</label><input type="text" id="t-handle" maxlength="40" placeholder="@yourpage" onchange="saveFrame()"></div></div>
+            <div><label class="f" for="t-handle">Account name (with @)</label><input type="text" id="t-handle" maxlength="40" placeholder="@yourpage" onchange="saveFrame()"></div></div>
           <label class="f" for="t-hook">Opening text stays for <b id="t-hookv"></b> seconds</label>
           <input type="range" id="t-hook" min="2" max="60" step="1" oninput="$('t-hookv').textContent=this.value" onchange="act('/api/options',{hook_seconds:+this.value})">
-          <p class="help" style="margin-top:6px">The post, news and hook-box templates show the opening text for the whole clip. Clips already drafted get the template when you press Make videos, or use "Make this video's drafts again" on a clip.</p>
+          <p class="help" style="margin-top:6px">The Post, Breaking news and Text box templates keep the opening text on screen for the whole clip. Clips that already have a draft get the template when you press Make videos, or use "Make this video's drafts again" on a clip.</p>
         </details>
           </div></div>
         </div>
         <div>
-          <h2 class="sect">Branding</h2>
+          <h2 class="sect">Logo, closing text and music</h2>
           <div class="card"><div class="body">
         <details class="sec" id="brandbox" open><summary>Branding <small>your logo, an outro line, music</small></summary>
-          <label class="f">Logo or watermark</label>
+          <label class="f">Your logo (a small picture in a corner of every clip)</label>
           <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-logofile').click()">Choose an image</button><span class="saved" id="g-logoname"></span><button class="btn quiet" id="g-logooff" hidden onclick="act('/api/options',{brand_logo:''})">Take it off</button></div>
           <input type="file" id="g-logofile" accept=".png,.jpg,.jpeg,.webp,.gif" hidden onchange="brandFile(this,'logo')">
           <div class="three"><div><label class="f" for="g-corner">Corner</label><select id="g-corner" onchange="saveBrand()"><option value="top-left">top left</option><option value="top-right">top right</option><option value="bottom-left">bottom left</option><option value="bottom-right">bottom right</option></select></div>
             <div><label class="f" for="g-size">Size</label><input type="range" id="g-size" min="5" max="50" onchange="saveBrand()"></div>
-            <div><label class="f" for="g-op">See-through</label><input type="range" id="g-op" min="10" max="100" onchange="saveBrand()"></div></div>
-          <label class="f" for="g-outro">Outro line over the last seconds <small>(empty = none)</small></label>
+            <div><label class="f" for="g-op" title="How solid the logo is. Left: you can see the video through it. Right: fully solid.">How solid</label><input type="range" id="g-op" min="10" max="100" onchange="saveBrand()"></div></div>
+          <label class="f" for="g-outro">Closing text over the last seconds <small>(empty = none)</small></label>
           <input type="text" id="g-outro" maxlength="60" placeholder="Follow for part 2" onchange="saveBrand()">
-          <label class="f">Music under the voice</label>
+          <label class="f">Background music (plays under the voice)</label>
           <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-musicfile').click()">Choose a sound file</button><span class="saved" id="g-musicname"></span><button class="btn quiet" id="g-musicoff" hidden onclick="act('/api/options',{brand_music:''})">Take it off</button></div>
           <input type="file" id="g-musicfile" accept=".mp3,.m4a,.wav,.ogg,.aac,.flac" hidden onchange="brandFile(this,'music')">
           <label class="f" for="g-vol">Music loudness</label><input type="range" id="g-vol" min="0" max="50" onchange="saveBrand()">
-          <label class="f" for="g-rise">Music grows louder over the last <b id="g-risev">0</b> seconds <small>(0 = stays level)</small></label>
+          <label class="f" for="g-rise">Music grows louder over the last <b id="g-risev">0</b> seconds <small>(0 = same loudness all the way)</small></label>
           <input type="range" id="g-rise" min="0" max="20" oninput="$('g-risev').textContent=this.value" onchange="saveBrand()">
-          <p class="help" style="margin-top:6px">Use only music you have the right to use: platforms mute or remove clips with other people's songs. Branding is added when a draft or a video is made; press Make videos to add it to clips already drafted.</p>
+          <p class="help" style="margin-top:6px">Use only music you have the right to use: platforms mute or remove clips with other people's songs. Your logo, closing text and music are added when a draft or a video is made. Press Make videos to add them to clips that already have a draft.</p>
         </details>
           </div></div>
           <h2 class="sect">Thumbnails</h2>
@@ -653,7 +653,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
           <label class="f" for="o-avoid">Things I do not want in thumbnails <small>(optional, in your own words)</small></label>
           <textarea id="o-avoid" maxlength="500" style="min-height:58px" placeholder="For example: no guns, no blood, no half-naked people, no swear words, no red arrows"></textarea>
           <div class="btns"><button class="btn" onclick="saveAvoid()">Save this list</button></div>
-          <p class="help" style="margin:6px 0 0">The list is used for every ChatGPT thumbnail, also the ones made from your own description. It is sent to OpenAI with the request. The free thumbnail is a real frame of the clip, so the list cannot change it.</p>
+          <p class="help" style="margin:6px 0 0">The list is used for every ChatGPT thumbnail, also the ones made from your own description. It is sent to OpenAI with the request. The free thumbnail is a real picture taken from the clip, so the list cannot change it.</p>
         </details>
           </div></div>
           <h2 class="sect">Versions</h2>
@@ -665,11 +665,11 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
       <div class="lookprev">
         <h2 class="sect">Preview <small>one of your clips with these choices</small></h2>
         <div class="card"><div class="body">
-          <div id="lk-tabs"><button data-w="open" class="on" onclick="lookShow('open')" title="The first seconds: the opening text and the zoom">Start</button><button data-w="mid" onclick="lookShow('mid')" title="The middle: the captions">Middle</button><button data-w="end" onclick="lookShow('end')" title="The last second: the outro line">End</button></div>
+          <div id="lk-tabs"><button data-w="open" class="on" onclick="lookShow('open')" title="The first seconds: the opening text and the zoom">Start</button><button data-w="mid" onclick="lookShow('mid')" title="The middle: the captions">Middle</button><button data-w="end" onclick="lookShow('end')" title="The last second: the closing text">End</button></div>
           <div id="lk-phone"><img id="lk-img" alt="A frame of one of your clips, drawn with the choices on this page" hidden><div id="lk-empty">The preview appears here.</div></div>
           <p class="help" id="lk-note" style="margin:8px 0 0"></p>
           <div class="btns" style="margin-top:8px"><button class="btn" id="lk-other" onclick="lookOther()" title="Show the same choices on another of your newest clips">Try another clip</button></div>
-          <p class="help" style="margin:8px 0 0">These are real frames, made the same way as the videos, so what you see is what you get. It follows every change on this page after a few seconds. Music cannot be shown.</p>
+          <p class="help" style="margin:8px 0 0">These are real pictures from one of your clips, made the same way as the videos, so the videos will look like this. The preview follows every change on this page after a few seconds. Music cannot be shown.</p>
         </div></div>
       </div>
       </div>
@@ -679,11 +679,11 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
       <div class="pagehead"><h1>Posted and earnings</h1></div>
       <div class="mainhead"><h2></h2>
         <div class="filters"><button class="chipbtn" id="b-views" onclick="refreshViews()">Refresh views</button><a class="chipbtn" href="/api/tracker.csv" style="text-decoration:none">Download as a spreadsheet</a></div></div>
-      <p class="keys">After you post a clip by hand, open that clip with Edit and use its Posted tab. Views can be read automatically from public links; payouts and rejections you type in.</p>
+      <p class="keys">After you post a clip by hand, open that clip with Edit and use its Posted tab. View counts can be read automatically from public links. What you were paid, and which posts a campaign rejected, you type in yourself.</p>
       <div class="totals" id="t-totals"></div>
       <div class="card twrap"><table class="ttable"><thead><tr><th>Clip</th><th>Version</th><th>Campaign</th><th>Platform</th><th>Link</th><th>Status</th><th>Views</th><th>Paid ($)</th><th>Rejection reason or note</th><th></th></tr></thead><tbody id="t-rows"></tbody></table></div>
-      <div class="empty" id="t-empty" hidden><b>Nothing logged yet.</b>Make a clip's videos, post one by hand, then open the clip with Edit and use its Posted tab.</div>
-      <h2 class="sect">Campaign <small>checks every clip against a campaign's rules</small></h2>
+      <div class="empty" id="t-empty" hidden><b>Nothing listed here yet.</b>Make a clip's videos, post one by hand, then open the clip with Edit and use its Posted tab.</div>
+      <h2 class="sect">Campaign <small>a paid clipping job; every clip is checked against its rules</small></h2>
       <div class="card narrow"><div class="body">
         <label class="f" for="o-camp">Campaign (checks every clip against its rules)</label>
         <select id="o-camp" onchange="saveOpts()"></select>
@@ -706,8 +706,8 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
           <div id="h-items"></div>
           <div class="btns">
             <button class="btn" id="b-hcheck" onclick="hAct('/api/health/check')">Run the full check</button>
-            <button class="btn" id="b-hrepair" data-yours onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. If the Microsoft Visual C++ runtime is missing, Windows will ask you to allow the installer from Microsoft for it: press Yes. Continue?')">Repair</button>
-            <button class="btn primary" id="b-hupdate" hidden onclick="hAct('/api/health/update','Update takes the newest version from GitHub. Your clips, settings and keys are not touched. Continue?')">Update</button>
+            <button class="btn" id="b-hrepair" data-yours onclick="hAct('/api/health/repair','Repair downloads anything that is missing (up to about 300 MB) and can take a few minutes. If the Microsoft Visual C++ runtime (a part of Windows that captions need) is missing, Windows will ask you to allow the Microsoft installer for it: press Yes. Continue?')">Repair</button>
+            <button class="btn primary" id="b-hupdate" hidden onclick="hAct('/api/health/update','Update downloads the newest version of this program from GitHub. Your clips, settings and keys stay as they are. Continue?')">Update</button>
           </div>
           <div class="bar indet" id="h-bar" hidden><i></i></div><div class="pct" id="h-pct" hidden></div>
           <div class="note" id="h-note" hidden></div>
@@ -716,37 +716,37 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
           <div class="card"><div class="body">
         <details id="langbox" open><summary hidden>Language: <b id="lang-sum">English</b></summary>
           <label class="f" for="l-speech">What the streamer speaks</label>
-          <select id="l-speech" onchange="saveLang()"><option value="en">English</option><option value="ur">Urdu</option><option value="hi">Hindi</option><option value="auto">Detect it (can guess wrong on mixed speech)</option></select>
+          <select id="l-speech" onchange="saveLang()"><option value="en">English</option><option value="ur">Urdu</option><option value="hi">Hindi</option><option value="auto">Find out automatically (can guess wrong when languages are mixed)</option></select>
           <label class="f" for="l-script">Captions for Urdu or Hindi speech</label>
           <select id="l-script" onchange="saveLang()"><option value="roman">Latin letters: "bhai ne kamaal kar diya" (best with Claude)</option><option value="native">Urdu or Hindi letters</option></select>
           <label class="f" for="l-text">Opening text and titles written in</label>
           <select id="l-text" onchange="saveLang()"><option value="Roman Urdu">Roman Urdu mixed with English</option><option>English</option><option value="Hinglish">Hinglish (Roman Hindi mixed with English)</option><option value="Urdu">Urdu letters</option><option value="Hindi">Hindi letters</option></select>
           <label class="f" for="l-yt">Words of YouTube videos come from</label>
           <select id="l-yt" onchange="saveLang()"><option value="auto">YouTube's own captions when it has them (seconds)</option><option value="off">Listening on this PC (minutes; try it if the captions are poor)</option></select>
-          <p class="help" style="margin-top:6px">Applies to clips made from now on. The narrator in explainer videos speaks English. Twitch, live streams and video files are always listened to on this PC.</p>
+          <p class="help" style="margin-top:6px">Applies to clips made from now on. The narrator voice in explainer videos (the version where a voice introduces the clip) speaks English. Twitch, live streams and video files are always listened to on this PC.</p>
         </details>
           </div></div>
         </div>
         <div>
           <h2 class="sect">AI for titles and ratings <small>optional</small></h2>
           <div class="card"><div class="body">
-        <p class="help">Claude writes the opening text and titles, judges each clip, and can read a whole stream. Without it everything still works, with placeholder text.</p>
+        <p class="help">Claude writes the opening text and titles, judges each clip, and can read a whole stream. Without it everything still works, but the texts are basic ones.</p>
         <label class="f" for="a-backend">How to reach Claude</label>
         <select id="a-backend" data-yours onchange="saveAi()"></select>
         <div id="a-auto">
-          <label class="f" for="a-prefer">When both work, use first</label>
+          <label class="f" for="a-prefer">When both ways work, use this one first</label>
           <select id="a-prefer" onchange="saveAi()"></select>
-          <label class="switch"><input type="checkbox" id="a-fallback" data-yours onchange="saveAi()"><span><b>Use the other if the first fails</b>For example when your plan's limit is reached. This can move work onto your paid API key; the page says so when it happens.</span></label>
+          <label class="switch"><input type="checkbox" id="a-fallback" data-yours onchange="saveAi()"><span><b>Use the other if the first fails</b>For example when your plan's usage limit is reached. Work can then go through your paid Claude key (API key), which costs money. The page tells you when this happens.</span></label>
         </div>
         <div id="a-ways" style="margin-top:10px"></div>
         <div class="two">
-          <div><label class="f" for="a-model">Model for clip text</label><select id="a-model" onchange="saveAi()"></select></div>
-          <div><label class="f" for="a-stream">Model for reading streams</label><select id="a-stream" onchange="saveAi()"></select></div>
+          <div><label class="f" for="a-model" title="Which Claude writes the opening text and titles. A stronger one judges better but uses more of your plan or costs more.">Which Claude writes clip text</label><select id="a-model" onchange="saveAi()"></select></div>
+          <div><label class="f" for="a-stream" title="Which Claude reads a whole stream when Let AI read the whole stream is on. The fastest one is usually enough and uses the least.">Which Claude reads whole streams</label><select id="a-stream" onchange="saveAi()"></select></div>
         </div>
         <div class="note" id="a-note"></div>
         <div class="note" id="a-local"></div>
         <div class="btns"><button class="btn" id="b-aicheck" onclick="act2('/api/ai/check')">Check again</button>
-          <button class="btn" id="b-localai" data-yours hidden onclick="localAi()">Set up free local AI</button></div>
+          <button class="btn" id="b-localai" data-yours hidden onclick="localAi()">Set up the free AI</button></div>
           </div></div>
         </div>
       </div>
@@ -827,10 +827,10 @@ function plainHtml(msg,lead){
     +'<details class="errtech"><summary>Technical details (for whoever set this up)</summary><div>'+esc(msg)+'</div></details>';
 }
 const LOG_LEAD='A background job reported a problem. ';
-const MODES={chat:['A','Chat only','Clips when chat suddenly erupts. Uses almost no internet.'],
-  audio:['B','Chat + sound','Also catches loud moments chat missed. About 70 MB an hour per channel.'],
-  video:['C','Chat + picture','Also catches fast action on screen. About 100 MB an hour per channel.'],
-  all:['D','Chat + sound + picture','Uses all three. About 100 MB an hour per channel.']};
+const MODES={chat:['A','Chat only','Makes a clip when the chat suddenly gets very busy. Uses almost no internet.'],
+  audio:['B','Chat + sound','Also catches loud moments that the chat missed. Uses about 70 MB of internet an hour for each channel.'],
+  video:['C','Chat + picture','Also catches fast action on screen. Uses about 100 MB of internet an hour for each channel.'],
+  all:['D','Chat + sound + picture','Uses all three. Uses about 100 MB of internet an hour for each channel.']};
 let drawn=false, toastTimer=0, last={};
 
 let errShown=[]; const errClosed=new Set();
@@ -900,13 +900,13 @@ function show(s){
     const st=w.missing?['#98a1b0','Not set up',w.missing]:(w.ok===true?['var(--ok)','Works','']:(w.ok===false?['var(--bad)','Does not work',w.problem]:['var(--warn)',s.ai.checking?'Checking…':'Not checked yet','']));
     return '<div style="display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:3px 0"><span class="dot" style="background:'+st[0]+';flex:none;position:relative;top:-1px"></span><span><b>'+esc(w.name)+'</b>: '+st[1]+(st[2]?'<br><span style="color:var(--muted)">'+esc(st[2])+'</span>':'')+'</span></div>'}).join('');
   const la=s.ai.local||{};
-  $('a-local').innerHTML='<b>Free local AI:</b> '+(la.ready?'ready ('+esc(la.model)+'). It writes clip text when Claude cannot be reached. Plainer than Claude, cannot look at frames or read whole streams.'
+  $('a-local').innerHTML='<b>Free AI on this computer:</b> '+(la.ready?'ready ('+esc(la.model)+'). It writes clip text when Claude cannot be reached. Its text is simpler than what Claude writes. It cannot look at pictures from the clip or read whole streams.'
     :(!la.supported?'not used on this computer ('+esc(la.why||'it cannot run it')+'). Nothing is downloaded for it.'
-      :'this computer can run it. Setting it up installs Ollama and a model, about 3 GB in all.'));
+      :'this computer can run it. Setting it up installs Ollama (a free program that runs AI) and one AI model, about 3 GB in all.'));
   $('b-localai').hidden=!!la.ready||!la.supported; $('b-localai').disabled=!!(s.health&&s.health.maint.running);
   const use=ways[s.ai.using];
   $('a-note').innerHTML=(s.ai.problem?'<b>Claude cannot be used yet:</b> '+esc(s.ai.problem)+'.'
-    :'<b>Using now:</b> '+esc(use?use.name:'')+'. '+(s.ai.using==='claude-code'?'Nothing is billed per use, but it counts towards your plan\'s usage limits.':'Each use is billed and written to the usage log.'))
+    :'<b>Using now:</b> '+esc(use?use.name:'')+'. '+(s.ai.using==='claude-code'?'Nothing is billed per use, but it counts towards your plan\'s usage limits.':'Each use costs money and is written to the usage log.'))
     +(s.ai.note?'<br><b style="color:var(--warn)">'+esc(s.ai.note)+'</b>':'');
   $('b-aicheck').disabled=!!s.ai.checking; $('b-aicheck').textContent=s.ai.checking?'Checking…':'Check again';
   const r=document.querySelector('[name=o-mode][value='+s.mode+']'); if(r&&!r.checked&&!document.querySelector('[name=o-mode]:focus'))r.checked=true;
@@ -915,18 +915,18 @@ function show(s){
   if(document.activeElement!==$('o-thumb'))$('o-thumb').value=s.thumbnail||'off';
   $('o-face').checked=s.thumbnail_face!==false;
   if(document.activeElement!==$('o-avoid')&&!avoidDirty)$('o-avoid').value=s.thumbnail_avoid||'';
-  $('thumb-sum').textContent=(s.thumbnail_face!==false?'face big and excited':'face not forced')+(s.thumbnail_avoid?' · a not-wanted list is set':' · no not-wanted list');
+  $('thumb-sum').textContent=(s.thumbnail_face!==false?'face big and excited':'face not always big')+(s.thumbnail_avoid?' · you have a list of things to leave out':' · no list of things to leave out');
   const gpt=s.chatgpt||{text:'this running program is older than the page; restart it'};
-  $('thumb-note').innerHTML=({off:'No thumbnail is made by itself. You can still make one for any clip: press Edit on it and open its <b>Thumbnail</b> tab.',
-    frame:'Free, no AI: the sharpest frame of the clip with its opening text in big letters. Saved beside the video with the same name.',
-    chatgpt:'ChatGPT looks at frames of the clip and draws the thumbnail itself; you write nothing. One to three minutes per clip. Frames, the title and the words of the clip are sent to OpenAI, and it counts towards your ChatGPT plan.'}[s.thumbnail||'off'])
+  $('thumb-note').innerHTML=({off:'No thumbnail is made automatically. You can still make one for any clip: press Edit on it and open its <b>Thumbnail</b> tab.',
+    frame:'Free, no AI: the sharpest picture from the clip with its opening text in big letters. Saved beside the video with the same name.',
+    chatgpt:'ChatGPT looks at still pictures from the clip and draws the thumbnail itself; you write nothing. It takes one to three minutes per clip. The pictures, the title and the words of the clip are sent to OpenAI, and it counts towards your ChatGPT plan.'}[s.thumbnail||'off'])
     +((s.thumbnail==='chatgpt'||gpt.signed_in)?'<br><b>ChatGPT:</b> <span style="color:'+(gpt.signed_in?'var(--ok)':(gpt.checking?'var(--muted)':'var(--bad)'))+'">'+esc(gpt.text)+'</span>':'');
   drawLooks(s);drawFrame(s);
   if(!document.querySelector('#langbox select:focus')){$('l-speech').value=s.speech_language||'en';$('l-script').value=s.caption_script||'roman';$('l-text').value=s.text_language||'English';$('l-yt').value=s.youtube_captions||'auto'}
   $('lang-sum').textContent=({en:'English',ur:'Urdu',hi:'Hindi',auto:'detected automatically'})[s.speech_language||'en']+((s.speech_language||'en')!=='en'?', captions in '+(s.caption_script==='roman'?'Latin letters':'its own letters')+', text in '+(s.text_language||'English'):'');
   if(document.activeElement!==$('o-camp'))$('o-camp').value=s.campaign||'';
   const cc=(s.campaigns||[]).find(c=>c.id===s.campaign);
-  $('camp-rules').textContent=cc?(cc.problem?'This campaign file cannot be read: '+cc.problem:'Rules: '+(cc.rules||'none that can be checked automatically')+'. Rule files are in the briefs folder.'):'Pick a campaign to have its length, tag and label rules checked on every clip. Rule files are in the briefs folder.';
+  $('camp-rules').textContent=cc?(cc.problem?'This campaign file cannot be read: '+cc.problem:'Rules: '+(cc.rules||'none that can be checked automatically')+'. Rule files are in the briefs folder.'):'Pick a campaign and the program checks every clip against its rules for length, hashtags and the ad label. Rule files are in the briefs folder.';
   const fp=s.finish_progress||{done:0,total:0,now:''};
   setBar('f',s.finishing,s.finish_percent); setBar('r',s.running,s.run_progress); setBar('m',s.running,s.run_progress); setBar('cb',s.running,s.run_progress);
   const hm=s.health?s.health.maint:null, hs=hm&&hm.step;
@@ -935,9 +935,9 @@ function show(s){
   $('b-start').disabled=s.watching; $('b-stop').disabled=!s.watching; $('b-clipnow').disabled=!s.watching;
   if(document.activeElement!==$('o-auto'))$('o-auto').checked=!!s.watch_autostart;
   /* Who is live, and a hype meter of each chat against its own usual pace. */
-  const HC={quiet:'var(--muted)',building:'var(--accent)',hot:'var(--warn)','peak hype':'var(--bad)'};
+  const HC={quiet:'var(--muted)','getting busy':'var(--accent)','very busy':'var(--warn)','at its busiest':'var(--bad)'};
   $('w-live').innerHTML=Object.entries(s.live||{}).map(([n,c])=>'<div class="live1"><b>'+esc(n)+'</b>'+(c.live
-      ?'<span class="hbar"><i style="width:'+c.percent+'%;background:'+(HC[c.label]||'var(--accent)')+'"></i></span><span>'+c.percent+'% · '+esc(c.label)+' · '+c.per_minute+' msgs/min'+(c.waiting?' · clip being made':'')+'</span>'
+      ?'<span class="hbar"><i style="width:'+c.percent+'%;background:'+(HC[c.label]||'var(--accent)')+'"></i></span><span title="How busy this chat is right now, compared with its own usual pace in this stream. 100% is the busiest it gets. A clip is made when it suddenly jumps.">'+c.percent+'% · '+esc(c.label)+' · '+c.per_minute+' chat messages a minute'+(c.waiting?' · clip being made':'')+'</span>'
       :'<span style="color:var(--muted)">not live yet; checked every half minute</span>')+'</div>').join('');
   $('w-note').innerHTML=s.watching?'<b>Watching.</b> Drafts appear under My clips as moments happen. '+esc(lastLine(s.watch_log)):(s.watch_problem?'<b>Stopped with a problem.</b> Open the activity log.':'Not watching.');
   logTo('wlog',s.watch_log);
@@ -947,7 +947,7 @@ function show(s){
   const ready=s.finish_log.filter(l=>l.startsWith('READY ')), notMade=s.finish_log.filter(l=>l.startsWith('NOT MADE ')||l.startsWith('FAILED'));
   $('f-note').innerHTML=s.finishing?'<b>Working…</b> '+(fp.total?'clip '+Math.min(fp.total,fp.done+1)+' of '+fp.total+(fp.now?': '+esc(fp.now):''):'starting')+'. The bar above shows how far it is.'
       +(s.finish_stopping==='after'?' <b>Stopping after this video.</b>':(s.finish_stopping==='now'?' <b>Stopping now…</b>':''))
-    :(s.finish_log.length?(s.finish_stopped?'<b>Stopped by you.</b> ':'')+(ready.length?'<b>'+ready.length+' video file'+(ready.length>1?'s':'')+' made.</b> ':(s.finish_stopped?'No video was finished before the stop. ':(notMade.length?'':'<b>Nothing to make:</b> no approved clip is waiting for its videos. ')))+(notMade.length?notMade.length+' could not be made. ':'')+(ready.length?'They are in the <b>ready</b> folder inside your data folder; press Open the videos folder.':'')+(s.finish_stopped?(s.finish_left?' '+s.finish_left+' clip'+(s.finish_left>1?'s were':' was')+' not made and '+(s.finish_left>1?'are':'is')+' still under Approved.':' Nothing else was waiting.'):''):'Nothing made yet in this session.');
+    :(s.finish_log.length?(s.finish_stopped?'<b>Stopped by you.</b> ':'')+(ready.length?'<b>'+ready.length+' video file'+(ready.length>1?'s':'')+' made.</b> ':(s.finish_stopped?'No video was finished before the stop. ':(notMade.length?'':'<b>Nothing to make:</b> no approved clip is waiting for its videos. ')))+(notMade.length?notMade.length+' could not be made. ':'')+(ready.length?'They are in the <b>ready</b> folder inside your data folder; press Open the videos folder.':'')+(s.finish_stopped?(s.finish_left?' '+s.finish_left+' clip'+(s.finish_left>1?'s were':' was')+' not made and '+(s.finish_left>1?'are':'is')+' still under Approved.':' Nothing else was waiting.'):''):'Nothing made yet since the program was started.');
   $('f-ready').innerHTML=ready.map(l=>'<li>'+esc(l.slice(6).split(/[\\/]/).pop())+'</li>').join('')+notMade.map(l=>'<li class="nm">'+esc(l)+'</li>').join('');
   /* How far the making of the videos is, at the top of the page too: it is seen from wherever you are. */
   const pm=$('p-make'), fq=s.finish_percent; pm.hidden=!s.finishing;
@@ -999,12 +999,12 @@ async function lookDraw(){
   LK.busy=false;$('lk-phone').classList.remove('wait');$('lk-other').disabled=false;
   if(r.error){LK.v='';$('lk-img').hidden=true;$('lk-empty').textContent=plainOf(r.error,true)||r.error;$('lk-note').textContent=''}
   else{LK.v=r.v;lookShow(LK.which);$('lk-other').hidden=r.of<2;
-    $('lk-note').textContent='Your clip: '+r.title+'. Shown as if it were '+Math.round(r.seconds)+' seconds long, so the end comes quickly.'+(r.has_hook?'':' It has no opening text yet, so a placeholder is shown.')}
+    $('lk-note').textContent='Your clip: '+r.title+'. Shown as if it were '+Math.round(r.seconds)+' seconds long, so the end comes quickly.'+(r.has_hook?'':' It has no opening text yet, so an example text is shown.')}
   if(LK.again){LK.again=false;lookDraw()}}
 async function localAi(){
-  if(!confirm('Set up the free local AI on this computer?'+NL+NL+'It installs Ollama (a free program that runs AI models, about 1 GB) and downloads one model (about 2 GB). This takes a while. Progress shows under Setup check.'))return;
+  if(!confirm('Set up the free AI on this computer?'+NL+NL+'It installs Ollama (a free program that runs AI models, about 1 GB) and downloads one model (about 2 GB). This takes a while. Progress shows under Setup check.'))return;
   const r=await send('/api/ai/local-setup'); if(r.error){toast(r.error,true);return}
-  $('healthbox').open=true; go('settings'); toast('Setting up the free local AI. Watch the progress under Setup check.'); show(r);
+  $('healthbox').open=true; go('settings'); toast('Setting up the free AI on this computer. Watch the progress under Setup check.'); show(r);
 }
 async function clipNow(){
   const n=+val('w-last'), r=await send('/api/watch/clip-now',{seconds:n});
@@ -1040,7 +1040,7 @@ function ownHint(){
   let t='';
   if(toEnd)t=mode==='one'?'One clip from the start time to the end of the video.':'From the start time to the end of the video, split into parts.';
   else if(len<=0)t='The end must be after the start.';
-  else if(mode==='one')t='One clip, '+Math.round(len)+' seconds long.'+(len>90?' That is long for a short; consider splitting it into parts.':'');
+  else if(mode==='one')t='One clip, '+Math.round(len)+' seconds long.'+(len>90?' That is long for a short video; think about splitting it into parts.':'');
   else if(mode==='count'){const n=+val('m-parts')||1;t=n+' parts of about '+Math.round(len/n)+' seconds each.'}
   else{const p=+val('m-plen')||50, n=Math.max(1,Math.floor(len/p)), rest=len-n*p;t=(rest>=8?n+1:n)+' parts of '+p+' seconds'+(rest>=8?', the last one '+Math.round(rest)+' seconds.':(rest>0?', the last one a little longer.':'.'))}
   $('m-hint').textContent=t;
@@ -1059,7 +1059,7 @@ async function uploadFile(inp){
       x.onload=()=>{if(x.status===200){try{ok(JSON.parse(x.responseText))}catch(e){bad('the answer could not be read')}}else bad(x.responseText||('error '+x.status))};
       x.onerror=()=>bad('the program is not answering');x.send(f)});
     $('m-src').value=d.path; st.textContent='Ready: '+f.name}
-  catch(e){st.textContent='';toast('The file was not taken: '+e,true)}
+  catch(e){st.textContent='';toast('The file could not be copied: '+e,true)}
   inp.value='';
 }
 function saveLang(){
@@ -1073,7 +1073,7 @@ function saveOpts(){const o={mode:mode(),opening:$('o-opening').checked};o.campa
 async function poll(){
   let s=null;
   try{const r=await fetch('/api/options');if(r.ok)s=await r.json();else setErr('The page could not read the program state: '+r.status+' '+await r.text())}
-  catch(e){setErr('THE PROGRAM IS NOT ANSWERING. It has stopped or crashed: look at the terminal window where you started it; the reason is printed there.')}
+  catch(e){setErr('THE PROGRAM IS NOT ANSWERING. It has stopped or crashed: look at the terminal window (the text window that opened with the program); the reason is printed there.')}
   /* Drawing is kept apart from fetching: a fault in the page itself must not be reported as the program having stopped. */
   if(s){try{show(s)}catch(e){setErr('THE PAGE HIT A FAULT OF ITS OWN while drawing ('+e+'). The program is still running. Reload the page; if this stays, restart the program and report this line.')}}
   setTimeout(poll,(s&&(s.running||s.finishing||(s.health&&s.health.maint.running)))?1500:5000)}
@@ -1084,7 +1084,7 @@ const STATUS_TEXT={candidate:'To review',approved:'Approved, videos not made yet
 function place(c){return c.made?'done':(c.status==='candidate'&&c.held?'pending':c.status)}
 let filter='candidate';
 function foundBy(c){const t=String(c.trigger||'chat'), parts=[];
-  if(t.includes('chat'))parts.push('Chat spike ×'+c.score);
+  if(t.includes('chat'))parts.push('Chat '+c.score+'× busier than usual');
   if(t.includes('audio'))parts.push('Loud moment');
   if(t.includes('video'))parts.push('Fast action');
   if(t.includes('said'))parts.push('Excited words');
@@ -1096,36 +1096,36 @@ const coverText=new Map();   /* a thumbnail description being typed, kept throug
 const coverOpen=new Set(), COVER_BY={frame:'Made from the clip',chatgpt:'Drawn by ChatGPT',prompt:'Drawn by ChatGPT from your description'};
 function cardHtml(c){
   /* a clip whose own record cannot be read: say so, and offer the one thing that can be done about it */
-  if(c.broken)return '<div class="tile" style="grid-column:1/-1"><div class="cliperr" style="white-space:normal"><b>This clip is damaged.</b> '+esc(c.error||'')+'</div><div style="margin-top:10px"><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+c.key+'\')">Delete</button></div></div>';
-  const cv=c.cover||{}, k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Raw download, draft not finished'):'';
-  const VN={'final.mp4':'A','final_b.mp4':'B','explained.mp4':'Explained A','explained_b.mp4':'Explained B','source.mp4':'Raw'};
+  if(c.broken)return '<div class="tile" style="grid-column:1/-1"><div class="cliperr" style="white-space:normal"><b>This clip is damaged.</b> '+esc(c.error||'')+'</div><div style="margin-top:10px"><button class="btn quiet" title="Remove this clip and its files forever" onclick="delClip(\''+c.key+'\')">Delete</button></div></div>';
+  const cv=c.cover||{}, k=c.key, shown=c.video?(c.video==='final.mp4'?'Draft with captions':'Downloaded video only, draft not finished'):'';
+  const VN={'final.mp4':'A','final_b.mp4':'B','explained.mp4':'Explained A','explained_b.mp4':'Explained B','source.mp4':'Original'};
   const tabs=(c.videos||[]).length>1||(c.videos||[]).includes('final.mp4')?'<div class="vtabs">'+(c.videos||[]).map(n=>'<button class="'+(n===c.video?'on':'')+'" onclick="showVid(\''+k+'\',\''+n+'\',this)">'+VN[n]+'</button>').join('')
     +(cv.made?'<button onclick="showCover(\''+k+'\',this)" title="This clip\'s thumbnail">Thumbnail</button>':'')
-    +((c.videos||[]).includes('final.mp4')&&!(c.videos||[]).includes('final_b.mp4')?'<button onclick="makeB(\''+k+'\',this)" title="Render version B now so you can compare it">Make B preview</button>':'')+'</div>':'';
+    +((c.videos||[]).includes('final.mp4')&&!(c.videos||[]).includes('final_b.mp4')?'<button onclick="makeB(\''+k+'\',this)" title="Make version B now so you can compare it with version A">Make B preview</button>':'')+'</div>':'';
   /* The picture: fill the screen (some of a wide stream is cut off), or the whole picture with a blurred copy above and below. */
   const fm=c.framing, whole=fm&&fm.layout==='blur', boxes=fm&&!whole&&fm.custom;
   const frow=fm&&(c.videos||[]).includes('source.mp4')?'<div class="frow"><span>Picture:</span>'
-    +'<button class="'+(!whole&&!boxes?'on':'')+'" title="The program frames the clip itself: it fills the screen, with the face on top when it finds a facecam" onclick="quickFrame(\''+k+'\',\'auto\',this)">Automatic</button>'
+    +'<button class="'+(!whole&&!boxes?'on':'')+'" title="The program chooses what to show: the video fills the screen, and the face of the streamer goes on top when the stream has a face camera" onclick="quickFrame(\''+k+'\',\'auto\',this)">Automatic</button>'
     +'<button class="'+(whole?'on':'')+'" title="Nothing is cut off: the whole stream picture in the middle, with a blurred, moving copy of it filling the space above and below" onclick="quickFrame(\''+k+'\',\'whole\',this)">Whole picture</button>'
     +'<button class="'+(boxes?'on':'')+'" title="Draw yourself what is shown: a box for the face and a box for the video. The boxes keep the right shape by themselves" onclick="openBoxes(\''+k+'\')">Choose boxes…</button></div>':'';
   const vid=c.video?'<video'+(openKey===k?' controls':'')+' preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+(openKey===k?'':'#t=1.5')+'"></video>'+tabs+'<small>'+shown+'</small>'+frow
     :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
   const pc=c.points>=70?'good':(c.points>=40?'':'meh');
   const chips='<span class="chip '+pc+'" title="One score from chat, sound, picture and AI. Higher is better."><b>Score '+c.points+'</b></span>'
-    +(c.ai_rating!=null?'<span class="chip" title="How well AI thinks this works as a clip, from its words and three frames">AI rating '+c.ai_rating+'</span>':'')
+    +(c.ai_rating!=null?'<span class="chip" title="How good AI thinks this clip is. It judges from the words and three still pictures">AI rating '+c.ai_rating+'</span>':'')
     +foundBy(c).map(x=>'<span class="chip">'+esc(x)+'</span>').join('')
-    +(c.activity!=null&&c.trigger!=='manual'?'<span class="chip">'+esc(c.activity)+' chatters</span>':'')
+    +(c.activity!=null&&c.trigger!=='manual'?'<span class="chip">'+esc(c.activity)+' people chatting</span>':'')
     +(c.ai_pick?'<span class="chip good">AI pick</span>':'')
     +(c.ai_judged?(c.copy_source==='plain'?'<span class="chip meh">Text written without AI</span>'
-        :'<span class="chip '+(c.ai_keep?'good':'meh')+'">'+(c.ai_keep?'AI: worth posting':'AI: probably filler')+'</span>'):'')
-    +(String(c.copy_source||'').startsWith('local')?'<span class="chip" title="Claude could not be reached, so the free AI on this computer wrote the text. It is redone by Claude when Claude is available.">Text by free local AI</span>':'')
-    +(c.words_from==="YouTube's captions"?'<span class="chip" title="The captions are YouTube\'s own words for this video, not heard by the speech model. Fix any wrong word under Captions.">Captions from YouTube</span>':'')
+        :'<span class="chip '+(c.ai_keep?'good':'meh')+'">'+(c.ai_keep?'AI: worth posting':'AI: probably not worth posting')+'</span>'):'')
+    +(String(c.copy_source||'').startsWith('local')?'<span class="chip" title="Claude could not be reached, so the free AI on this computer wrote the text. It is redone by Claude when Claude is available.">Text by the free AI</span>':'')
+    +(c.words_from==="YouTube's captions"?'<span class="chip" title="The captions are YouTube\'s own words for this video. This program did not listen to the speech itself. Fix any wrong word under Captions.">Captions from YouTube</span>':'')
     +(c.exported?'<span class="chip good">Videos made</span>':'')
     +(cv.made?'<span class="chip good" title="'+esc(COVER_BY[cv.by]||'')+'">Thumbnail made</span>':'');
   const lay=[['','Automatic'],['split','Face on top, video below'],['crop','Video only, full height'],['split_under','Video on top, face below'],['blur','Whole picture on a blurred background'],['pip','Face in a corner over the video'],['circle','Face in a circle over the video']].map(o=>'<option value="'+o[0]+'"'+((c.layout||'')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
   const title=c.title||c.hook||String(c.transcript||'').slice(0,70)||'Untitled clip', who=c.channel||c.stream_title||'Your video', secs=Math.round((c.cut_end_s??c.end_s)-(c.cut_start_s??c.start_s));
   const where=place(c), isOpen=openKey===k;
-  const etabs=[['text','Text'],['versions','Versions']].concat(c.has_words?[['captions','Captions']]:[],[['trim','Trim and framing'],['thumb','Thumbnail',!!cv.error]],c.exported?[['posted','Posted']]:[]);
+  const etabs=[['text','Text'],['versions','Versions']].concat(c.has_words?[['captions','Captions']]:[],[['trim','Start, end and picture'],['thumb','Thumbnail',!!cv.error]],c.exported?[['posted','Posted']]:[]);
   let tabNow=isOpen?(edTab.get(k)||'text'):'';if(isOpen&&!etabs.some(t=>t[0]===tabNow))tabNow='text';
   const P=n=>' class="sec pane" data-tab="'+n+'"'+(tabNow===n?' open':'');
   const decide=''
@@ -1148,18 +1148,18 @@ function cardHtml(c){
    +'<span class="when2" title="When this clip was made'+(c.decided_at?'. Decided '+esc(c.decided_at):'')+'">'+madeText(c.made_at)+'</span></div>'
    +'<div class="tfound" title="Why this clip is here. Press Edit for the details.">'+esc(foundBy(c).concat(c.ai_pick?['AI pick']:[]).join(' · '))+'</div>'
    +(c.error?'<div class="tprob">Has a problem. Open it to read why.</div>':'')
-   +'<div class="ta">'+quick+'<button class="btn" onclick="openClip(\''+k+'\')" title="Text, captions, trim, framing, thumbnail, versions">'+ICON.edit+'Edit</button></div></div>'
+   +'<div class="ta">'+quick+'<button class="btn" onclick="openClip(\''+k+'\')" title="Change its text, captions, start and end, picture, thumbnail and versions">'+ICON.edit+'Edit</button></div></div>'
    +'<div class="info">'
    +'<div class="chips">'+chips+'</div>'
    +(c.ai_pick?'<div class="ai"><b>Why AI picked it:</b> '+esc(c.ai_pick)+'</div>':'')
-   +(c.ai_judged&&c.copy_source==='plain'?'<div class="ai"><b>The opening text and titles below are placeholders,</b> because AI was not used: '+esc(c.copy_problem||'no reason recorded')+'. Type your own, or press "Write text with AI".</div>'
+   +(c.ai_judged&&c.copy_source==='plain'?'<div class="ai"><b>The opening text and titles below are basic ones,</b> because AI was not used: '+esc(c.copy_problem||'no reason recorded')+'. Type your own, or press "Write text with AI".</div>'
      :(c.ai_judged&&c.ai_reason?'<div class="ai">'+esc(c.ai_reason)+'</div>':''))
    +(c.campaign?'<div class="issues"><b>'+esc(c.campaign)+':</b> '+((c.campaign_issues||[]).some(i=>i.level==='fail')?'<span style="color:var(--bad)">does not meet the rules yet</span>':'meets the rules that can be checked')
       +((c.campaign_issues||[]).length?'<ul>'+c.campaign_issues.map(i=>'<li class="'+(i.level==='fail'?'fail':'')+'">'+(i.level==='fail'?'Fix: ':'Check by hand: ')+esc(i.message)+'</li>').join('')+'</ul>':'')+'</div>':'')
    +(c.error?'<div class="cliperr">'+plainHtml(c.error,'This clip has a problem'+(/^\d\d:\d\d:\d\d /.test(c.error)?' (at '+c.error.slice(0,5)+')':'')+':')+'<button class="x" title="Close this message" aria-label="Close this message" onclick="clearErr(\''+k+'\')">×</button></div>':'')
    +(c.notes?'<div class="ai"><b>Note:</b> '+esc(c.notes)+'</div>':'')
    +((c.files||[]).length?'<div class="ai"><b>Finished file'+(c.files.length>1?'s':'')+' in the ready folder:</b> '+c.files.map(esc).join(' · ')+'</div>':'')
-   +'<div class="said">'+(c.transcript?'“'+esc(c.transcript)+'”':'<span style="color:var(--muted)">No transcript yet.</span>')+'</div>'
+   +'<div class="said">'+(c.transcript?'“'+esc(c.transcript)+'”':'<span style="color:var(--muted)">The words of this clip are not written down yet.</span>')+'</div>'
    +(String(c.transcript||'').length>260?'<button class="more" onclick="this.previousElementSibling.classList.toggle(\'open\');this.textContent=this.textContent===\'Show all\'?\'Show less\':\'Show all\'">Show all</button>':'')
    +'<div class="edtabs">'+etabs.map(t=>'<button class="'+(tabNow===t[0]?'on':'')+(t[2]?' flag':'')+'" data-tab="'+t[0]+'" onclick="edGo(\''+k+'\',\''+t[0]+'\')">'+t[1]+'</button>').join('')+'</div>'
    +'<details'+P('text')+'><summary>Text <small>opening text, title, description and hashtags</small></summary>'
@@ -1172,32 +1172,32 @@ function cardHtml(c){
    +'<details'+P('versions')+'><summary>Versions to make <small>now: '+(c.simple===false?'the explainer only':(c.explainer?'the normal video and an explainer':'the normal video'))+(c.ab!==false?', each as A and B':', version A only')+'</small></summary>'
    +'<label class="check"><input type="checkbox" name="simple"'+(c.simple!==false?' checked':'')+'> Make the normal video (the clip as it is, without a narrator)</label>'
    +'<label class="check"><input type="checkbox" name="ab"'+(c.ab!==false?' checked':'')+'> Make a version B too <small style="color:var(--muted)">(the same clip with the other opening text and title, to test which does better; this clip only)</small></label>'
-   +'<label class="check"><input type="checkbox" name="explainer"'+(c.explainer?' checked':'')+'> Make an explainer version (a narrator sets up the moment, then the clip plays)</label>'
+   +'<label class="check"><input type="checkbox" name="explainer"'+(c.explainer?' checked':'')+'> Make an explainer version (a narrator voice introduces the moment first, then the clip plays)</label>'
    +'<div class="two"><div><label class="f">What the narrator says (version A)</label><input type="text" name="intro" value="'+esc(c.intro)+'"></div>'
    +'<div><label class="f">Narrator, version B <small>(empty = same as A)</small></label><input type="text" name="intro_b" value="'+esc(c.intro_b)+'"></div></div></details>'
    +(c.has_words?'<details'+P('captions')+' ontoggle="if(this.open)initWords(\''+k+'\')"><summary>Captions <small>fix a wrong word, or empty a box to remove it</small></summary>'
      +'<div class="words"></div><div class="btns"><button class="btn" onclick="saveWords(\''+k+'\')">Save captions</button>'
      +'<a class="btn" href="/api/clip/'+k+'/captions.srt" download>Download .srt</a><a class="btn" href="/api/clip/'+k+'/captions.vtt" download>Download .vtt</a>'
      +'<button class="btn" onclick="this.nextElementSibling.click()">Use a subtitle file…</button><input type="file" accept=".srt,.vtt,.txt" hidden onchange="subFile(this,\''+k+'\')"></div>'
-     +'<p class="help" style="margin-top:6px">A subtitle file replaces these captions. Its times must count from the start of the clip.</p></details>':'')
-   +'<details'+P('trim')+' ontoggle="if(this.open)initTrim(\''+k+'\')"><summary>Trim and framing <small>where it starts and ends, framing, ad label</small></summary>'
+     +'<p class="help" style="margin-top:6px">The two Download buttons save these captions as subtitle files (.srt or .vtt) that other video apps can open. The button Use a subtitle file replaces these captions with a file of your own. The times in that file must count from the start of the clip.</p></details>':'')
+   +'<details'+P('trim')+' ontoggle="if(this.open)initTrim(\''+k+'\')"><summary>Start, end and picture <small>where it starts and ends, what the clip shows, ad label</small></summary>'
    +'<div class="trim"></div>'
    +'<div class="three"><div><label class="f">Start (seconds into the stream)</label><input type="number" step="0.5" name="cut_start_s" value="'+esc(c.cut_start_s??c.start_s)+'"></div>'
    +'<div><label class="f">End</label><input type="number" step="0.5" name="cut_end_s" value="'+esc(c.cut_end_s??c.end_s)+'"></div>'
-   +'<div><label class="f">Framing</label><select name="layout">'+lay+'</select></div></div>'
-   +'<p class="help" style="margin-top:6px">Can be set anywhere from '+esc(c.lo)+' to '+esc(c.hi)+' seconds. Framing now: '+esc(c.layout_reason||'not checked yet')+'.</p>'
+   +'<div><label class="f">What the clip shows</label><select name="layout">'+lay+'</select></div></div>'
+   +'<p class="help" style="margin-top:6px">Start and end can be anywhere from '+esc(c.lo)+' to '+esc(c.hi)+' seconds. What the clip shows now: '+esc(c.layout_reason||'not checked yet')+'.</p>'
    +((c.videos||[]).includes('source.mp4')?'<div class="btns" style="margin-top:0;align-items:center"><span class="help" style="margin:0">Need more of the stream?</span>'
        +'<button class="btn" title="Download 15 more seconds in front of what this clip has, so its start can be moved earlier" onclick="widen(\''+k+'\',15,0,this)">Add 15 s before</button>'
        +'<button class="btn" title="Download 15 more seconds after what this clip has, so its end can be moved later" onclick="widen(\''+k+'\',0,15,this)">Add 15 s after</button>'
        +'<button class="btn" title="Download 30 more seconds on each side" onclick="widen(\''+k+'\',30,30,this)">Add 30 s on both sides</button></div>':'')
    +(c.framing?'<div class="btns" style="margin-top:0"><button class="btn" onclick="openBoxes(\''+k+'\')">Set the face box and the video box</button>'
-       +'<button class="btn" title="Draft every unfinished clip of this video again with the caption style, template and branding chosen now" onclick="remakeAll(\''+k+'\')">Make this video\'s drafts again</button></div>':'')
+       +'<button class="btn" title="Make the draft of every unfinished clip of this video again, with the caption style, template, logo and music chosen now" onclick="remakeAll(\''+k+'\')">Make this video\'s drafts again</button></div>':'')
    +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
    +'<details'+P('thumb')+' ontoggle="this.open?coverOpen.add(\''+k+'\'):coverOpen.delete(\''+k+'\')"><summary>Thumbnail <small>a cover picture for Shorts, Reels and TikTok (optional)'+(cv.made?' · made':'')+(cv.error?' · <b style="color:var(--bad)">could not be made</b>':'')+'</small></summary>'
    +(cv.made?'<img class="cover" alt="This clip\'s thumbnail" src="/media/'+k+'/cover.jpg?v='+cv.mtime+'"><p class="help" style="margin:0 0 6px">'+esc(COVER_BY[cv.by]||'Made')+(cv.at?' · '+esc(cv.at):'')+(cv.words&&cv.by!=='frame'?' · words on it: '+esc(cv.words):'')+'. '+(c.exported?'It is saved beside the finished video, with the same name.':'It is put beside the finished video, with the same name, when the videos are made.')+'</p>'
-     :'<p class="help" style="margin-top:8px">No thumbnail yet. Nothing has to be made: this is an extra.</p>')
+     :'<p class="help" style="margin-top:8px">No thumbnail yet. You do not have to make one: a thumbnail is optional.</p>')
    +(cv.error?'<div class="cliperr"><b>The thumbnail could not be made:</b> '+esc(cv.error)+'</div>':'')
-   +'<div class="btns" style="margin-top:0"><button class="btn" title="Free, no AI: the sharpest frame of the clip with its opening text" onclick="makeCover(\''+k+'\',\'frame\',this)">Make it from the clip (free)</button>'
+   +'<div class="btns" style="margin-top:0"><button class="btn" title="Free, no AI: the sharpest picture from the clip with its opening text" onclick="makeCover(\''+k+'\',\'frame\',this)">Make it from the clip (free)</button>'
    +'<button class="btn" title="ChatGPT looks at the clip and decides the picture itself. Uses your ChatGPT plan; one to three minutes" onclick="makeCover(\''+k+'\',\'chatgpt\',this)">Let ChatGPT make it</button></div>'
    +'<label class="f">Or describe the picture yourself <small>(ChatGPT draws it; it still sees the clip)</small></label>'
    +'<textarea name="t_cover" maxlength="2000" style="min-height:64px" oninput="coverText.set(\''+k+'\',this.value)" placeholder="For example: the streamer shocked on the left, the bike upside down in the air on the right, big yellow text NO WAY">'+esc(coverText.has(k)?coverText.get(k):(cv.prompt||''))+'</textarea>'
@@ -1210,10 +1210,10 @@ function cardHtml(c){
      +'<div><label class="f">Version</label><select name="t_version"><option>A</option><option>B</option><option>Explained A</option><option>Explained B</option></select></div>'
      +'<div><label class="f">Link to the post</label><input type="text" name="t_url" placeholder="https://..."></div></div>'
      +'<label class="f">Campaign (leave empty if none)</label><input type="text" name="t_campaign" value="'+esc(c.campaign)+'">'
-     +'<div class="btns"><button class="btn" data-act="log" data-key="'+esc(k)+'">Add to the tracker</button></div></details>':'')
+     +'<div class="btns"><button class="btn" data-act="log" data-key="'+esc(k)+'">Add to Posted and earnings</button></div></details>':'')
    +'<div class="acts"><div class="tools"><button class="btn" onclick="save(\''+k+'\')">Save changes</button>'
    +'<button class="btn" onclick="rewrite(\''+k+'\',this)">Write text with AI</button>'
-   +'<span class="saved"></span><button class="btn quiet" title="Remove this clip and its files for good" onclick="delClip(\''+k+'\')">Delete</button></div></div></div>';
+   +'<span class="saved"></span><button class="btn quiet" title="Remove this clip and its files forever" onclick="delClip(\''+k+'\')">Delete</button></div></div></div>';
 }
 function domId(k){return 'c-'+k.replace('/','--')}
 function busy(el){return el.dataset.dirty==='1'||[...el.querySelectorAll('video')].some(v=>!v.paused)||el.contains(document.activeElement)}
@@ -1269,7 +1269,7 @@ async function loadClips(){
   let clips;try{const r=await fetch('/api/clips');
     if(!r.ok){const why=await r.text();if(why!==clipsWhy){clipsWhy=why;toast('The clip list could not be loaded: '+why,true)}return}
     clips=await r.json();clipsWhy='';if(!HAS_PANEL)setErr('')}
-  catch(e){if(!HAS_PANEL)setErr('THE PROGRAM IS NOT ANSWERING. It has stopped or crashed: look at the terminal window where you started it; the reason is printed there.');return}  /* with the panel, the status check reports it */
+  catch(e){if(!HAS_PANEL)setErr('THE PROGRAM IS NOT ANSWERING. It has stopped or crashed: look at the terminal window (the text window that opened with the program); the reason is printed there.');return}  /* with the panel, the status check reports it */
   if(turn!==loadTurn)return;
   const a=arrangeNow();
   clips=arrange(clips,a);
@@ -1345,13 +1345,13 @@ async function post(url){
 }
 async function delClip(key){
   const c=known.find(x=>x.key===key)||{};
-  if(!confirm('Delete this clip'+(c.channel?' of '+c.channel:'')+' for good?'+NL+NL+'Its draft and downloaded video are removed and cannot be brought back. Finished videos you already made stay in the ready folder.'))return;
+  if(!confirm('Delete this clip'+(c.channel?' of '+c.channel:'')+' forever?'+NL+NL+'Its draft and downloaded video are removed and cannot be brought back. Finished videos you already made stay in the ready folder.'))return;
   const r=await post('/api/clip/'+key+'/delete'); if(!r)return;
   const el=$(domId(key)); if(el){if(openKey===key)closeClip(true);el.remove()}
   toast('Clip deleted'+(r.mb?' ('+r.mb+' MB freed)':'')); loadClips();
 }
 async function delRejected(n){
-  if(!confirm('Delete all '+n+' rejected clip'+(n>1?'s':'')+' for good?'+NL+NL+'Their drafts and downloaded videos are removed and cannot be brought back.'))return;
+  if(!confirm('Delete all '+n+' rejected clip'+(n>1?'s':'')+' forever?'+NL+NL+'Their drafts and downloaded videos are removed and cannot be brought back.'))return;
   const r=await post('/api/clips/delete-rejected'); if(!r)return;
   toast(r.deleted+' clip'+(r.deleted===1?'':'s')+' deleted ('+r.mb+' MB freed)'+(r.busy?'. '+r.busy+' could not be deleted because a job is still using them; try again when it has ended.':''),r.busy>0); loadClips();
 }
@@ -1389,7 +1389,7 @@ async function holdApproved(n){
 /* The videos of one approved clip, without the others. */
 async function makeOne(key,again){
   const el=$(domId(key));
-  if(again&&!confirm('Make this finished clip\'s videos again?'+NL+NL+'Its files in the videos folder are replaced. If you changed the caption look or the opening effects since, it is rendered again with the new ones.'))return;
+  if(again&&!confirm('Make this finished clip\'s videos again?'+NL+NL+'Its files in the videos folder are replaced. If you changed the caption look or the opening effects since, it is made again with the new ones.'))return;
   if(el&&el.dataset.dirty==='1'){toast('This clip has unsaved changes. Press Save changes first, then make its videos.',true);return}
   if(document.activeElement)document.activeElement.blur();   /* a focused button would keep the card from being redrawn when it is done */
   const inEditor=openKey===key;
@@ -1427,7 +1427,7 @@ async function quickFrame(key,mode,btn){
   for(const b of row.querySelectorAll('button'))b.disabled=false;btn.textContent=was;
   if(document.activeElement)document.activeElement.blur();if(card){card.dataset.m='';card.dataset.dirty=''}
   if(r.error)toast((/^the boxes are saved/i.test(r.error)?'':'The picture was not changed: ')+r.error,true);
-  else toast(mode==='whole'?'This clip now shows the whole picture, with blur above and below. The draft is made again.':'Back to automatic framing. The draft is made again.');
+  else toast(mode==='whole'?'This clip now shows the whole picture, with blur above and below. The draft is made again.':'Back to the automatic picture. The draft is made again.');
   loadClips()}
 /* More of the stream in front of or behind one clip, so its start or end can be dragged further out. */
 async function widen(key,before,after,btn){
@@ -1435,7 +1435,7 @@ async function widen(key,before,after,btn){
   if(card&&card.dataset.dirty==='1'&&!(await save(key)))return;
   /* Windows cannot replace a video file that a player still has open */
   if(card)for(const v of card.querySelectorAll('video')){v.pause();v.removeAttribute('src');v.load()}
-  for(const b of row.querySelectorAll('button'))b.disabled=true;btn.textContent='Fetching… a minute or two';
+  for(const b of row.querySelectorAll('button'))b.disabled=true;btn.textContent='Downloading… a minute or two';
   const r=await send('/api/clip/'+key+'/widen',{before:before,after:after});
   for(const b of row.querySelectorAll('button'))b.disabled=false;btn.textContent=was;
   if(document.activeElement)document.activeElement.blur();if(card){card.dataset.m='';card.dataset.dirty=''}
@@ -1447,12 +1447,12 @@ async function initTrim(key){
   const el=$(domId(key)), box=el.querySelector('.trim'), c=known.find(x=>x.key===key);
   if(!box||box.dataset.ready||!c||!(c.videos||[]).includes('source.mp4'))return;
   box.dataset.ready='1'; box.innerHTML='<p class="help">Loading the sound wave…</p>';
-  let w;try{const r=await fetch('/api/clip/'+key+'/wave');if(!r.ok){box.innerHTML='<p class="help">The trimmer is not available: '+esc(await r.text())+'</p>';return}w=await r.json()}
-  catch(e){box.innerHTML='<p class="help">The trimmer could not load ('+esc(e)+').</p>';return}
+  let w;try{const r=await fetch('/api/clip/'+key+'/wave');if(!r.ok){box.innerHTML='<p class="help">The bar for start and end cannot be shown: '+esc(await r.text())+'</p>';return}w=await r.json()}
+  catch(e){box.innerHTML='<p class="help">The bar for start and end could not load ('+esc(e)+').</p>';return}
   box.innerHTML='<video controls preload="metadata" src="/media/'+key+'/source.mp4?v='+c.mtime+'"></video>'
     +'<div class="tl"><canvas></canvas><div class="sel"></div><div class="ph"></div><div class="h hs" title="Drag: where the clip starts"></div><div class="h he" title="Drag: where the clip ends"></div></div>'
-    +'<div class="btns" style="margin-top:8px"><button class="btn" data-a="play">Play selection</button><span class="tinfo" style="font-size:12.5px;color:var(--muted)"></span></div>'
-    +'<p class="help" style="margin-top:6px">Drag the two handles, or click the wave to listen from there. This is the raw download, without captions. Press Save changes when it is right.</p>';
+    +'<div class="btns" style="margin-top:8px"><button class="btn" data-a="play">Play the chosen part</button><span class="tinfo" style="font-size:12.5px;color:var(--muted)"></span></div>'
+    +'<p class="help" style="margin-top:6px">Drag the two handles to set where the clip starts and ends, or click the sound wave to listen from there. This is the video as it was downloaded, without captions. Press Save changes when it is right.</p>';
   const total=w.seconds, base=Number(c.fetch_start_s)||0, tl=box.querySelector('.tl'), cv=tl.querySelector('canvas'), v=box.querySelector('video');
   const iS=el.querySelector('[name=cut_start_s]'), iE=el.querySelector('[name=cut_end_s]');
   const get=()=>[Math.max(0,parseFloat(iS.value)-base),Math.min(total,parseFloat(iE.value)-base)];
@@ -1539,7 +1539,7 @@ function setZones(){const z=val('z-pick');try{localStorage.setItem('zones',z)}ca
   const c=$('clips');c.dataset.zones=z;const k=ZONES[z];
   if(k){c.style.setProperty('--zt',k.top+'%');c.style.setProperty('--zb',k.bottom+'%');c.style.setProperty('--zr',k.right+'%')}}
 async function remakeAll(key){
-  if(!confirm('Make the drafts of every unfinished clip of this video again, with the caption style, template and branding chosen now?'+NL+NL+'This takes about half a minute per clip. Their text, cuts and boxes are kept.'))return;
+  if(!confirm('Make the drafts of every unfinished clip of this video again, with the caption style, template, logo and music chosen now?'+NL+NL+'This takes about half a minute per clip. Their text, start and end, and boxes are kept.'))return;
   const r=await send('/api/clip/'+key+'/remake-all'); if(r.error){toast(r.error,true);return}
   toast(r.clips+' draft'+(r.clips===1?' is':'s are')+' being made again. Each card updates when its draft is ready.');
 }
@@ -1552,7 +1552,7 @@ function drawLooks(s){
   const sig=JSON.stringify([Object.keys(pre),Object.keys(mine)]);
   if(sig!==sel.dataset.sig){sel.dataset.sig=sig;
     sel.innerHTML=Object.entries(pre).map(([k,p])=>'<option value="'+k+'">'+esc(p.label)+'</option>').join('')
-      +Object.keys(mine).map(k=>'<option value="mine:'+esc(k)+'">Your profile: '+esc(k)+'</option>').join('')+'<option value="">Your own style (set below)</option>';
+      +Object.keys(mine).map(k=>'<option value="mine:'+esc(k)+'">Your saved style: '+esc(k)+'</option>').join('')+'<option value="">Your own style (set below)</option>';
     $('o-anim').innerHTML=Object.entries(s.caption_animations||{}).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('')}
   const cur=s.caption_preset in pre?s.caption_preset:(s.caption_preset in mine?'mine:'+s.caption_preset:'');
   if(document.activeElement!==sel)sel.value=cur;
@@ -1579,18 +1579,18 @@ function pickLook(){const v=val('o-cap');
   if(v)act('/api/options',{caption_preset:v});else{$('lookbox').open=true;$('k-font').focus()}}
 function useLook(asProfile){
   const look=lookForm();
-  if(asProfile){const name=(prompt('A name for this caption profile:',last.caption_preset in (last.caption_profiles||{})?last.caption_preset:'')||'').trim();if(!name)return;
+  if(asProfile){const name=(prompt('A name for this caption style:',last.caption_preset in (last.caption_profiles||{})?last.caption_preset:'')||'').trim();if(!name)return;
     look.name=name;if(document.activeElement)document.activeElement.blur();act('/api/options',{caption_profile_save:look});return}
   if(document.activeElement)document.activeElement.blur();act('/api/options',{caption_look:look});
 }
-function delLook(){const name=last.caption_preset;if(!confirm('Delete the caption profile "'+name+'"? Clips already made keep their look.'))return;
+function delLook(){const name=last.caption_preset;if(!confirm('Delete your saved caption style "'+name+'"? Clips already made keep their look.'))return;
   act('/api/options',{caption_profile_delete:name,caption_preset:'bold'})}
 function saveBrand(){if(document.activeElement)document.activeElement.blur();
   act('/api/options',{brand_logo_corner:val('g-corner'),brand_logo_size:val('g-size')/100,brand_logo_opacity:val('g-op')/100,brand_outro_text:val('g-outro'),brand_music_volume:val('g-vol')/100,brand_music_rise_s:+val('g-rise')})}
 async function brandFile(inp,kind){
   const f=inp.files[0];inp.value='';if(!f)return;
   try{const r=await fetch('/api/brand/upload?kind='+kind+'&name='+encodeURIComponent(f.name),{method:'POST',body:f});
-    if(!r.ok){toast('The file was not taken: '+await r.text(),true);return}
+    if(!r.ok){toast('The file could not be copied: '+await r.text(),true);return}
     show(await r.json());toast(kind==='logo'?'Logo set. It is added to drafts and videos made from now on.':'Music set. It is added to drafts and videos made from now on.')}
   catch(e){toast('The program is not answering: '+e,true)}
 }
@@ -1672,7 +1672,7 @@ async function saveBoxes(auto){
   const r=await send('/api/clip/'+key+'/framing',body);
   if(r.error){for(const b of ['bx-save','bx-auto','bx-cancel'])$(b).disabled=false;$('bx-note').textContent='';toast((/^the boxes are saved/i.test(r.error)?'':'The boxes were not saved: ')+r.error,true);if(/^the boxes are saved/i.test(r.error)){closeBoxes();loadClips()}return}
   closeBoxes();const el=$(domId(key));if(el){el.dataset.dirty='';el.dataset.m=''}
-  toast(auto?'Back to automatic framing. The draft is made again.':'Boxes saved. The draft is made again'+(r.others?'; '+r.others+' other clip'+(r.others>1?'s are':' is')+' being made again too.':'.')
+  toast(auto?'Back to the automatic picture. The draft is made again.':'Boxes saved. The draft is made again'+(r.others?'; '+r.others+' other clip'+(r.others>1?'s are':' is')+' being made again too.':'.')
     +((r.skipped||[]).length?' Not applied to '+r.skipped.length+' clip(s) that could not take them: '+r.skipped.join(', ')+'.':''),(r.skipped||[]).length>0);loadClips();
 }
 function bxInit(){
@@ -1738,7 +1738,7 @@ function cbRows(){
   if(!CB)return;const segs=cbSegs(),on=segs.filter(s=>s.on),bad=on.filter(cbProblem);let num=0;
   $('cb-rows').innerHTML=segs.map(s=>{const len=s.b-s.a,p=s.on?cbProblem(s):'';
     return '<div class="cbrow'+(s.on?'':' off')+'"><b>'+(s.on?'Clip '+(++num):'Skipped')+'</b><span>'+clock(CB.r.start_s+s.a)+' to '+clock(CB.r.start_s+s.b)+' of the video</span>'
-      +'<span class="'+(p?'badt':(s.on&&len>90?'warnt':''))+'">'+len.toFixed(1)+' s'+(p?' · '+p:(s.on&&len>90?' · long for a short':''))+'</span>'
+      +'<span class="'+(p?'badt':(s.on&&len>90?'warnt':''))+'">'+len.toFixed(1)+' s'+(p?' · '+p:(s.on&&len>90?' · long for a short video':''))+'</span>'
       +'<label><input type="checkbox" data-seg="'+s.i+'"'+(s.on?' checked':'')+'> make this one</label><button class="btn" data-play="'+s.i+'">Play</button></div>'}).join('');
   const sum=on.reduce((x,s)=>x+s.b-s.a,0);
   $('cb-count').textContent=on.length?(on.length+' clip'+(on.length>1?'s':'')+' will be made · '+Math.round(sum)+' seconds in all'+(bad.length?' · fix the piece'+(bad.length>1?'s':'')+' marked in red first':'')):'No piece is ticked, so nothing will be made';
@@ -1833,7 +1833,7 @@ function twDraw(){
   $('tw-make').disabled=!TW.picks.length||cbRunning;$('tw-make').textContent=TW.picks.length>1?'Make these '+TW.picks.length+' clips':'Make this clip';
 }
 function twAdd(){if(TW.a==null||TW.b==null)return;
-  if(TW.picks.some(p=>TW.a<p[1]&&TW.b>p[0])){toast('That stretch overlaps one you already picked.',true);return}
+  if(TW.picks.some(p=>TW.a<p[1]&&TW.b>p[0])){toast('That part overlaps one you already picked.',true);return}
   TW.picks.push([TW.a,TW.b,'']);TW.picks.sort((x,y)=>x[0]-y[0]);TW.a=TW.b=null;twDraw()}
 async function twMake(){
   const r=await send('/api/cut',{source:TW.url,ranges:TW.picks.map(p=>[p[0],p[1]])}); if(r.error){toast(r.error,true);return}
@@ -1857,9 +1857,9 @@ twInit();
 
 /* ---------- the help assistant: ask, and be shown where ---------- */
 let HELP={turns:[],map:new Map(),busy:false,tour:null,at:0,el:null,chat:0,said:''};
-const HELP_STARTERS=['What does this program do?','How do I make my first clip?','How do I clip a live stream?','What do the scores and chips on a clip mean?','How do I change how the captions look?','Why is it not working?','What can you do for me?'];
+const HELP_STARTERS=['What does this program do?','How do I make my first clip?','How do I clip a live stream?','What do the scores and small labels on a clip mean?','How do I change how the captions look?','Why is it not working?','What can you do for me?'];
 function helpToggle(){const b=$('helpbox');b.hidden=!b.hidden;if(!b.hidden){if(!$('helpmsgs').children.length)helpClear();$('helpq').focus()}}
-function helpClear(){HELP.turns=[];HELP.chat++;HELP.busy=false;$('helpsend').disabled=false;$('helpmsgs').innerHTML='<div class="ha">Ask me anything about this program, in English or Roman Urdu. I answer in simple words and can show you where things are. You can also tell me to do something, like "start watching lacy" or "make the captions yellow": I list the steps, and one press on Do it for me does them on the page while you watch. Approving, rejecting and deleting clips stay yours.</div>'
+function helpClear(){HELP.turns=[];HELP.chat++;HELP.busy=false;$('helpsend').disabled=false;$('helpmsgs').innerHTML='<div class="ha">Ask me anything about this program, in English or Roman Urdu. I answer in simple words and can show you where things are. You can also tell me to do something, like "start watching lacy" or "make the captions yellow": I list the steps, and one press on Do it for me does them on the page while you watch. Approving, rejecting and deleting clips are always done by you.</div>'
   +'<div class="hsug">'+HELP_STARTERS.map(q=>'<button type="button" data-q="'+esc(q)+'">'+esc(q)+'</button>').join('')+'</div>'}
 /* Where a thing sits, in words: the view, the step-1 tab, the box and any fold-out it is inside. */
 function helpWhere(el){
@@ -1933,8 +1933,8 @@ async function helpAsk(text){
   if(r.error){helpAdd('ha','<b style="color:var(--bad)">I could not answer:</b> '+esc(r.error));return}
   HELP.turns.push({q:q,a:r.answer+' '+r.steps.map(s=>s.text).join(' ')});
   const id=HELP.turns.length-1, pts=r.steps.filter(s=>s.target&&HELP.map.has(s.target)).length, acts=r.steps.filter(s=>s.act&&HELP.map.has(s.target)).length;
-  const box=helpAdd('ha',esc(r.answer)+(r.steps.length?'<ol>'+r.steps.map((s,i)=>'<li data-li="'+i+'">'+esc(s.text)+(s.yours?'<span class="mine">yours to press</span>':'')+(s.target&&HELP.map.has(s.target)?'<button class="show" data-step="'+i+'">Show me</button>':'')+'</li>').join('')+'</ol>':'')
-    +((pts>1||acts)?'<div class="tour">'+(acts?'<button class="btn primary" data-do="1">Do it for me</button>':'')+(pts>1?'<button class="btn'+(acts?'':' primary')+'" data-tour="1">Walk me through it</button>':'')+'</div>':'')+(r.note?'<small>'+esc(r.note)+'</small>':''));
+  const box=helpAdd('ha',esc(r.answer)+(r.steps.length?'<ol>'+r.steps.map((s,i)=>'<li data-li="'+i+'">'+esc(s.text)+(s.yours?'<span class="mine">you press this yourself</span>':'')+(s.target&&HELP.map.has(s.target)?'<button class="show" data-step="'+i+'">Show me</button>':'')+'</li>').join('')+'</ol>':'')
+    +((pts>1||acts)?'<div class="tour">'+(acts?'<button class="btn primary" data-do="1">Do it for me</button>':'')+(pts>1?'<button class="btn'+(acts?'':' primary')+'" data-tour="1">Show me step by step</button>':'')+'</div>':'')+(r.note?'<small>'+esc(r.note)+'</small>':''));
   box._steps=r.steps;box._map=HELP.map;box._meta=HELP.meta;box._turn=id;
   if((r.follow_ups||[]).length)helpAdd('hsug',r.follow_ups.map(f=>'<button type="button" data-q="'+esc(f)+'">'+esc(f)+'</button>').join(''));
   $('helpmsgs').scrollTop=1e9;$('helpq').focus();
@@ -2027,7 +2027,7 @@ async function helpDo(box){
     if(HELP.turns[box._turn])HELP.turns[box._turn].a+=' ['+(msg||'nothing was done')+']';
     if(msg)helpAdd('ha',(bad?'<b style="color:var(--bad)">':'<b>')+esc(msg)+'</b>');
   }finally{HELP.doing=false;$('helpq').focus()}
-  if(yours>=0){helpAdd('ha','The next step is yours to press, so I only show it: '+esc(steps[yours].text));HELP.tour=steps;HELP.at=yours;
+  if(yours>=0){helpAdd('ha','You must press the next step yourself, so I only show it: '+esc(steps[yours].text));HELP.tour=steps;HELP.at=yours;
     spotShow(steps[yours],steps.slice(yours+1).some(s=>s.target&&HELP.map.has(s.target)))}
 }
 /* Bring a thing into view: open its view, its tab and every fold-out around it. Returns the thing to highlight (the nearest visible one). */
@@ -2101,7 +2101,7 @@ async function loadTracker(){
     +'<td class="num"><input data-f="views" type="number" min="0" value="'+(r.views??'')+'"></td>'
     +'<td class="num"><input data-f="payout" type="number" min="0" step="0.01" value="'+(r.payout??'')+'"></td>'
     +'<td><input data-f="reason" value="'+esc(r.reason||r.notes||'')+'" placeholder="why it was rejected, or a note"></td>'
-    +'<td><button class="btn quiet" data-act="trdel" title="Remove this line from the tracker">Remove</button></td></tr>').join('');
+    +'<td><button class="btn quiet" data-act="trdel" title="Remove this line from Posted and earnings">Remove</button></td></tr>').join('');
   $('t-empty').hidden=d.rows.length>0;
 }
 document.addEventListener('change',async e=>{
@@ -2119,14 +2119,14 @@ document.addEventListener('focusout',e=>{
 });
 document.addEventListener('click',async e=>{
   const b=e.target.closest&&e.target.closest('[data-act]'); if(!b)return;
-  if(b.dataset.act==='trdel'){if(!confirm('Remove this line from the tracker? The post itself is not touched.'))return;
+  if(b.dataset.act==='trdel'){if(!confirm('Remove this line from Posted and earnings? The post itself is not changed.'))return;
     const r=await send('/api/tracker/delete',{id:b.closest('tr').dataset.id}); if(r.error)toast(r.error,true); loadTracker(); return}
   if(b.dataset.act==='log'){const key=b.dataset.key, el=$(domId(key)), c=known.find(x=>x.key===key)||{}, g=n=>el.querySelector('[name='+n+']').value;
     const body={clip:key,channel:c.channel||'',title:c.title||'',platform:g('t_platform'),version:g('t_version'),url:g('t_url'),campaign:g('t_campaign')};
     let r=await send('/api/tracker/add',body);
-    if(r.error&&/already logged/.test(r.error)){if(!confirm(r.error+String.fromCharCode(10,10)+'Log it anyway?'))return; r=await send('/api/tracker/add',Object.assign(body,{allow_duplicate:true}))}
-    if(r.error){toast('Not logged: '+r.error,true);return}
-    el.querySelector('[name=t_url]').value=''; toast('Logged. See it under Posted and earnings.')}
+    if(r.error&&/already logged/.test(r.error)){if(!confirm(r.error+String.fromCharCode(10,10)+'Add it anyway?'))return; r=await send('/api/tracker/add',Object.assign(body,{allow_duplicate:true}))}
+    if(r.error){toast('Not added: '+r.error,true);return}
+    el.querySelector('[name=t_url]').value=''; toast('Added. See it under Posted and earnings.')}
 });
 async function refreshViews(){const b=$('b-views');b.disabled=true;b.textContent='Reading views…';
   const r=await send('/api/tracker/refresh');b.disabled=false;b.textContent='Refresh views';
@@ -2208,14 +2208,14 @@ function suDraw(s){
   if(curPage!=='setup')return;
   const box=$('su-body');
   /* before the program has answered there is nothing to say yet: never "This computer is ready" on no evidence */
-  if(!steps.length){const w='<div class="card"><div class="body"><h2 class="sutitle">Checking this computer…</h2><p class="suwhat">'+(g.problem?'The guide could not be worked out: '+esc(g.problem):'This takes a few seconds.')+'</p></div></div>';
+  if(!steps.length){const w='<div class="card"><div class="body"><h2 class="sutitle">Checking this computer…</h2><p class="suwhat">'+(g.problem?'The setup steps could not be checked: '+esc(g.problem):'This takes a few seconds.')+'</p></div></div>';
     if(box._h!==w){box._h=w;box.innerHTML=w}return}
   if(SU.wait){const w=steps.find(x=>x.id===SU.wait);if(!w||w.state==='done'){SU.wait='';SU.fastUntil=0}}   /* what was waited for has happened: no more asking every few seconds */
   const n=steps.length; if(SU.at<0)SU.at=steps.findIndex(x=>x.state!=='done');if(SU.at<0||SU.at>n)SU.at=n;
   const at=SU.at, m=(s.health||{}).maint||{}, running=!!m.running;
   let h='<div class="suprog" aria-label="Steps">'+steps.map((x,i)=>'<button class="'+(i===at?'on ':'')+(x.state==='done'?'ok':'')+'" onclick="suGo('+i+')" title="'+esc(x.title)+(x.state==='done'?': done':'')+'">'+(i+1)+'</button>').join('')
     +'<button class="'+(at===n?'on':'')+'" onclick="suGo('+n+')">Finish</button></div>';
-  if(g.problem)h+='<div class="cliperr" style="white-space:normal">The guide could not be worked out: '+esc(g.problem)+'</div>';
+  if(g.problem)h+='<div class="cliperr" style="white-space:normal">The setup steps could not be checked: '+esc(g.problem)+'</div>';
   if(at<n){
     const x=steps[at], done=x.state==='done', signin=x.actions.some(a=>a.do==='signin');
     h+='<div class="card"><div class="body"><div class="sukick">Step '+(at+1)+' of '+n+(x.optional?' · optional, you can skip it':'')+'</div><h2 class="sutitle">'+esc(x.title)+'</h2><p class="suwhat">'+esc(x.what)+'</p>'

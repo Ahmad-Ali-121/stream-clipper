@@ -183,21 +183,21 @@ def status(cfg: Config, health_items: list[dict], local_ai: dict, fresh: bool = 
     tools_ok = bool(need) and all(i["state"] == "ok" for i in need if i["id"] != "voice") and by.get("voice", {}).get("state") in ("ok", None)
     missing = [i["name"].split(" (")[0] for i in need if i["state"] != "ok"]
     unchecked = "" if need else ("This computer could not be checked: " + str(by.get("check", {}).get("detail") or "the list of tools came back empty")
-                                 + ". Press Check again; if it stays, the terminal window says more.")
+                                 + ". Press Check again. If the problem stays, the terminal window (the text window that opened when the program started) says more.")
     runtime_bad = by.get("runtime", {}).get("state") == "bad"
     speech = by.get("speech", {})
     steps: list[dict] = []
     steps.append({"id": "tools", "title": "Video tools", "optional": False, "size": "about 300 MB",
-                  "what": "FFmpeg and TwitchDownloader cut and download the video; two small models find the face and speak the explainer's lines.",
+                  "what": "FFmpeg and TwitchDownloader are free programs that download and cut the video. Two small AI files come with them: one finds the streamer's face, the other is the narrator voice for explainer videos.",
                   "state": "done" if tools_ok else "todo",
                   "detail": "All there." if tools_ok else unchecked or ("Missing: " + ", ".join(missing) + "."
-                            + (" The Windows C++ runtime is Microsoft's: the button below fetches Microsoft's own installer, and Windows then asks "
+                            + (" The Windows C++ runtime is a part of Windows, made by Microsoft, that captions need. The button below downloads Microsoft's own installer, and Windows then asks "
                                "\"Do you want to allow this app to make changes?\" once. Press Yes. Or install it yourself from "
                                "https://aka.ms/vs/17/release/vc_redist.x64.exe and restart the computer." if runtime_bad else "")),
                   "actions": [] if tools_ok or unchecked else [{"do": "install", "what": "tools", "label": "Install the video tools"}]})
     speech_ok = speech.get("state") == "ok"
     steps.append({"id": "speech", "title": "Captions", "optional": False, "size": "about 1.6 GB the first time",
-                  "what": "The speech model hears what is said and writes the captions. It is downloaded once and then tried on this computer.",
+                  "what": "The speech model is the part that listens to what is said and writes the captions. It is downloaded once and then tested on this computer.",
                   "state": "done" if speech_ok else ("wait" if not tools_ok else "todo"),
                   "detail": "The video tools come first: go back one step." if not speech_ok and not tools_ok else
                             (speech.get("detail") or ("Works on this computer." if speech_ok else "Not tried yet on this computer.")),
@@ -205,7 +205,7 @@ def status(cfg: Config, health_items: list[dict], local_ai: dict, fresh: bool = 
     c = ext["claude"]
     steps.append({"id": "claude", "title": "Claude, for titles and ratings", "optional": True, "size": "about 250 MB",
                   "what": "Claude writes each clip's opening text, title and description and judges whether it is worth posting. It uses your own Claude plan. "
-                          "Without it everything still works, with placeholder text.",
+                          "Without it everything still works, but the texts are basic ones.",
                   "state": "done" if c["signed_in"] else ("wait" if c["signed_in"] is None else "todo"),
                   "detail": "Checking..." if c["signed_in"] is None else
                             ("Installed and signed in." if c["signed_in"] else (_unsure(c) or "Installed. Not signed in yet.") if c["installed"] else "Not installed."),
@@ -222,11 +222,11 @@ def status(cfg: Config, health_items: list[dict], local_ai: dict, fresh: bool = 
     elif ext["node"]:
         acts, detail = [{"do": "install", "what": "codex", "label": "Install the ChatGPT tool"}], "Not installed."
     elif ext["winget"]:
-        acts, detail = [{"do": "install", "what": "node", "label": "Install Node.js first"}], "Needs Node.js, which is not on this computer."
+        acts, detail = [{"do": "install", "what": "node", "label": "Install Node.js first"}], "Needs Node.js (a free helper program), which is not on this computer."
     else:
         acts, detail = [], "Needs Node.js. Install it from https://nodejs.org (the LTS version), then press Check again."
     steps.append({"id": "codex", "title": "ChatGPT, for thumbnails", "optional": True, "size": "Node.js about 90 MB, the tool about 150 MB",
-                  "what": "ChatGPT can draw a thumbnail for a clip, through OpenAI's tool Codex and your own ChatGPT plan (pictures need a paid plan). "
+                  "what": "ChatGPT can draw a thumbnail (the cover picture people see before they play a clip). It works through Codex, a tool from OpenAI, and your own ChatGPT plan (pictures need a paid plan). "
                           "Without it, thumbnails are made from the clip itself.",
                   "state": "done" if x["signed_in"] else ("wait" if x["signed_in"] is None else "todo"), "detail": detail, "actions": acts})
     if local_ai.get("ready"):
@@ -234,11 +234,11 @@ def status(cfg: Config, health_items: list[dict], local_ai: dict, fresh: bool = 
     elif not local_ai.get("supported"):
         la_state, la_detail, la_acts = "done", f"Not used on this computer: {local_ai.get('why', 'it cannot run it')}. Nothing is downloaded.", []
     else:
-        measured = f": it has {local_ai['facts']} (it needs about 8 GB and 4 threads, or an NVIDIA card with 4 GB)" if local_ai.get("facts") else ""
+        measured = f": it has {local_ai['facts']} (it needs about 8 GB of memory and a processor with 4 threads, or an NVIDIA graphics card with 4 GB of its own memory)" if local_ai.get("facts") else ""
         la_state, la_detail, la_acts = ("todo", f"This computer can run it{measured}. It is not set up.",
-                                        [{"do": "install", "what": "localai", "label": "Set up free local AI"}])
+                                        [{"do": "install", "what": "localai", "label": "Set up the free AI"}])
     steps.append({"id": "localai", "title": "Free AI on this computer", "optional": True, "size": "about 3 GB",
-                  "what": "A free AI that runs on this PC and writes clip text when Claude cannot be reached. Slower and plainer than Claude.",
+                  "what": "A free AI that runs on this PC and writes clip text when Claude cannot be reached. It is slower than Claude and its text is simpler.",
                   "state": la_state, "detail": la_detail, "actions": la_acts})
     flags = _flags(cfg)
     required_left = [s["id"] for s in steps if not s["optional"] and s["state"] != "done"]

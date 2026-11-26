@@ -96,7 +96,7 @@ def test_step_five_says_what_it_measured(tmp_path, monkeypatch):
     assert localai.facts(cfg).endswith(", an NVIDIA card with 4 GB")
     step = setupguide.status(cfg, [], {"supported": True, "facts": "16 GB of memory, 8 processor threads"})["steps"][-1]
     assert step["id"] == "localai" and step["state"] == "todo" and step["actions"]
-    assert "it has 16 GB of memory, 8 processor threads" in step["detail"] and "about 8 GB and 4 threads" in step["detail"]
+    assert "it has 16 GB of memory, 8 processor threads" in step["detail"] and "about 8 GB of memory and a processor with 4 threads" in step["detail"]
     small = setupguide.status(cfg, [], {"supported": False, "why": "this computer has 4 GB of memory; the local model needs about 8 GB"})["steps"][-1]
     assert small["actions"] == [] and "4 GB of memory" in small["detail"] and "Nothing is downloaded" in small["detail"]
 

@@ -128,7 +128,7 @@ The page opens at http://127.0.0.1:8765/. The code is plain Python and FFmpeg, s
 - **More of the stream, later.** Add 15 or 30 seconds before or after a clip that starts too late or ends too early.
 - **Templates and a background card.** The clip as a rounded card on a blur, a colour, a gradient or your image; inside a social post; under a breaking-news banner; or with the opening text in a box on top.
 - **A strong first three seconds.** Zoom-in, pop-in opening text, a whoosh and a progress bar.
-- **Branding.** Your logo in a corner, an outro line over the last seconds, music under the voice that can grow louder at the end.
+- **Branding.** Your logo in a corner, a closing text over the last seconds, background music under the voice that can grow louder at the end.
 - **Safe zones.** See where TikTok, Reels and Shorts cover the video.
 
 ### Text, versions and posting help

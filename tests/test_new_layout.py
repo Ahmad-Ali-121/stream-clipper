@@ -56,7 +56,7 @@ def test_nothing_was_lost_in_the_move():
 
 def test_a_clip_is_a_tile_and_the_same_card_is_its_editor():
     for piece in ('<div class="tile">', '<div class="edhead">', '<div class="edtabs">', "class=\"sec pane\" data-tab=\"'+n+'\"", "onclick=\"openClip(",
-                  "['text','Text'],['versions','Versions']", "['trim','Trim and framing'],['thumb','Thumbnail'", "if(!decided&&el.dataset.dirty==='1')save(key)",
+                  "['text','Text'],['versions','Versions']", "['trim','Start, end and picture'],['thumb','Thumbnail'", "if(!decided&&el.dataset.dirty==='1')save(key)",
                   "if(extra&&extra.status&&el.classList.contains('open'))closeClip(true)", "Make its videos again", "Move to Pending", "Back to review"):
         assert piece in SCRIPT, piece
     # the editor's fields are the card's own fields: what Save reads is still found by name

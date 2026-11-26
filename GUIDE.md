@@ -95,8 +95,8 @@ Open http://127.0.0.1:8765/ in your browser. The page has a menu on the left and
 - **New clips:** make clips from a finished stream, a video link or a file on this PC. Four tabs: **Find the best moments** (paste a link, press the button, the program picks the moments), **Pick the part myself** (you give the start and the end), **Cutting board** (cut a downloaded part into pieces) and **Search what was said** (find a moment by its words). Under them, **Your videos** lists the videos you have clips of, newest first; click one to see only that video's clips on My clips (a line under the filters says so, and **Clear filters** shows all clips again).
 - **Live channels:** type channel names, pick A, B, C or D, press **Start watching**. **Stop** ends it. **Clip the last** makes a clip of what just happened.
 - **My clips:** every clip as a tile with its video, score, length and title. This is where you review, edit and approve, and where **Make videos** is. The number beside it in the menu is how many clips wait for review.
-- **Look and branding:** the caption style, the template and opening text, your logo, outro line and music, and the thumbnails. What you choose here is used for every clip made from now on. A **Preview** on the right of the page shows one of your own clips with these choices: three real frames (**Start** with the opening text, **Middle** with the captions, **End** with the outro line), made the same way as the videos, so you do not have to make a video to see the result. It follows every change a few seconds later; **Try another clip** shows the same choices on another of your newest clips. Music cannot be shown. With no clip made yet, the preview says so.
-- **Posted and earnings:** what you posted, its views and what it earned (the tracker), and the campaign choice.
+- **Look and branding:** the caption style, the template and opening text, your logo, closing text and music, and the thumbnails. What you choose here is used for every clip made from now on. A **Preview** on the right of the page shows one of your own clips with these choices: three real frames (**Start** with the opening text, **Middle** with the captions, **End** with the closing text), made the same way as the videos, so you do not have to make a video to see the result. It follows every change a few seconds later; **Try another clip** shows the same choices on another of your newest clips. Music cannot be shown. With no clip made yet, the preview says so.
+- **Posted and earnings:** what you posted, its views and what it earned, and the campaign choice.
 - **Set up:** the step-by-step guide that installs what the program needs and signs you in to Claude and ChatGPT. It never opens by itself. While a needed step (Video tools, Captions) is missing, its menu entry is an amber warning with the number of steps left; with only optional steps left it shows their number quietly.
 - **Settings:** the **Setup check**, the AI connection, the language, and updates.
 - **Ask for help:** the help chat.
@@ -132,14 +132,14 @@ At the bottom of the menu are the status lines (setup, watching, how many clips)
 - **Text:** the opening text on the video, the title, description and hashtags to paste when you post. **Write text with AI** is under the tabs.
 - **Versions:** the normal video, the explainer version, and what the narrator says.
 - **Captions:** correct a word or empty its box to remove it, press **Save captions**. A subtitle file can replace them.
-- **Trim and framing:** drag the two handles over the sound wave to set where it starts and ends, choose the framing, **Set the face box and the video box**, the ad label, and **Make this video's drafts again**. **Need more of the stream?** has three buttons (**Add 15 s before**, **Add 15 s after**, **Add 30 s on both sides**): they download more of the stream around the clip, so you can drag its start or end further out. The clip itself does not move and its captions are kept; the added seconds get their captions too. It takes a minute or two. It cannot be done for a clip from a live stream that was not being recorded, and a clip keeps at most ten minutes of the stream.
+- **Start, end and picture:** drag the two handles over the sound wave to set where it starts and ends, choose the framing, **Set the face box and the video box**, the ad label, and **Make this video's drafts again**. **Need more of the stream?** has three buttons (**Add 15 s before**, **Add 15 s after**, **Add 30 s on both sides**): they download more of the stream around the clip, so you can drag its start or end further out. The clip itself does not move and its captions are kept; the added seconds get their captions too. It takes a minute or two. It cannot be done for a clip from a live stream that was not being recorded, and a clip keeps at most ten minutes of the stream.
 - **Picture** (under the player): **Automatic** lets the program frame the clip; **Whole picture** shows the whole stream picture in the middle with a blurred, moving copy of it above and below, so nothing is cut off; **Choose boxes…** lets you draw what is shown. One click, and the draft is made again.
 - **Thumbnail:** make a cover picture from the clip, or let ChatGPT draw it.
 - **Posted:** (on a finished clip) log where you posted it.
 
 At the top of the editor are the buttons that decide about the clip, and only the ones that fit where the clip is now: a clip to review has **Approve** and **Reject**; an approved clip has **Make this clip's videos now**, **Move to Pending**, **Back to review** and **Reject**; a finished clip has **Make its videos again**, **Move to Pending**, **Back to review** and **Reject**; a rejected clip has **Approve** and **Back to review**. Under the tabs are **Save changes**, **Write text with AI** and **Delete**. **Clips** at the top left (or Esc) goes back to the list; what you typed is saved. Approving or rejecting also goes back to the list, and so does **Make this clip's videos now** (the progress bar is at the top of My clips). A problem that comes up while a clip is open shows in a red box at the top of the editor. Esc closes one thing at a time: first the help chat or the Activity log if one is open, then the editor.
 
-Under the video in the editor, small buttons switch between its versions (**A**, **B**, **Explained A**, **Explained B**, **Raw**) and, when it has one, its **Thumbnail**. **Make B preview** renders version B now so you can compare.
+Under the video in the editor, small buttons switch between its versions (**A**, **B**, **Explained A**, **Explained B**, **Original**, which is the video as it was downloaded) and, when it has one, its **Thumbnail**. **Make B preview** makes version B now so you can compare it with version A.
 
 **Keyboard on My clips:** J and K move between clips, Space plays, A approves, R rejects, Enter opens the clip, Esc closes it. A key held down decides one clip only.
 
@@ -255,7 +255,7 @@ A part can be between 8 seconds and 5 minutes long. A video file can also be sea
 **Ask for help** in the menu on the left opens a chat (bottom left, beside the menu). Type a question about the program, in English or Roman Urdu: "How do I clip a live stream?", "What does the score mean?", "Why is it not working?".
 
 - It answers in simple words, with numbered steps when there is something to do.
-- **Show me** beside a step takes you there: it opens the right page, tab or clip, scrolls to the button, highlights it and darkens everything else. **Walk me through it** does this for every step in turn; press **Next**, or **Done** (or Esc) to stop. You can press the highlighted button itself.
+- **Show me** beside a step takes you there: it opens the right page, tab or clip, scrolls to the button, highlights it and darkens everything else. **Show me step by step** does this for every step in turn; press **Next**, or **Done** (or Esc) to stop. You can press the highlighted button itself.
 - It knows what the program is doing right now, so it can explain an error that is on screen.
 - It only answers questions about this program.
 
@@ -298,16 +298,16 @@ Open the **Look and branding** page, **Template and opening**.
 - **Card:** the video as a rounded card. Behind it: a blurred copy of the video, one colour, two colours blending, or your own image.
 - **Post (light or dark):** a round letter, your name and handle, the opening text as the post, and the video under it. Type the name and handle to show.
 - **Breaking news:** a red banner with the opening text as the headline.
-- **Hook box:** the opening text in a black band on top for the whole clip.
+- **Text box:** the opening text in a black band on top for the whole clip.
 - **Opening text stays for … seconds:** from 2 to 60, for the layouts where it pops in at the start.
 
-Clips already drafted get a new template when you press Make videos, or at once with **Make this video's drafts again** (in a clip's editor, under Trim and framing): it drafts every unfinished clip of that video again with the caption style, template and branding chosen now.
+Clips already drafted get a new template when you press Make videos, or at once with **Make this video's drafts again** (in a clip's editor, under Start, end and picture): it drafts every unfinished clip of that video again with the caption style, template and branding chosen now.
 
 ### Safe zones, moment mix, music that rises
 
 - **Show where an app covers the video** (under **Sort and filter** on My clips): pick TikTok, Reels or Shorts and red bands show where that app's own buttons and text sit. Only on the previews, never in the video.
 - **What kind of moments** (under Find the best moments): Balanced, Action (loud, fast, shouted) or Dialogue (stories, jokes, what is said). It leans the scores and what AI is asked to look for.
-- **Music grows louder over the last … seconds** (Branding): the music stays level, then rises to the end.
+- **Music grows louder over the last … seconds** (Logo, closing text and music): the music stays level, then rises to the end.
 - Two more caption movements: each line pops in, and plain lines with no highlight.
 
 ### Search what was said: find a moment by its words
@@ -316,7 +316,7 @@ Open **New clips** and choose the fourth tab, **Search what was said**.
 
 1. Paste a video link and press **Get the words**. A YouTube video with captions is ready in seconds. Other videos need one run under Find the best moments with *Let AI read the whole stream*; their words are kept and can be searched here.
 2. Type a word or phrase in the search box. Hindi and Urdu speech is shown in its own letters here, so search in those letters.
-3. Click the line where the clip should start, then a later line where it should end. Press **Add this stretch to my picks**. Do this for as many clips as you like.
+3. Click the line where the clip should start, then a later line where it should end. Press **Add this part to my picks**. Do this for as many clips as you like.
 4. Press **Make these clips**. Each pick becomes a draft, 8 seconds to 5 minutes long.
 
 **No AI set up? Use any free chatbot.** Open that section under your picks. The transcript is cut into parts of about 25 minutes, because a chatbot given a whole stream only reads the start. Press **Copy part 1**, paste it into ChatGPT, Gemini or any other, and copy its answer. When all parts are done, paste the answers into the box and press **Read the answers**: the moments are added to your picks. The program itself sends nothing anywhere.
@@ -327,13 +327,13 @@ Open a clip with **Edit** and go to its **Captions** tab. **Download .srt** and 
 
 ### Live: who is live, and how hot the chat is
 
-While watching, the Live channels page lists every channel on your list: *not live yet* (checked every half minute and clipped as soon as they start), or a **hype meter** from 0 to 100 that compares the last half minute of chat with that stream's own usual pace. *quiet*, *building*, *hot*, *peak hype*. Peak is a good moment to press **Clip the last**.
+While watching, the Live channels page lists every channel on your list: *not live yet* (checked every half minute and clipped as soon as they start), or a **hype meter** from 0 to 100 that compares the last half minute of chat with that stream's own usual pace. *quiet*, *getting busy*, *very busy*, *at its busiest*. When it is at its busiest is a good moment to press **Clip the last**.
 
 Tick **Start watching this list by itself when the program opens** and the program watches your saved list every time it starts, without a press. Add only creators you have a campaign or permission for.
 
 ### Layouts: what the clip shows
 
-Open the clip with **Edit** and go to **Trim and framing**. **Framing** has seven choices (Automatic, which lets the program decide, and the six below), and **Set the face box and the video box** shows each one live. The two commonest are one click under the player, in the **Picture** row: **Automatic** and **Whole picture**. In the box editor the two boxes always keep the shape the finished video shows them in: you change a box's size by its corner and its height follows its width, so a box can never be stretched out of shape:
+Open the clip with **Edit** and go to **Start, end and picture**. **What the clip shows** has seven choices (Automatic, which lets the program decide, and the six below), and **Set the face box and the video box** shows each one live. The two commonest are one click under the player, in the **Picture** row: **Automatic** and **Whole picture**. In the box editor the two boxes always keep the shape the finished video shows them in: you change a box's size by its corner and its height follows its width, so a box can never be stretched out of shape:
 
 | Layout | What you get |
 |---|---|
@@ -351,19 +351,19 @@ For the last two, choose the corner and how big the small face is. A face in a b
 On the **Look and branding** page, under **Captions**:
 
 - **How the captions move:** the spoken word changes colour (as before), pops in, shows one big word at a time, or the line fills in word by word.
-- **Your own caption style:** type a font installed on the PC, pick the size, outline, words on screen and the two colours. **Use this style** applies it; **Save as a profile…** keeps it under a name you choose, and it then appears in the Caption style list.
+- **Your own caption style:** type a font installed on the PC, pick the size, outline thickness, words shown at once and the two colours. **Use this style** applies it; **Save this style…** keeps it under a name you choose, and it then appears in the Caption style list.
 
 Clips already drafted get the new look when you press **Make videos**.
 
-### Branding: logo, outro line, music
+### Logo, closing text and music
 
-Open the **Look and branding** page, **Branding**.
+Open the **Look and branding** page, **Logo, closing text and music**.
 
-- **Logo or watermark:** choose an image (a PNG with a clear background looks best), then its corner, size and how see-through it is.
-- **Outro line:** a short line such as "Follow for part 2" shown over the last four seconds.
-- **Music under the voice:** choose a sound file and its loudness. It fades in and out and repeats if it is shorter than the clip. Use only music you have the right to use; platforms mute or remove clips with other people's songs.
+- **Your logo:** choose an image (a PNG with a clear background looks best), then its corner, size and how solid it is (the **How solid** slider: to the left you can see the video through the logo).
+- **Closing text:** a short line such as "Follow for part 2" shown over the last four seconds.
+- **Background music:** choose a sound file and its loudness. It fades in and out and repeats if it is shorter than the clip. Use only music you have the right to use; platforms mute or remove clips with other people's songs.
 
-Branding is added whenever a draft or a video is made. Press **Make videos** to add it to clips drafted earlier.
+Your logo, closing text and music are added whenever a draft or a video is made. Press **Make videos** to add it to clips drafted earlier.
 
 ### Faster on YouTube: its own captions
 
@@ -383,14 +383,14 @@ Twitch, live streams and video files are still listened to on this PC, because n
 
 ### Clip the last 30 seconds (live)
 
-While watching live, the Live channels page has **Clip the last** with a length next to it. Saw something chat did not react to? Press it right after the moment. A draft of that stretch appears at the top of My clips in two or three minutes; trim it in its editor under Trim and framing. It needs a stream being watched. Every press makes a clip of its own, also two presses close together. On a stream that is not being recorded only the last few minutes are kept (`watch.buffer_minutes`, 10 as installed): a longer stretch than that is shortened to what is kept, and the Activity log says so; a stretch from before the watch began cannot be clipped.
+While watching live, the Live channels page has **Clip the last** with a length next to it. Saw something chat did not react to? Press it right after the moment. A draft of that stretch appears at the top of My clips in two or three minutes; trim it in its editor under Start, end and picture. It needs a stream being watched. Every press makes a clip of its own, also two presses close together. On a stream that is not being recorded only the last few minutes are kept (`watch.buffer_minutes`, 10 as installed): a longer stretch than that is shortened to what is kept, and the Activity log says so; a stretch from before the watch began cannot be clipped.
 
 ### Free local AI (optional)
 
 For a computer with no Claude plan or key. A small AI runs on the PC itself and writes the opening text, title and a rating, so clips do not get placeholder text.
 
 - The program checks by itself whether the PC can run it. It reads three things from Windows: how much memory is installed (about 8 GB is needed), how many processor threads there are (4 are needed), and whether there is an NVIDIA card with 4 GB or more (then the first two do not matter). The Set up page's step shows what it measured. When you press the button it also wants 8 GB free on the drive with your clips. It does not time the computer or try the model first, so a PC that only just passes can be slow. A PC that cannot never downloads anything for it; Settings says so under AI.
-- A PC that can shows **Set up free local AI** on the Settings page, under AI. One press installs Ollama and a model, about 3 GB in all; progress shows under Setup check on the same page.
+- A PC that can shows **Set up the free AI** on the Settings page, under AI. One press installs Ollama and a model, about 3 GB in all; progress shows under Setup check on the same page.
 - Claude is always used first when it works. The local AI is the fallback, and its text is redone by Claude when Claude is back.
 - Claude Code is called once per job and leaves no chats behind in your Claude app. Turning captions into Latin letters now uses the small, fast model (about four times quicker, a fraction of your plan's usage), with almost the same result.
 - It is plainer than Claude, cannot look at the picture, and is not used to read whole streams or to turn captions into Latin letters.
@@ -411,7 +411,7 @@ Every job on the page has a bar with a line under it, for example **41% · Step 
 
 Works on every clip: live Twitch, Kick and YouTube drafts, finished streams and your own clips.
 
-1. Open the clip with **Edit**, go to **Trim and framing** and press **Set the face box and the video box**.
+1. Open the clip with **Edit**, go to **Start, end and picture** and press **Set the face box and the video box**.
 2. You see the stream as it was, with two boxes: orange **Face** and blue **Video**. Drag a box to move it; drag its round corner to make it bigger or smaller. The boxes keep the shape they are shown in, so what is inside a box is exactly what the viewer sees. The small picture on the right is the result. Use the slider or **Play** to check other moments of the clip.
 3. Under **What the clip shows** choose one of its six layouts, for example *Face on top, video below* (two boxes) or *Video only, full height* (one tall box).
 4. Tick **Use the same boxes for the other clips of this video** to apply them to the other unfinished clips of the same video (handy for parts), and **Remember these boxes for new clips of this streamer** so the next drafts of that streamer start with them.
@@ -528,7 +528,7 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 
 ## Part 4: Adding things
 
-- **A new streamer.** Nothing to do: just use the channel name. The clipper measures where the streamer's facecam is from the picture itself, and once two clips of that streamer agree it remembers the position (in `D:\clipper-data\facecams.json`). The first clip or two of a new streamer may be framed a little off; fix those in the clip's editor: press **Edit**, open **Trim and framing**, and change **Framing** or press **Set the face box and the video box**. If a streamer's framing stays wrong, you can type the exact box under `channels:` in `config.yaml`, which always wins.
+- **A new streamer.** Nothing to do: just use the channel name. The clipper measures where the streamer's facecam is from the picture itself, and once two clips of that streamer agree it remembers the position (in `D:\clipper-data\facecams.json`). The first clip or two of a new streamer may be framed a little off; fix those in the clip's editor: press **Edit**, open **Start, end and picture**, and change **Framing** or press **Set the face box and the video box**. If a streamer's framing stays wrong, you can type the exact box under `channels:` in `config.yaml`, which always wins.
 - **A new campaign.** Ask Claude Code: "add a brief for this campaign" and paste the campaign page link. It writes a file under `briefs/`. Check it against the live campaign page yourself.
 
 ## Part 5: When something goes wrong
@@ -541,7 +541,7 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | "live ... but Twitch is not recording this broadcast" | Not an error. The streamer has recordings (VODs) switched off, so the watcher keeps the last 10 minutes of the live stream on disk and cuts clips from that. It uses about 3 GB of internet an hour for that channel, the first minute is lost to Twitch's opening advert, and moments during advert breaks are lost. To skip such streams instead, set `buffer_when_no_vod: false` under `watch:` in `config.yaml` |
 | "no chat replay" | That video cannot be scored from chat. Use a live watch instead |
 | A clip is framed wrong, or too much of the stream picture is cut off | Open the clip with Edit. Under the player, **Picture**: press **Whole picture** to show everything with blur above and below, or **Choose boxes…** to draw what is shown. The draft is made again at once |
-| The clip starts too late or ends too early and the handles will not go further | Edit, **Trim and framing**, **Need more of the stream?**: press **Add 15 s before** or **Add 15 s after**, wait a minute or two, then drag the handle into the new part and press Save changes |
+| The clip starts too late or ends too early and the handles will not go further | Edit, **Start, end and picture**, **Need more of the stream?**: press **Add 15 s before** or **Add 15 s after**, wait a minute or two, then drag the handle into the new part and press Save changes |
 | "this clip comes from a live stream that is not being recorded" when adding seconds | The seconds around that clip were only kept for a few minutes while the stream was live and are gone. Nothing can be added to it |
 | "an NVIDIA card was found but speech-to-text cannot run on it" | Not an error: speech-to-text runs on the processor instead (slower, same result). To use the card, run the setup command again with `-Gpu` added at the end. It downloads NVIDIA's libraries (about 1 GB) and then says whether the card works. If it still cannot, update the NVIDIA driver and run `uv run clipper hardware --refresh` |
 | A red box at the top of the page | The watcher stopped by itself, or the program is not answering. The red and yellow lines in the **Activity log** (bottom of the menu), and the terminal window, say why. A clip that could not be made says so on its tile and shows its own reason in red in its editor |
@@ -586,7 +586,7 @@ The most common ones and what they mean:
 - **"The AI service refused: the limit of your plan is reached..."**: wait for the limit to reset, or open **Settings** and pick another way under **AI for titles and ratings** (*How to reach Claude*).
 - **"The AI program on this computer is not signed in any more"**: open **Set up** in the menu; the Claude or ChatGPT step has a **Sign in** button.
 - **"The graphics card could not do this step"** or **"The computer ran out of memory"**: close games and other heavy programs and try again.
-- **"The video file for this step is damaged or was only half downloaded"**: make the draft again: open the clip with Edit, Trim and framing, Make this video's drafts again.
+- **"The video file for this step is damaged or was only half downloaded"**: make the draft again: open the clip with Edit, Start, end and picture, Make this video's drafts again.
 - **"This step took far longer than it should and was stopped"**: check the internet and try again.
 - **"This step did not work, and the program does not have a plain explanation..."**: a fault the program has not met before. Try once more; if it repeats, send the Technical details to whoever set the program up.
 

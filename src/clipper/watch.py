@@ -474,7 +474,7 @@ def note_error(d: Path, message: str | None) -> None:
 
 
 LIVE_FILE = "live.json"  # what the watcher is doing right now, for the page: who is live, and how hot each chat is
-HYPE_LABELS = ((85, "peak hype"), (60, "hot"), (35, "building"), (0, "quiet"))
+HYPE_LABELS = ((85, "at its busiest"), (60, "very busy"), (35, "getting busy"), (0, "quiet"))
 
 
 def hype(samples: list[tuple[float, int]], now: float) -> dict:

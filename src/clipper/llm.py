@@ -74,7 +74,7 @@ SCHEMA = {
 }
 
 
-BACKENDS = {"api": "Claude API key (paid per use)", "claude-code": "Claude Code on this computer (uses your Claude plan)"}
+BACKENDS = {"api": "Claude key, also called API key (you pay for each use)", "claude-code": "Claude Code on this computer (uses your Claude plan)"}
 CHOICES = {"auto": "Automatic (use whichever works)", **BACKENDS}
 CHECK_MODEL = "claude-haiku-5-5"  # the cheapest model: a connection check must cost next to nothing
 CHECK_FRESH_S = 6 * 3600
@@ -156,7 +156,7 @@ def candidates(cfg: Config) -> list[str]:
 def why_unavailable(cfg: Config) -> str:
     """Why AI cannot be used on this computer right now, in words a person can act on; "" when it can."""
     if not cfg.llm.enabled:
-        return "AI is switched off (llm.enabled is false in the settings)"
+        return "AI is switched off in the settings file (the line enabled: false under llm: in config.yaml or config.local.yaml)"
     if cfg.llm.backend not in CHOICES:
         return f"llm.backend must be one of {', '.join(CHOICES)}, not {cfg.llm.backend!r}"
     if cfg.llm.backend in BACKENDS:

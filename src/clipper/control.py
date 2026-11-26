@@ -405,7 +405,7 @@ class Control:
         try:
             return localai.status(self.cfg)
         except Exception as e:  # never take the page down over an optional extra
-            log.error("the free local AI could not be looked at: %s", e, exc_info=True)
+            log.error("the free AI could not be looked at: %s", e, exc_info=True)
             return {"supported": False, "why": str(e), "installed": False, "running": False, "has_model": False, "ready": False, "model": self.cfg.llm.local_model}
 
     def start_local_ai(self) -> dict:
@@ -414,7 +414,7 @@ class Control:
 
         ok, why = localai.supported(self.cfg)
         if not ok:
-            raise ValueError(f"The free local AI is not set up on this computer: {why}. Nothing was downloaded.")
+            raise ValueError(f"The free AI is not set up on this computer: {why}. Nothing was downloaded.")
 
         def work(say) -> None:
             localai.setup(self.reload(), say, step=say.step)

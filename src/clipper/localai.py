@@ -62,7 +62,7 @@ def supported(cfg: Config) -> tuple[bool, str]:
     from .work import free_gb, read_json
 
     if cfg.llm.local == "off":
-        return False, "switched off in the settings (llm.local)"
+        return False, "it is switched off in the settings file (the line local: off under llm:)"
     ram, threads = _ram_gb(), os.cpu_count() or 1
     vram = int((read_json(cfg.data_dir / "hardware.json", {}) or {}).get("vram_mb") or 0)
     if ram < MIN_RAM_GB and vram < 4000:
@@ -150,12 +150,12 @@ def why_not(cfg: Config) -> str:
     if s["ready"]:
         return ""
     if not s["supported"]:
-        return f"the free local AI is not used on this computer: {s['why']}"
+        return f"the free AI is not used on this computer: {s['why']}"
     if not s["installed"]:
-        return "the free local AI is not set up (open Settings and press 'Set up free local AI' under AI)"
+        return "the free AI is not set up (open Settings and press 'Set up the free AI' under AI)"
     if not s["has_model"]:
-        return f"the free local AI has no model yet (press 'Set up free local AI' to download {s['model']})"
-    return "the free local AI is installed but not answering"
+        return f"the free AI has no model yet (press 'Set up the free AI' to download {s['model']})"
+    return "the free AI is installed but not answering"
 
 
 def ask(cfg: Config, system: str, user: str, schema: dict, what: str) -> dict:
@@ -178,7 +178,7 @@ def ask(cfg: Config, system: str, user: str, schema: dict, what: str) -> dict:
         raise LocalAiError(f"the local AI did not give a usable answer ({type(e).__name__}: {e})") from e
     if not isinstance(data, dict):
         raise LocalAiError("the local AI answered in the wrong shape")
-    log.info("free local AI (%s) answered in %.0fs: %s", cfg.llm.local_model, time.monotonic() - t0, what)
+    log.info("free AI (%s) answered in %.0fs: %s", cfg.llm.local_model, time.monotonic() - t0, what)
     return data
 
 
@@ -188,7 +188,7 @@ def setup(cfg: Config, say, step=None) -> None:
 
     ok, why = supported(cfg)
     if not ok:
-        raise ValueError(f"The free local AI is not set up on this computer: {why}. Nothing was downloaded.")
+        raise ValueError(f"The free AI is not set up on this computer: {why}. Nothing was downloaded.")
     if free_gb(cfg.data_dir) < MIN_FREE_GB:
         raise ValueError(f"less than {MIN_FREE_GB:.0f} GB free on {Path(cfg.data_dir).anchor}; the model needs about 2 GB there. Nothing was downloaded.")
     note = step or (lambda i, n, text: say(text))
@@ -225,4 +225,4 @@ def setup(cfg: Config, say, step=None) -> None:
                     say(line)
     if not status(cfg, fresh=True)["ready"]:
         raise ValueError("the model was downloaded but the local AI is still not ready; press 'Check again' in a minute")
-    say("the free local AI is ready. It is used when Claude cannot be reached.")
+    say("the free AI is ready. It is used when Claude cannot be reached.")

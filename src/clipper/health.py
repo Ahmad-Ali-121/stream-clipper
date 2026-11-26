@@ -45,9 +45,9 @@ def update_state(fetch: bool = False) -> dict:
     """
     try:
         if _git("rev-parse", "--is-inside-work-tree").returncode != 0:
-            return {"can": False, "behind": 0, "why": "this copy was not installed with git, so it cannot update itself"}
+            return {"can": False, "behind": 0, "why": "this copy of the program cannot update itself: it was copied by hand, not put there by the installer. To get new versions, install it with the installer"}
         if _git("remote", "get-url", "origin").returncode != 0:
-            return {"can": False, "behind": 0, "why": "this copy has no 'origin' to update from (a developer's copy)"}
+            return {"can": False, "behind": 0, "why": "this copy does not update itself: it is the copy the program is developed in, with no address to fetch new versions from"}
         if fetch and (f := _git("fetch", "origin", "--quiet", timeout=120)).returncode != 0:
             return {"can": False, "behind": 0, "unreachable": True, "why": f"GitHub could not be reached ({f.stderr.strip()[-200:] or 'no reason given'})"}
         target = "origin/main"
@@ -83,14 +83,14 @@ def quick_checks(cfg: Config) -> list[dict]:
     from .tools import ToolError, find_tool
 
     out: list[dict] = []
-    for tool, what in (("ffmpeg", "FFmpeg (cuts and renders video)"), ("TwitchDownloaderCLI", "TwitchDownloader (fetches clip ranges and chat)")):
+    for tool, what in (("ffmpeg", "FFmpeg (cuts and makes the videos)"), ("TwitchDownloaderCLI", "TwitchDownloader (downloads the chat and the parts of a stream that become clips)")):
         try:
             out.append(_item(tool, what, "ok", find_tool(tool, cfg.data_dir)))
         except ToolError:
             out.append(_item(tool, what, "bad", f"not found in {cfg.data_dir / 'tools'}", RERUN_SETUP))
     models = cfg.data_dir / "models"
     face = models / "face_detection_yunet_2023mar.onnx"
-    out.append(_item("face", "Face detection model (frames the clip)", "ok" if face.exists() else "bad",
+    out.append(_item("face", "Face detection model (finds the streamer's face for the picture)", "ok" if face.exists() else "bad",
                      "" if face.exists() else f"missing from {models}", RERUN_SETUP))
     voice = [models / "kokoro" / n for n in ("voices-v1.0.bin", "kokoro-v1.0.int8.onnx")]
     out.append(_item("voice", "Narrator voice (explainer videos)", "ok" if all(v.exists() for v in voice) else "warn",
@@ -105,31 +105,31 @@ def quick_checks(cfg: Config) -> list[dict]:
         gb = free_gb(cfg.data_dir)
         state = "bad" if gb < 2 else ("warn" if gb < 8 else "ok")
         out.append(_item("disk", "Free disk space for clips", state, f"{gb:.0f} GB free on {Path(cfg.data_dir).anchor}",
-                         "Delete rejected clips (Rejected list, 'Delete all rejected'), or old folders under the data folder's 'work'."))
+                         "In My clips, open the Rejected list and press 'Delete all rejected'. Or delete old folders inside the 'work' folder of the data folder."))
     except OSError as e:
         out.append(_item("disk", "Free disk space for clips", "bad", f"the data folder {cfg.data_dir} cannot be read ({e})",
                          "Check that the drive is connected, or run the setup step again with another -DataDir."))
     saved = read_json(cfg.data_dir / "health.json", {}) or {}
     speech = saved.get("speech") or {}
     if speech.get("ok") is True:
-        out.append(_item("speech", "Captions (speech-to-text really runs)", "ok", speech.get("detail", "")))
+        out.append(_item("speech", "Captions (turning speech into text really works)", "ok", speech.get("detail", "")))
     elif speech.get("ok") is False:
-        out.append(_item("speech", "Captions (speech-to-text really runs)", "bad", speech.get("detail", ""),
+        out.append(_item("speech", "Captions (turning speech into text really works)", "bad", speech.get("detail", ""),
                          "Fix the red items above first, then press 'Run the full check'. If it still fails, run:  uv run clipper doctor"))
     else:
-        out.append(_item("speech", "Captions (speech-to-text really runs)", "todo", "not tried yet on this computer",
+        out.append(_item("speech", "Captions (turning speech into text really works)", "todo", "not tried yet on this computer",
                          "Press 'Run the full check'. The first time it downloads the speech model (about 1.6 GB)."))
     hwinfo = read_json(cfg.data_dir / "hardware.json", {}) or {}
     if hwinfo:
         speech_on = "the NVIDIA card" if hwinfo.get("whisper_device") == "cuda" else "the processor"
-        out.append(_item("hardware", "Graphics and speed", "ok", f"video encoder {hwinfo.get('encoder')}; speech-to-text on {speech_on}"
+        out.append(_item("hardware", "Graphics and speed", "ok", f"videos are made with {hwinfo.get('encoder')}; speech is turned into text on {speech_on}"
                          + (f" (card not usable: {str(hwinfo['cuda_problem']).splitlines()[0][:120]})" if hwinfo.get("cuda_problem") else "")))
     ai_problem = llm.why_unavailable(cfg)
     checks = llm.read_checks(cfg)
     works = [llm.BACKENDS[b] for b in llm.BACKENDS if checks[b]["ok"] is True]
     if ai_problem:
         out.append(_item("ai", "Claude (optional: writes text, reads streams)", "warn", ai_problem,
-                         "Optional. Either sign in to Claude Code, or put an API key in the .env file. See Settings, under AI."))
+                         "Optional. Either sign in to Claude on the Set up page, or put a paid Claude key (API key) in the .env file. See Settings, under AI."))
     elif works:
         out.append(_item("ai", "Claude (optional: writes text, reads streams)", "ok", "works: " + " and ".join(works)))
     else:
@@ -140,13 +140,13 @@ def quick_checks(cfg: Config) -> list[dict]:
 
     la = localai.status(cfg)
     if la["ready"]:
-        out.append(_item("localai", "Free local AI (optional: writes clip text without Claude)", "ok", f"ready ({la['model']}); used when Claude cannot be reached"))
+        out.append(_item("localai", "Free AI on this computer (optional: writes clip text without Claude)", "ok", f"ready ({la['model']}); used when Claude cannot be reached"))
     elif not la["supported"]:
-        out.append(_item("localai", "Free local AI (optional: writes clip text without Claude)", "ok", f"not used here: {la['why']}. Nothing is downloaded for it."))
+        out.append(_item("localai", "Free AI on this computer (optional: writes clip text without Claude)", "ok", f"not used here: {la['why']}. Nothing is downloaded for it."))
     else:
-        out.append(_item("localai", "Free local AI (optional: writes clip text without Claude)", "ok" if works else "todo",
+        out.append(_item("localai", "Free AI on this computer (optional: writes clip text without Claude)", "ok" if works else "todo",
                          "this computer can run it; it is not set up" + (" (not needed while Claude works)" if works else ""),
-                         "" if works else "Open Settings and press 'Set up free local AI' under AI (about 3 GB)."))
+                         "" if works else "Open Settings and press 'Set up the free AI' under AI (about 3 GB)."))
     upd = saved.get("update") or {}
     if upd.get("behind"):
         out.append(_item("update", "Program version", "warn", f"a newer version is available ({upd['behind']} change(s) behind)" + (f". {upd['why']}" if upd.get("why") else ""),
@@ -154,7 +154,7 @@ def quick_checks(cfg: Config) -> list[dict]:
     elif upd:
         out.append(_item("update", "Program version", "ok", upd.get("why") or "up to date"))
     else:
-        out.append(_item("update", "Program version", "todo", "not compared with GitHub yet", "It is compared by itself within a minute of starting."))
+        out.append(_item("update", "Program version", "todo", "not compared with GitHub yet", "The program compares it automatically within a minute of starting."))
     return out
 
 
@@ -167,8 +167,8 @@ def summary(items: list[dict]) -> dict:
 
 
 ASK_FIRST = "CLIPPER_ASK_FIRST"  # set by the page's program (clipper review) for itself and every job it starts
-NEED_CAPTIONS = ("Captions are not set up on this computer yet: the speech model (about 1.6 GB) has not been downloaded, and a download "
-                 "that size never starts without your own press. Open Set up in the menu, go to the Captions step and press "
+NEED_CAPTIONS = ("Captions are not set up on this computer yet. The speech model (the part that turns speech into text, about 1.6 GB) has not been downloaded, and a download "
+                 "that size never starts until you press the button for it. Open Set up in the menu, go to the Captions step and press "
                  "'Download and try it'. Then start this again. Nothing was started.")
 
 
