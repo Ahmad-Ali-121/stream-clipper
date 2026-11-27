@@ -81,6 +81,9 @@ def videos_made(d: Path, state: dict) -> bool:
     if isinstance(exports, dict):  # a version ticked after the videos were made is still to be made
         if (state.get("simple", True) and "a" not in exports) or (state.get("explainer") and "xa" not in exports):
             return False
+        # "Make a version B too" was ticked on this clip after its videos were made
+        if state.get("ab") is True and ((state.get("simple", True) and "b" not in exports) or (state.get("explainer") and "xb" not in exports)):
+            return False
         # version B was made and its render was taken away since (its opening text was changed): it is to be made again
         if (state.get("simple", True) and "b" in exports and not (d / "final_b.mp4").exists()) or \
                 (state.get("explainer") and "xb" in exports and not (d / "explained_b.mp4").exists()):
@@ -139,21 +142,31 @@ def look_preview(works: list[Path], cfg, n: int = 0) -> dict:
         raise ValueError("There is no clip to show yet. Make one clip (New clips), then this preview shows your own video with these choices.")
     found.sort(key=lambda x: x[0], reverse=True)
     found = found[:12]
-    d = found[n % len(found)][1]
-    state = read_json(d / "clip.json")
-    out = Path(cfg.data_dir) / "tmp" / "look-preview"
+    import shutil
+
+    from .render import ClipBusy, preview_seconds
+
+    base = Path(cfg.data_dir) / "tmp" / "look-preview"
     r = cfg.render
-    key = hashlib.sha256(repr((look_signature(cfg), bool(r.opening), r.hook_seconds, str(d), (d / "clip.json").stat().st_mtime_ns,
-                               (d / "source.mp4").stat().st_mtime_ns, (d / "words.json").stat().st_mtime_ns)).encode()).hexdigest()[:16]
     with _preview_lock:  # one at a time: a second request waits and then finds the pictures already made
-        mark = out / "key.txt"
-        fresh = mark.exists() and mark.read_text(encoding="utf-8") == key and all((out / f"{x}.jpg").exists() for x in ("open", "mid", "end"))
-        if not fresh:
-            mark.unlink(missing_ok=True)
-            preview_stills(d, cfg, out)
-            mark.write_text(key, encoding="utf-8")
-    return {"v": key, "clip": f"{d.parent.parent.name}/{d.name}", "title": state.get("title") or state.get("hook") or d.name, "of": len(found),
-            "has_hook": bool(state.get("hook")), "seconds": float(__import__("clipper.render", fromlist=["PREVIEW_SECONDS"]).PREVIEW_SECONDS)}
+        for i in range(len(found)):
+            d = found[(n + i) % len(found)][1]
+            state = read_json(d / "clip.json")
+            key = hashlib.sha256(repr((look_signature(cfg), bool(r.opening), r.hook_seconds, str(d), (d / "clip.json").stat().st_mtime_ns,
+                                       (d / "source.mp4").stat().st_mtime_ns, (d / "words.json").stat().st_mtime_ns)).encode()).hexdigest()[:16]
+            out = base / key  # its own folder: another tab, or another clip a moment later, never shows these pictures as its own
+            if not all((out / f"{x}.jpg").exists() for x in ("open", "mid", "end")):
+                try:
+                    preview_stills(d, cfg, out, wait=False)
+                except ClipBusy:
+                    continue  # its video is being made right now (Make videos): show the next clip instead of waiting minutes
+            keep = sorted((p for p in base.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
+            for old in keep[3:]:
+                if old.name != key:
+                    shutil.rmtree(old, ignore_errors=True)
+            return {"v": key, "clip": f"{d.parent.parent.name}/{d.name}", "title": state.get("title") or state.get("hook") or d.name, "of": len(found),
+                    "has_hook": bool(state.get("hook")), "seconds": preview_seconds(cfg)}
+    raise ValueError("Your clips are being made right now, so the preview has to wait. Open this page again when Make videos has finished.")
 
 
 def clip_view(d: Path, weights: dict | None = None, brief=None, cfg=None) -> dict:
@@ -221,7 +234,8 @@ def set_framing(d: Path, body: dict, cfg) -> dict:
         for k in ("layout", "facecam", "game", "crop_x", "face_corner", "face_size"):
             state.pop(k, None)
         state["layout_auto"] = True
-        layout_mod.save_framing(channel, None, cfg)
+        if not body.get("keep"):  # the boxes kept for this streamer's new clips are forgotten only when asked from the box editor
+            layout_mod.save_framing(channel, None, cfg)
         state = layout_mod.auto_layout(d, state, cfg)  # looks at the video: takes a few seconds
         keys = ("layout", "facecam", "game", "crop_x", "face_corner", "face_size", "layout_auto", "layout_reason")
         state = update_clip(d / "clip.json", {k: state[k] for k in keys if k in state}, drop=tuple(k for k in keys if k not in state))
@@ -729,7 +743,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     return self._send(500, f"{type(e).__name__}: {e}".encode("utf-8", "replace"), "text/plain")
             m = re.fullmatch(r"/api/look/preview/(open|mid|end)\.jpg", self.path.split("?")[0])
             if m and cfg is not None:
-                f = Path((control.cfg if control else cfg).data_dir) / "tmp" / "look-preview" / f"{m.group(1)}.jpg"
+                v = re.search(r"[?&]v=([0-9a-f]{16})(&|$)", self.path)  # which look these pictures belong to
+                f = Path((control.cfg if control else cfg).data_dir) / "tmp" / "look-preview" / (v.group(1) if v else "-") / f"{m.group(1)}.jpg"
                 if not f.exists():
                     return self._send(404, b"no preview has been made yet", "text/plain")
                 return self._send(200, f.read_bytes(), "image/jpeg")
@@ -1088,14 +1103,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 except Exception as e:
                     log.error("clip %s: no more of the stream could be added: %s", d.name, e, exc_info=True)
                     return self._send(500, f"{type(e).__name__}: {e}".encode("utf-8", "replace"), "text/plain")
-                try:  # the draft is made again from the new video, so the two never disagree
-                    for name in RENDERS:
-                        remove(d / name)
-                    render_clip(d, use)
-                except Exception as e:
-                    log.error("clip %s: more of the stream was added, but its draft could not be made again: %s", d.name, e, exc_info=not isinstance(e, ValueError))
-                    return self._send(400, ("the seconds were added, but the draft could not be made again: " + str(e)
-                                            + ". Press \"Make this video's drafts again\" on the clip").encode("utf-8", "replace"), "text/plain")
+                # The draft and any finished video are left alone: the clip's start and end did not move, so they still show
+                # exactly this clip. Moving the start or end afterwards makes them again, as any other change of the cut does.
                 return self._send(200, json.dumps({"lo": state["fetch_start_s"], "hi": state["fetch_end_s"]}).encode(), "application/json")
             m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/framing", self.path)
             if m and m.group(1) in by_name and cfg is not None:

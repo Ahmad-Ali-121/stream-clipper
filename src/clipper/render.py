@@ -419,7 +419,24 @@ PREVIEW_SECONDS = 14.0  # the preview treats the clip as this short, so its last
 PREVIEW_HOOK = "YOUR OPENING TEXT"
 
 
-def preview_stills(clip_dir: Path, cfg: Config, out_dir: Path) -> dict[str, Path]:
+class ClipBusy(ToolError):
+    """The clip's video is being made right now, so nothing else can be made from it this moment."""
+
+
+def clip_render_lock(clip_dir: Path):
+    """The lock every render of one clip takes (in this program). Whoever replaces the clip's video takes it too."""
+    import threading
+
+    with _render_locks_guard:
+        return _render_locks.setdefault(str(clip_dir.resolve()), threading.Lock())
+
+
+def preview_seconds(cfg: Config) -> float:
+    """How long the preview pretends the clip is: long enough for the closing text to appear (it needs four seconds before it)."""
+    return max(PREVIEW_SECONDS, float(cfg.brand.outro_seconds) + 6.0)
+
+
+def preview_stills(clip_dir: Path, cfg: Config, out_dir: Path, wait: bool = True) -> dict[str, Path]:
     """Three frames of one clip exactly as its video would look with the settings as they are now: {"open", "mid", "end"}.
 
     Made by the renderer itself (same layout, captions, template, logo, opening effects), only without sound and
@@ -427,10 +444,14 @@ def preview_stills(clip_dir: Path, cfg: Config, out_dir: Path) -> dict[str, Path
     import threading
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    with _render_locks_guard:
-        lock = _render_locks.setdefault(str(clip_dir.resolve()), threading.Lock())
-    with lock:
+    lock = clip_render_lock(clip_dir)
+    if not lock.acquire(blocking=wait):  # its video is being made: that takes minutes, and a preview must not wait for it
+        raise ClipBusy(f"clip {clip_dir.name} is being made right now")
+    try:
         return _render_clip(clip_dir, cfg, True, still={"out": out_dir})
+    finally:
+        lock.release()
+        (clip_dir / "preview.ass").unlink(missing_ok=True)  # also when it failed before the frames were taken
 
 
 def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str = "final.mp4", hook: bool = True, variant: str = "a",
@@ -451,7 +472,7 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
     ffmpeg = find_tool("ffmpeg", cfg.data_dir)
     offset, duration = cut_window(state)
     if still:
-        duration = min(duration, PREVIEW_SECONDS)
+        duration = min(duration, preview_seconds(cfg))
     r, layout = _layout_for(state, cfg)
 
     words = words_from_json(read_json(clip_dir / "words.json", []), offset_s=offset)

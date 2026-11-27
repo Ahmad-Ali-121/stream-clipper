@@ -56,7 +56,7 @@ RULES: list[tuple[str, str, str]] = [
     (r"http error 429|too many requests|rate.?limit(ed)? by (youtube|twitch|kick)",
      "The video site is refusing for a while because too many requests came from this internet connection in a short time.",
      "Wait 15 to 30 minutes, then try again. Watching fewer channels at once makes this rarer."),
-    (r"local ai is installed but not answering|local ai did not give a usable answer|:11434|"
+    (r"(local|free) ai is installed but not answering|(local|free) ai did not give a usable answer|:11434|"
      r"ollama.{0,80}(refused|not running|not reachable|unreachable|did not answer|timed out)|could not reach ollama",
      "The free AI on this computer (Ollama) is not running or did not answer.",
      "Start Ollama from the Start menu, wait half a minute, then try again. Setup check shows whether it is running."),
@@ -104,7 +104,7 @@ RULES: list[tuple[str, str, str]] = [
     # ---- broken video files ----
     (r"moov atom not found|invalid data found when processing input|error opening input|could not find codec parameters",
      "The video file for this step is damaged or was only half downloaded.",
-     "Make the draft again (open the clip with Edit, then Trim and framing, then Make this video's drafts again), so the video is fetched again. If it fails the same way, reject the clip."),
+     "Make the draft again (open the clip with Edit, then Start, end and picture, then Make this video's drafts again), so the video is fetched again. If it fails the same way, reject the clip."),
     # ---- waiting too long ----
     (r"timed out after",
      "This step took far longer than it should and was stopped, so the program would not hang forever.",

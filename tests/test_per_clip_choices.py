@@ -27,6 +27,7 @@ def _clip(tmp_path, **extra):
              "platform": "twitch", "channel": "somebody", **extra}
     (d / "clip.json").write_text(json.dumps(state), encoding="utf-8")
     (d / "source.mp4").write_bytes(b"old video")
+    (d / "words.json").write_text("[]", encoding="utf-8")
     (d.parent.parent / "meta.json").write_text(json.dumps({"url": state["vod_url"], "duration_s": 7200, "is_live": False}), encoding="utf-8")
     return d
 
@@ -72,7 +73,7 @@ def test_a_clip_adds_its_own_not_wanted_things_to_the_general_list(tmp_path):
     assert "do not show the other player's name" in thumbs.auto_prompt(state, cfg)
     assert "do not show the other player's name" in thumbs.own_prompt("a red car", cfg, state)
     assert "other player" not in thumbs.own_prompt("a red car", cfg)
-    for piece in ('name="cover_avoid"', "Not wanted in this clip", "avoid:el.querySelector('[name=cover_avoid]').value", "cover_avoid:g('cover_avoid').value.trim()"):
+    for piece in ('name="t_cover_avoid"', "Not wanted in this clip", "avoid:el.querySelector('[name=t_cover_avoid]').value", "cover_avoid:g('t_cover_avoid').value.trim()"):
         assert piece in PAGE, piece
     assert 'id="o-avoid"' in PAGE                                        # the general list stays where it was
 
@@ -166,7 +167,7 @@ def test_adding_seconds_says_plainly_when_it_cannot(tmp_path, monkeypatch):
 # ---------------- the whole picture, in one click ----------------
 
 def test_the_whole_picture_is_one_click_under_the_player():
-    for piece in ("async function quickFrame(key,mode,btn){", "{layout:'blur',game:[0,0,1,1]}:{auto:true}", ">Whole picture</button>", ">Automatic</button>",
+    for piece in ("async function quickFrame(key,mode,btn){", "{layout:'blur',game:[0,0,1,1]}:{auto:true,keep:true}", ">Whole picture</button>", ">Automatic</button>",
                   ">Choose boxes…</button>", ".clip.open .frow{display:flex"):
         assert piece in PAGE, piece
     # the two boxes keep the shape the layout shows them in: resizing changes the width and the height follows
@@ -202,7 +203,7 @@ def test_the_preview_is_made_once_per_look(tmp_path, monkeypatch):
     (d / "words.json").write_text("[]", encoding="utf-8")
     calls = []
 
-    def fake(clip_dir, c, out):
+    def fake(clip_dir, c, out, wait=True):
         calls.append(clip_dir.name)
         out.mkdir(parents=True, exist_ok=True)
         for n in ("open", "mid", "end"):

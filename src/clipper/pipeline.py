@@ -610,6 +610,8 @@ def stage_transcribe(url: str, cfg: Config, only: list[str] | None = None, force
 
 MAX_FETCH_S = 600.0  # the most of a stream one clip keeps on disk: ten minutes
 WIDEN_MAX_S = 120.0  # the most that is added to one side at a time
+_widening: set[str] = set()  # clips that are getting more of the stream right now (in this program)
+_widening_guard = __import__("threading").Lock()
 
 
 def merge_words(old: list[dict], new: list[dict], shift: float, old_len: float) -> list[dict]:
@@ -623,13 +625,30 @@ def merge_words(old: list[dict], new: list[dict], shift: float, old_len: float) 
     kept = [{**w, "start": round(float(w["start"]) + shift, 3), "end": round(float(w["end"]) + shift, 3)} for w in old]
     if not kept:
         return list(new)
-    first, last = kept[0]["start"], kept[-1]["end"]
-    head = [w for w in new if float(w["end"]) <= min(a + 0.05, first)]
-    tail = [w for w in new if float(w["start"]) >= max(b - 0.05, last)]
-    return head + kept + tail
+    # A word that was cut in half by the old video's first or last moment is whole in the longer video: there the new
+    # word wins, and whatever the old words had of it goes.
+    head = [w for w in new if float(w["start"]) < a]
+    tail = [w for w in new if float(w["end"]) > b]
+    lo = float(head[-1]["end"]) - 0.05 if head else float("-inf")
+    hi = float(tail[0]["start"]) + 0.05 if tail else float("inf")
+    return head + [w for w in kept if w["start"] >= lo and w["end"] <= hi] + tail
 
 
 def widen_clip(d: Path, cfg: Config, before: float = 0.0, after: float = 0.0) -> dict:
+    """One at a time per clip: a second request while one runs would download into the same file. See ``_widen_clip``."""
+    key = str(d.resolve()).lower()
+    with _widening_guard:
+        if key in _widening:
+            raise ValueError("more of the stream is already being added to this clip; wait for it to finish, then press again")
+        _widening.add(key)
+    try:
+        return _widen_clip(d, cfg, before, after)
+    finally:
+        with _widening_guard:
+            _widening.discard(key)
+
+
+def _widen_clip(d: Path, cfg: Config, before: float = 0.0, after: float = 0.0) -> dict:
     """Download more of the stream around one clip: ``before`` seconds earlier and ``after`` seconds later than it has.
 
     The clip itself does not move: its start and end stay where they are, there is only more room to drag them into.
@@ -652,6 +671,8 @@ def widen_clip(d: Path, cfg: Config, before: float = 0.0, after: float = 0.0) ->
     work = d.parent.parent
     if not done(d / "source.mp4") or "fetch_start_s" not in state:
         raise ValueError("this clip has no downloaded video yet, so there is nothing to add to")
+    if not (d / "words.json").exists() and not state.get("error"):
+        raise ValueError("this clip is still being made (its captions are not written yet). Wait for its draft, then press again")
     meta = read_json(work / "meta.json", {}) or {}
     old_a = float(state["fetch_start_s"])
     old_len = float(state.get("source_duration_s") or (float(state.get("fetch_end_s", state["end_s"])) - old_a))
@@ -669,7 +690,7 @@ def widen_clip(d: Path, cfg: Config, before: float = 0.0, after: float = 0.0) ->
     if from_part:
         base = float(info["start_s"])
         new_a, new_b = max(base, new_a), min(base + float(info["duration_s"]), new_b)
-    if new_a >= old_a - 0.5 and new_b <= old_b + 0.5:
+    if old_a - new_a < 1.5 and new_b - old_b < 1.5:
         raise ValueError("there is nothing more to add on that side: the clip's video already reaches the "
                          + ("edge of the part you downloaded for the cutting board" if from_part else "start or the end of the video"))
     if new_b - new_a > MAX_FETCH_S:
@@ -695,7 +716,7 @@ def widen_clip(d: Path, cfg: Config, before: float = 0.0, after: float = 0.0) ->
             raise ToolError(f"the download came back no longer than before ({new_len:.0f} s): that part of the stream cannot be fetched (any more)")
         # the words of the longer video: YouTube's own captions when it has them, else the speech model listens
         words = None
-        if source.platform == "youtube" and not from_part:
+        if source.platform == "youtube":
             from . import ytcaptions
 
             whole = ytcaptions.video_words(source.url, work, cfg)
@@ -708,24 +729,36 @@ def widen_clip(d: Path, cfg: Config, before: float = 0.0, after: float = 0.0) ->
             ensure_sound(tmp, cfg)
             words = transcribe_file(tmp, cfg)
         had = read_json(d / "words.json", []) if (d / "words.json").exists() else []
-        words = merge_words(had, words, old_a - new_a, old_len)
-        # only now is anything of the clip touched
-        for attempt in range(8):
-            try:
-                os.replace(tmp, d / "source.mp4")
-                break
-            except PermissionError:
-                if attempt == 7:
-                    raise ValueError("the clip's video is open somewhere (playing on the page, or another job is using it). "
-                                     "Pause it, wait a moment and press the button again; nothing was changed") from None
-                time.sleep(0.4)
+        shift = old_a - new_a
+        words = merge_words(had, words, shift, old_len)
+        # The text of a clip (its title, its thumbnail) is written from "transcript". That stays the words of the stretch
+        # the clip had before, not of every second that was added around it.
+        said = " ".join(w["word"] for w in words if float(w["start"]) >= shift - 0.05 and float(w["end"]) <= shift + old_len + 0.05)
+        from .render import clip_render_lock
+
+        # Only now is anything of the clip touched, and never while its video is being made: the video, the words and
+        # the record change together.
+        with clip_render_lock(d):
+            for attempt in range(8):
+                try:
+                    os.replace(tmp, d / "source.mp4")
+                    break
+                except PermissionError:
+                    if attempt == 7:
+                        raise ValueError("the clip's video is open somewhere (playing on the page, or another job is using it). "
+                                         "Pause it, wait a moment and press the button again; nothing was changed") from None
+                    time.sleep(0.4)
+            write_json(d / "words.json", words)
+            remove(d / "wave.json")  # the sound wave of the trimmer belongs to the old video
+            state = update_clip(d / "clip.json", {"fetch_start_s": round(new_a, 3), "fetch_end_s": round(new_a + new_len, 3), "source_duration_s": round(new_len, 2),
+                                                  "fetch_seconds": round(time.monotonic() - t0, 1), "transcript": said or state.get("transcript") or ""})
     except BaseException:
-        remove(tmp)
+        for junk in (tmp, d / "source.wide.part.mp4"):  # the half-made download, and the downloader's own unfinished piece
+            try:
+                remove(junk)
+            except Exception as e:
+                log.warning("clip %s: %s could not be cleared away: %s", d.name, junk.name, e)
         raise
-    write_json(d / "words.json", words)
-    remove(d / "wave.json")  # the sound wave of the trimmer belongs to the old video
-    state = update_clip(d / "clip.json", {"fetch_start_s": new_a, "fetch_end_s": new_a + new_len, "source_duration_s": round(new_len, 2),
-                                          "fetch_seconds": round(time.monotonic() - t0, 1), "transcript": " ".join(w["word"] for w in words)})
     log.info("clip %s: its video now covers %.0f to %.0f seconds of the stream (was %.0f to %.0f), in %.0fs",
              d.name, new_a, new_a + new_len, old_a, old_b, state["fetch_seconds"])
     return state

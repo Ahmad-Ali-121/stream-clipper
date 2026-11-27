@@ -76,7 +76,15 @@ def stream_model_name(cfg: Config) -> str:
 
     if cfg.ai.speech_model != "auto":
         return cfg.ai.speech_model
-    return cfg.transcribe.model if hw.whisper_device(cfg)[0] == "cuda" else "small"
+    if hw.whisper_device(cfg)[0] == "cuda":
+        return cfg.transcribe.model
+    # Started from the page, nothing big is downloaded without a press, and the only press there is fetches the usual
+    # model. So when the small one is not on this computer but the usual one is, the usual one reads the stream (slower).
+    from .health import captions_blocked
+
+    if captions_blocked(cfg, "small") and not captions_blocked(cfg):
+        return cfg.transcribe.model
+    return "small"
 
 
 def _speech_language(cfg: Config) -> str | None:

@@ -234,7 +234,7 @@ body.editing #errbox{position:fixed;top:10px;left:50%;transform:translateX(-50%)
 .edhead h3{font:600 18px/1.25 var(--display);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}
 .edhead .sp{flex:1}
 .clip.open .vid{align-self:start;position:sticky;top:78px;background:none}
-.clip.open .vid video{border-radius:var(--r2);max-height:calc(100vh - 170px);cursor:default}
+.clip.open .vid video{border-radius:var(--r2);max-height:max(220px,calc(100vh - 244px));cursor:default}
 .clip.open .vid .none{border-radius:var(--r2);border:1px dashed var(--line2)}
 .clip.open .vid small{display:block;margin-top:8px;color:var(--muted);font-size:12px;text-align:center}
 .clip.open .vtabs{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-top:10px}
@@ -625,7 +625,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
         <div>
           <h2 class="sect">Logo, closing text and music</h2>
           <div class="card"><div class="body">
-        <details class="sec" id="brandbox" open><summary>Branding <small>your logo, an outro line, music</small></summary>
+        <details class="sec" id="brandbox" open><summary>Logo, closing text and music <small>added to every clip</small></summary>
           <label class="f">Your logo (a small picture in a corner of every clip)</label>
           <div class="btns" style="margin-top:0"><button class="btn" onclick="$('g-logofile').click()">Choose an image</button><span class="saved" id="g-logoname"></span><button class="btn quiet" id="g-logooff" hidden onclick="act('/api/options',{brand_logo:''})">Take it off</button></div>
           <input type="file" id="g-logofile" accept=".png,.jpg,.jpeg,.webp,.gif" hidden onchange="brandFile(this,'logo')">
@@ -989,7 +989,7 @@ async function act(url,body){
 const LK={n:0,busy:false,again:false,which:'open',timer:0,v:''};
 function lookSoon(){clearTimeout(LK.timer);LK.timer=setTimeout(lookDraw,900)}
 function lookShow(w){LK.which=w;for(const b of $('lk-tabs').children)b.classList.toggle('on',b.dataset.w===w);
-  if(LK.v){$('lk-img').src='/api/look/preview/'+w+'.jpg?v='+LK.v;$('lk-img').hidden=false;$('lk-empty').textContent=''}}
+  if(LK.v&&!LK.busy){$('lk-img').src='/api/look/preview/'+w+'.jpg?v='+LK.v;$('lk-img').hidden=false;$('lk-empty').textContent=''}}
 function lookOther(){LK.n++;lookDraw()}
 async function lookDraw(){
   if(curPage!=='look')return;
@@ -997,7 +997,7 @@ async function lookDraw(){
   LK.busy=true;$('lk-phone').classList.add('wait');$('lk-empty').textContent='Making the preview… a few seconds';$('lk-other').disabled=true;
   let r;try{const q=await fetch('/api/look/preview?n='+LK.n);r=q.ok?await q.json():{error:await q.text()}}catch(e){r={error:'The program is not answering: '+e}}
   LK.busy=false;$('lk-phone').classList.remove('wait');$('lk-other').disabled=false;
-  if(r.error){LK.v='';$('lk-img').hidden=true;$('lk-empty').textContent=plainOf(r.error,true)||r.error;$('lk-note').textContent=''}
+  if(r.error){LK.v='';$('lk-img').hidden=true;if(plainOf(r.error,true))$('lk-empty').innerHTML=plainHtml(r.error);else $('lk-empty').textContent=r.error;$('lk-note').textContent=''}
   else{LK.v=r.v;lookShow(LK.which);$('lk-other').hidden=r.of<2;
     $('lk-note').textContent='Your clip: '+r.title+'. Shown as if it were '+Math.round(r.seconds)+' seconds long, so the end comes quickly.'+(r.has_hook?'':' It has no opening text yet, so an example text is shown.')}
   if(LK.again){LK.again=false;lookDraw()}}
@@ -1104,10 +1104,11 @@ function cardHtml(c){
     +((c.videos||[]).includes('final.mp4')&&!(c.videos||[]).includes('final_b.mp4')?'<button onclick="makeB(\''+k+'\',this)" title="Make version B now so you can compare it with version A">Make B preview</button>':'')+'</div>':'';
   /* The picture: fill the screen (some of a wide stream is cut off), or the whole picture with a blurred copy above and below. */
   const fm=c.framing, whole=fm&&fm.layout==='blur', boxes=fm&&!whole&&fm.custom;
-  const frow=fm&&(c.videos||[]).includes('source.mp4')?'<div class="frow"><span>Picture:</span>'
-    +'<button class="'+(!whole&&!boxes?'on':'')+'" title="The program chooses what to show: the video fills the screen, and the face of the streamer goes on top when the stream has a face camera" onclick="quickFrame(\''+k+'\',\'auto\',this)">Automatic</button>'
-    +'<button class="'+(whole?'on':'')+'" title="Nothing is cut off: the whole stream picture in the middle, with a blurred, moving copy of it filling the space above and below" onclick="quickFrame(\''+k+'\',\'whole\',this)">Whole picture</button>'
-    +'<button class="'+(boxes?'on':'')+'" title="Draw yourself what is shown: a box for the face and a box for the video. The boxes keep the right shape by themselves" onclick="openBoxes(\''+k+'\')">Choose boxes…</button></div>':'';
+  const wk=WORK.get(k), dis=wk?' disabled':'';
+  const frow=fm&&(c.videos||[]).includes('source.mp4')?'<div class="frow"><span>'+(wk?esc(wk):'Picture:')+'</span>'
+    +'<button class="'+(!whole&&!boxes?'on':'')+'" title="The program chooses what to show: the video fills the screen, and the face of the streamer goes on top when the stream has a face camera"'+dis+' onclick="quickFrame(\''+k+'\',\'auto\',this)">Automatic</button>'
+    +'<button class="'+(whole?'on':'')+'" title="Nothing is cut off: the whole stream picture in the middle, with a blurred, moving copy of it filling the space above and below"'+dis+' onclick="quickFrame(\''+k+'\',\'whole\',this)">Whole picture</button>'
+    +'<button class="'+(boxes?'on':'')+'" title="Draw yourself what is shown: a box for the face and a box for the video. The boxes keep the right shape by themselves"'+dis+' onclick="openBoxes(\''+k+'\')">Choose boxes…</button></div>':'';
   const vid=c.video?'<video'+(openKey===k?' controls':'')+' preload="metadata" src="/media/'+k+'/'+c.video+'?v='+c.mtime+(openKey===k?'':'#t=1.5')+'"></video>'+tabs+'<small>'+shown+'</small>'+frow
     :'<div class="none">'+(c.error?'This clip could not be made.':'The video is not ready yet.')+'</div>';
   const pc=c.points>=70?'good':(c.points>=40?'':'meh');
@@ -1186,10 +1187,10 @@ function cardHtml(c){
    +'<div><label class="f">End</label><input type="number" step="0.5" name="cut_end_s" value="'+esc(c.cut_end_s??c.end_s)+'"></div>'
    +'<div><label class="f">What the clip shows</label><select name="layout">'+lay+'</select></div></div>'
    +'<p class="help" style="margin-top:6px">Start and end can be anywhere from '+esc(c.lo)+' to '+esc(c.hi)+' seconds. What the clip shows now: '+esc(c.layout_reason||'not checked yet')+'.</p>'
-   +((c.videos||[]).includes('source.mp4')?'<div class="btns" style="margin-top:0;align-items:center"><span class="help" style="margin:0">Need more of the stream?</span>'
-       +'<button class="btn" title="Download 15 more seconds in front of what this clip has, so its start can be moved earlier" onclick="widen(\''+k+'\',15,0,this)">Add 15 s before</button>'
-       +'<button class="btn" title="Download 15 more seconds after what this clip has, so its end can be moved later" onclick="widen(\''+k+'\',0,15,this)">Add 15 s after</button>'
-       +'<button class="btn" title="Download 30 more seconds on each side" onclick="widen(\''+k+'\',30,30,this)">Add 30 s on both sides</button></div>':'')
+   +((c.videos||[]).includes('source.mp4')?'<div class="btns wrow" style="margin-top:0;align-items:center"><span class="help" style="margin:0">'+(wk?esc(wk):'Need more of the stream?')+'</span>'
+       +'<button class="btn" title="Download 15 more seconds in front of what this clip has, so its start can be moved earlier"'+dis+' onclick="widen(\''+k+'\',15,0,this)">Add 15 s before</button>'
+       +'<button class="btn" title="Download 15 more seconds after what this clip has, so its end can be moved later"'+dis+' onclick="widen(\''+k+'\',0,15,this)">Add 15 s after</button>'
+       +'<button class="btn" title="Download 30 more seconds on each side"'+dis+' onclick="widen(\''+k+'\',30,30,this)">Add 30 s on both sides</button></div>':'')
    +(c.framing?'<div class="btns" style="margin-top:0"><button class="btn" onclick="openBoxes(\''+k+'\')">Set the face box and the video box</button>'
        +'<button class="btn" title="Make the draft of every unfinished clip of this video again, with the caption style, template, logo and music chosen now" onclick="remakeAll(\''+k+'\')">Make this video\'s drafts again</button></div>':'')
    +'<label class="check"><input type="checkbox" name="disclosure"'+(c.disclosure?' checked':'')+'> Show an on-screen ad label (for paid campaign clips)</label></details>'
@@ -1202,7 +1203,7 @@ function cardHtml(c){
    +'<label class="f">Or describe the picture yourself <small>(ChatGPT draws it; it still sees the clip)</small></label>'
    +'<textarea name="t_cover" maxlength="2000" style="min-height:64px" oninput="coverText.set(\''+k+'\',this.value)" placeholder="For example: the streamer shocked on the left, the bike upside down in the air on the right, big yellow text NO WAY">'+esc(coverText.has(k)?coverText.get(k):(cv.prompt||''))+'</textarea>'
    +'<label class="f">Not wanted in this clip\'s thumbnail <small>(optional; added to your general list on the Look and branding page)</small></label>'
-   +'<input type="text" name="cover_avoid" maxlength="500" value="'+esc(c.cover_avoid||'')+'" placeholder="For example: no blood, do not show the other player\'s name, no red arrows">'
+   +'<input type="text" name="t_cover_avoid" maxlength="500" oninput="coverAvoid.set(\''+k+'\',this.value)" value="'+esc(coverAvoid.has(k)?coverAvoid.get(k):(c.cover_avoid||''))+'" placeholder="For example: no blood, do not show the other player\'s name, no red arrows">'
    +'<div class="btns"><button class="btn" onclick="makeCover(\''+k+'\',\'prompt\',this)">Make it from my description</button>'
    +(cv.made?'<a class="btn" href="/media/'+k+'/cover.jpg" download="thumbnail.jpg">Download</a><button class="btn quiet" onclick="makeCover(\''+k+'\',\'none\',this)">Remove thumbnail</button>':'')+'</div></details>'
    +(c.exported?'<details'+P('posted')+'><summary>Posted <small>log where you posted it; keeps views, payouts and rejections under Posted and earnings</small></summary>'
@@ -1306,7 +1307,7 @@ async function loadClips(){
 async function save(key,extra){
   const el=$(domId(key)), g=n=>el.querySelector('[name='+n+']');
   if(!el){toast('That clip is not on the page any more.',true);return false}
-  const all={hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,simple:g('simple').checked,ab:g('ab').checked,cover_avoid:g('cover_avoid').value.trim(),
+  const all={hook:g('hook').value,hook_b:g('hook_b').value,intro:g('intro').value,intro_b:g('intro_b').value,explainer:g('explainer').checked,simple:g('simple').checked,ab:g('ab').checked,cover_avoid:g('t_cover_avoid').value.trim(),
     title:g('title').value,title_b:g('title_b').value,description:g('description').value,tags:g('tags').value,
     layout:g('layout').value,disclosure:g('disclosure').checked,cut_start_s:parseFloat(g('cut_start_s').value),cut_end_s:parseFloat(g('cut_end_s').value)};
   /* What the card showed when it was drawn. A field you did not touch is not sent: the card may be older than the clip
@@ -1362,6 +1363,7 @@ async function saveAvoid(){
   if(await act('/api/options',{thumbnail_avoid:$('o-avoid').value})){avoidDirty=false;toast($('o-avoid').value.trim()?'Saved. ChatGPT thumbnails made from now on leave these out.':'Saved. The list is empty now.')}
 }
 /* A thumbnail for one clip: from the clip (free), by ChatGPT on its own, from your description, or taken off again. */
+const coverAvoid=new Map();   /* what is typed in a clip's not-wanted box, kept while the card is redrawn */
 async function makeCover(key,how,btn){
   const el=$(domId(key)); if(!el)return;
   const text=el.querySelector('[name=t_cover]').value.trim();
@@ -1370,7 +1372,7 @@ async function makeCover(key,how,btn){
   const box=btn.closest('details'), was=btn.textContent;
   for(const b of box.querySelectorAll('button'))b.disabled=true;
   btn.textContent=how==='frame'?'Making…':(how==='none'?'Removing…':'ChatGPT is drawing… one to three minutes');
-  let r;try{r=await fetch('/api/clip/'+key+'/cover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({how:how,prompt:text,avoid:el.querySelector('[name=cover_avoid]').value})})}
+  let r;try{r=await fetch('/api/clip/'+key+'/cover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({how:how,prompt:text,avoid:el.querySelector('[name=t_cover_avoid]').value})})}
   catch(e){toast('The program is not answering: '+e,true);for(const b of box.querySelectorAll('button'))b.disabled=false;btn.textContent=was;return}
   const bad=r.ok?'':await r.text();
   coverOpen.add(key); if(document.activeElement)document.activeElement.blur(); el.dataset.m='';
@@ -1417,31 +1419,47 @@ function showVid(key,name,btn){const el=$(domId(key)),v=el.querySelector('.vid v
 async function makeB(key,btn){btn.disabled=true;btn.textContent='Making B…';
   if(await post('/api/clip/'+key+'/render-b')){const el=$(domId(key));if(document.activeElement)document.activeElement.blur();if(el)el.dataset.m='';toast('Version B is ready');loadClips()}else{btn.disabled=false;btn.textContent='Make B preview'}}
 
+/* Clips with a long request running (key -> what is being done). It is drawn on the card, so the note and the
+   switched-off buttons survive the card being redrawn, and a second press on the same clip is refused. */
+const WORK=new Map();
+function workStart(key,text){
+  if(WORK.has(key)){toast('Wait a moment: '+WORK.get(key),true);return false}
+  WORK.set(key,text);
+  const el=$(domId(key));if(el){for(const b of el.querySelectorAll('.frow button,.wrow button'))b.disabled=true;for(const n of el.querySelectorAll('.frow span,.wrow span'))n.textContent=text}
+  return true}
+/* The request is over. What was typed on the card meanwhile is saved, not thrown away; otherwise the card is drawn again. */
+async function workEnd(key){
+  WORK.delete(key);
+  const el=$(domId(key));
+  if(el&&el.dataset.dirty==='1'&&await save(key))return;
+  if(el){if(el.dataset.dirty!=='1'){if(el.contains(document.activeElement))document.activeElement.blur();el.dataset.m=''}
+    else for(const b of el.querySelectorAll('.frow button,.wrow button'))b.disabled=false}   /* the save was refused: the card stays as typed, usable again */
+  await loadClips()}
 /* The picture of one clip, in one click: automatic framing, or the whole stream picture on a blurred copy of itself. */
 async function quickFrame(key,mode,btn){
-  const card=$(domId(key)), row=btn.parentElement, was=btn.textContent;
   if(btn.classList.contains('on')&&mode==='whole')return;
-  if(card&&card.dataset.dirty==='1'&&!(await save(key)))return;   /* what was typed is saved first, so it is not lost when the card is redrawn */
-  for(const b of row.querySelectorAll('button'))b.disabled=true;btn.textContent='Making the draft again…';
-  const r=await send('/api/clip/'+key+'/framing',mode==='whole'?{layout:'blur',game:[0,0,1,1]}:{auto:true});
-  for(const b of row.querySelectorAll('button'))b.disabled=false;btn.textContent=was;
-  if(document.activeElement)document.activeElement.blur();if(card){card.dataset.m='';card.dataset.dirty=''}
+  if(WORK.has(key)){toast('Wait a moment: '+WORK.get(key),true);return}
+  const card=$(domId(key));
+  if(card&&card.dataset.dirty==='1'&&!(await save(key)))return;   /* what was typed is saved first */
+  if(!workStart(key,'Making the draft again… up to a minute'))return;
+  for(const o of document.querySelectorAll('#clips video'))o.pause();   /* its video file is about to be replaced */
+  /* keep: the boxes remembered for this streamer stay; only this clip goes back to what the program chooses */
+  const r=await send('/api/clip/'+key+'/framing',mode==='whole'?{layout:'blur',game:[0,0,1,1]}:{auto:true,keep:true});
+  await workEnd(key);
   if(r.error)toast((/^the boxes are saved/i.test(r.error)?'':'The picture was not changed: ')+r.error,true);
-  else toast(mode==='whole'?'This clip now shows the whole picture, with blur above and below. The draft is made again.':'Back to the automatic picture. The draft is made again.');
-  loadClips()}
+  else toast(mode==='whole'?'This clip now shows the whole picture, with blur above and below. The draft is made again.':'Back to the automatic picture. The draft is made again.')}
 /* More of the stream in front of or behind one clip, so its start or end can be dragged further out. */
 async function widen(key,before,after,btn){
-  const card=$(domId(key)), row=btn.parentElement, was=btn.textContent;
+  if(WORK.has(key)){toast('Wait a moment: '+WORK.get(key),true);return}
+  const card=$(domId(key));
   if(card&&card.dataset.dirty==='1'&&!(await save(key)))return;
+  if(!workStart(key,'Downloading more of the stream… a minute or two'))return;
   /* Windows cannot replace a video file that a player still has open */
-  if(card)for(const v of card.querySelectorAll('video')){v.pause();v.removeAttribute('src');v.load()}
-  for(const b of row.querySelectorAll('button'))b.disabled=true;btn.textContent='Downloading… a minute or two';
+  {const el=$(domId(key));if(el)for(const v of el.querySelectorAll('video')){v.pause();v.removeAttribute('src');v.load()}}
   const r=await send('/api/clip/'+key+'/widen',{before:before,after:after});
-  for(const b of row.querySelectorAll('button'))b.disabled=false;btn.textContent=was;
-  if(document.activeElement)document.activeElement.blur();if(card){card.dataset.m='';card.dataset.dirty=''}
-  if(r.error)toast('No more of the stream was added: '+r.error,true);
-  else toast('Added. The clip itself did not move: drag its start or end into the new part, then press Save changes.');
-  loadClips()}
+  await workEnd(key);
+  if(r.error)toast((/^the seconds were added/i.test(r.error)?'':'No more of the stream was added: ')+r.error,true);
+  else toast('Added. The clip itself did not move: drag its start or end into the new part, then press Save changes.')}
 /* ---------- trimmer: drag the start and end over the sound wave ---------- */
 async function initTrim(key){
   const el=$(domId(key)), box=el.querySelector('.trim'), c=known.find(x=>x.key===key);
@@ -1591,7 +1609,7 @@ async function brandFile(inp,kind){
   const f=inp.files[0];inp.value='';if(!f)return;
   try{const r=await fetch('/api/brand/upload?kind='+kind+'&name='+encodeURIComponent(f.name),{method:'POST',body:f});
     if(!r.ok){toast('The file could not be copied: '+await r.text(),true);return}
-    show(await r.json());toast(kind==='logo'?'Logo set. It is added to drafts and videos made from now on.':'Music set. It is added to drafts and videos made from now on.')}
+    show(await r.json());if(curPage==='look')lookSoon();toast(kind==='logo'?'Logo set. It is added to drafts and videos made from now on.':'Music set. It is added to drafts and videos made from now on.')}
   catch(e){toast('The program is not answering: '+e,true)}
 }
 
@@ -1867,7 +1885,7 @@ function helpWhere(el){
   if(el.closest('#side'))out.push('menu on the left');
   if(page)out.push('page "'+(PAGE_NAME[Object.keys(PAGES).find(k=>PAGES[k]===page.id)]||page.id)+'"');
   if(part)out.push('tab "'+SUB_NAME[Object.keys(SUBS).find(k=>SUBS[k]===part.id)]+'"');
-  if(clip)out.push('on each clip\'s card (this is the first clip\'s)'+(el.closest('.info,.edhead')?', in its editor (press Edit on the clip)':''));
+  if(clip)out.push('on each clip\'s card (this is the first clip\'s)'+(el.closest('.info,.edhead,.frow,.vtabs')?', in its editor (press Edit on the clip)':''));
   if(card&&!clip){let h=card.querySelector('h2');if(!h){let p=card.previousElementSibling;while(p&&!p.matches('.sect'))p=p.previousElementSibling;h=p}if(h&&h.textContent.trim())out.push(h.textContent.trim().replace(/\s+/g,' '))}
   for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details')){const s=d.querySelector('summary');if(s&&s!==el&&!s.hidden)out.push((d.classList.contains('pane')?'under the tab "':'inside the fold-out "')+s.textContent.trim().replace(/\s+/g,' ').slice(0,50)+'"')}
   if(modal)out.push(modal.id==='stopbox'?'in the "Stop making videos?" window':'in the box editor window');
@@ -2038,7 +2056,7 @@ function helpReveal(el){
   if(el.closest('#sortrow'))$('sortrow').hidden=false;
   if(el.closest('#drawer'))actToggle(true);
   const clip=el.closest('.clip');if(clip&&!clip.classList.contains('open')&&clip.offsetParent===null&&filter!=='all')setFilter('all');
-  if(clip&&el.closest('.info,.edhead')&&!clip.classList.contains('open')&&clip._c){const pane=el.closest('details.pane');openClip(clip._c.key,pane?pane.dataset.tab:'text')}
+  if(clip&&el.closest('.info,.edhead,.frow,.vtabs')&&!clip.classList.contains('open')&&clip._c){const pane=el.closest('details.pane');openClip(clip._c.key,pane?pane.dataset.tab:'text')}
   else if(clip&&clip.classList.contains('open')){const pane=el.closest('details.pane');if(pane&&!pane.open)edGo(clip._c.key,pane.dataset.tab)}
   for(let d=el.closest('details');d;d=d.parentElement&&d.parentElement.closest('details'))if(!d.open&&!d.classList.contains('pane')&&d.querySelector('summary')!==el)d.open=true;
   let show=el;while(show&&show.offsetParent===null&&show.parentElement)show=show.parentElement;   /* hidden right now: point at what holds it */

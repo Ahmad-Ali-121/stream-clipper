@@ -81,7 +81,7 @@ def _load_locked(cfg: Config, name: str, device: str, compute_type: str, key: tu
         models.mkdir(parents=True, exist_ok=True)
         from .health import speech_model_there
 
-        if speech_model_there(cfg):
+        if speech_model_there(cfg, name):
             log.info("loading whisper model %s (%s, %s)", name, device, compute_type)
         else:
             log.warning("the speech model %s is not on this computer yet: DOWNLOADING IT NOW, once (about 1.6 GB for the default model; "

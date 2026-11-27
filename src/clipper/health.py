@@ -182,6 +182,22 @@ def captions_blocked(cfg: Config, name: str | None = None) -> str:
     return NEED_CAPTIONS
 
 
+def model_repos(name: str) -> set[str]:
+    """The repository names (lower case) the speech library downloads a model from, for a name as written in the settings.
+
+    Its folder under models/ is "models--<owner>--<repository>". Matching the whole repository name matters: "large-v3"
+    must not be taken for there because "faster-distil-whisper-large-v3" is, and "distil-large-v3" (kept as
+    "faster-distil-whisper-large-v3") must not be called missing because the folder does not end in that name.
+    """
+    n = str(name).replace("\\", "/").strip().lower()
+    if "/" in n:  # owner/repository, written out
+        return {n.split("/")[-1]}
+    n = {"large": "large-v3", "turbo": "large-v3-turbo"}.get(n, n)
+    if n.startswith("distil-"):
+        return {"faster-distil-whisper-" + n[len("distil-"):], n + "-ct2"}
+    return {"faster-whisper-" + n}
+
+
 def speech_model_there(cfg: Config, name: str | None = None) -> bool:
     """Whether the speech model is on this computer already. Loading it when it is not downloads it (about 1.6 GB
     for the default one), and a download that size is only started by the person's own press."""
@@ -189,8 +205,8 @@ def speech_model_there(cfg: Config, name: str | None = None) -> bool:
     try:
         if Path(name).exists():
             return True
-        short = name.replace("\\", "/").split("/")[-1].lower()
-        return any(d.name.lower().endswith(short) and any(d.glob("snapshots/*/model.bin")) for d in (cfg.data_dir / "models").glob("models--*"))
+        wanted = model_repos(name)
+        return any(d.name.lower().split("--")[-1] in wanted and any(d.glob("snapshots/*/model.bin")) for d in (cfg.data_dir / "models").glob("models--*"))
     except OSError:
         return False
 
