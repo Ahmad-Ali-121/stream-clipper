@@ -247,6 +247,16 @@ body.editing #errbox{position:fixed;top:10px;left:50%;transform:translateX(-50%)
 .frow button{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:4px;height:26px;padding:0 9px;font-size:12px;cursor:pointer}
 .frow button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--text)}
 .frow button:disabled{opacity:.55;cursor:default}
+/* selecting several clips: a tick box on every tile, and a bar with what can be done to the ticked ones */
+.pk{display:none}
+#clips.selecting .clip:not(.open) .pk{display:flex;position:absolute;left:8px;top:8px;z-index:3;width:28px;height:28px;align-items:center;justify-content:center;background:rgba(10,11,13,.85);border:1px solid var(--line2);border-radius:5px;cursor:pointer}
+#clips.selecting .clip:not(.open) .pk input{width:17px;height:17px;margin:0;accent-color:var(--accent);cursor:pointer}
+#clips.selecting .clip:not(.open) .vid .score{display:none}
+#clips.selecting .clip:not(.open) .vid{cursor:pointer}
+#clips.selecting .clip:not(.open):has(.pk input:checked){outline:2px solid var(--accent);outline-offset:-2px}
+.bulkbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-6px 0 14px;padding:10px 12px;background:var(--surface);border:1px solid var(--line2);border-radius:var(--r2);position:sticky;top:8px;z-index:5}
+.bulkbar .sp{flex:1}.bulkbar b{font-size:13px;margin-right:4px}.bulkbar select{height:32px;width:auto;max-width:270px}
+#b-select.on{background:var(--accent-soft);border-color:var(--accent);color:var(--text)}
 .clip.open .info{display:block;min-width:0;max-width:860px}
 @media (max-width:820px){.clip.open{grid-template-columns:1fr;padding:0 14px 24px}.clip.open .vid{position:static;max-width:300px}}
 .badge{padding:0 8px;border-radius:3px;font:600 11.5px/22px var(--ui);background:var(--surface2);border:1px solid var(--line2);color:var(--muted);white-space:nowrap}
@@ -559,6 +569,7 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
         <div class="note" id="f-note" hidden>Nothing made yet since the program was started.</div><ul class="ready" id="f-ready"></ul></div>
       <div class="listbar"><div class="filters" id="filters"></div><span class="sp"></span>
         <input type="text" id="s-find" placeholder="Search titles and words" oninput="setArrange()" aria-label="Search the clips">
+        <button class="btn" id="b-select" onclick="selMode()" title="Tick several clips and approve, reject, change or delete them together">Select several</button>
         <button class="btn" id="b-filter" onclick="$('sortrow').hidden=!$('sortrow').hidden" title="Order, streamer, how it was found, when"><svg class="i" aria-hidden="true"><use href="#i-filter"/></svg>Sort and filter</button></div>
       <div class="sortrow" id="sortrow" hidden>
       <label>Order <select id="s-sort" onchange="setArrange()"><option value="new">Newest first</option><option value="score">Best score first</option><option value="old">Oldest first</option></select></label>
@@ -569,6 +580,20 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
         <label>Show where an app covers the video <select id="z-pick" onchange="setZones()"><option value="">Off</option><option value="tiktok">TikTok</option><option value="reels">Instagram Reels</option><option value="shorts">YouTube Shorts</option></select></label>
         <button class="btn" id="s-clear" hidden onclick="clearArrange()">Clear filters</button>
         <span class="help" id="s-count" style="margin:0"></span>
+      </div>
+      <div class="bulkbar" id="bulkbar" hidden>
+        <b id="bulk-n">0 selected</b>
+        <button class="btn" onclick="selAll()" title="Tick every clip in the list you are looking at">Select all shown</button>
+        <button class="btn quiet" onclick="selNone()">Untick all</button>
+        <span class="sp"></span>
+        <button class="btn ok" data-yours onclick="bulk('approve')" title="Approve every ticked clip">Approve</button>
+        <button class="btn" data-yours onclick="bulk('reject')" title="Reject every ticked clip">Reject</button>
+        <button class="btn" data-yours onclick="bulk('review')" title="Put every ticked clip back under To review">Back to review</button>
+        <select id="bulk-more" aria-label="More things to do with the ticked clips"><option value="">More to do with them…</option><option value="pending">Move to Pending (set aside for later)</option><option value="whole">Picture: show the whole picture</option><option value="auto">Picture: automatic</option><option value="b_on">Version B: make it</option><option value="b_off">Version B: do not make it</option><option value="x_on">Explainer version: make it</option><option value="x_off">Explainer version: do not make it</option><option value="del">Delete forever</option></select>
+        <button class="btn" data-yours onclick="bulkMore()">Do it</button>
+        <button class="btn quiet" id="bulk-stop" hidden onclick="BULK.stop=true;this.disabled=true">Stop after this one</button>
+        <button class="btn quiet" onclick="selMode(false)" title="Leave selecting; nothing is changed">Done</button>
+        <span class="help" id="bulk-note" style="margin:0;flex-basis:100%">Press a clip to tick it. Then choose what to do with the ticked clips.</span>
       </div>
       <div class="clips" id="clips" data-filter="candidate"></div>
       <div class="empty" id="empty" hidden></div>
@@ -587,9 +612,17 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
         <div class="capprev" id="capprev" aria-hidden="true"></div>
         <label class="f" for="o-anim">How the captions move</label>
         <select id="o-anim" onchange="act('/api/options',{caption_animation:val('o-anim')})"></select>
+        <label class="f" for="p-up">Captions higher or lower <small id="p-upv"></small></label>
+        <input type="range" id="p-up" min="80" max="1500" step="10" oninput="posText()" onchange="savePos()">
+        <label class="f" for="p-side">Captions left or right <small id="p-sidev"></small></label>
+        <input type="range" id="p-side" min="-300" max="300" step="10" oninput="posText()" onchange="savePos()">
+        <div class="btns" style="margin-top:6px"><button class="btn quiet" onclick="$('p-up').value=520;$('p-side').value=0;posText();savePos()" title="A little below the middle, centred">Back to the usual place</button></div>
+        <p class="help" style="margin-top:4px">The preview on the right shows where they sit. A small face in a bottom corner, and some templates, move the captions out of their own way.</p>
         <details class="sec" id="lookbox"><summary>Your own caption style <small>font, colours, size; save it under a name to use again</small></summary>
-          <label class="f" for="k-font">Font (one installed on this computer)</label>
-          <input type="text" id="k-font" list="k-fonts"><datalist id="k-fonts"><option>Arial Black</option><option>Impact</option><option>Segoe UI Black</option><option>Bahnschrift</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Georgia</option><option>Comic Sans MS</option><option>Franklin Gothic Heavy</option><option>Montserrat</option><option>Poppins</option></datalist>
+          <label class="f" for="k-pick">Font <small>20 good caption fonts come with the program</small></label>
+          <select id="k-pick" onchange="pickFont()"></select>
+          <label class="f" for="k-font">Or type the name of a font installed on this computer</label>
+          <input type="text" id="k-font" list="k-fonts" oninput="$('k-pick').value=''"><datalist id="k-fonts"><option>Arial Black</option><option>Impact</option><option>Segoe UI Black</option><option>Bahnschrift</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Georgia</option><option>Comic Sans MS</option><option>Franklin Gothic Heavy</option><option>Montserrat</option><option>Poppins</option></datalist>
           <div class="three"><div><label class="f" for="k-size">Size</label><input type="number" id="k-size" min="40" max="160"></div>
             <div><label class="f" for="k-outline">Outline thickness</label><input type="number" id="k-outline" min="0" max="14"></div>
             <div><label class="f" for="k-words">Words shown at once</label><input type="number" id="k-words" min="1" max="6"></div></div>
@@ -747,6 +780,26 @@ img.cover{width:190px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r);
         <div class="note" id="a-local"></div>
         <div class="btns"><button class="btn" id="b-aicheck" onclick="act2('/api/ai/check')">Check again</button>
           <button class="btn" id="b-localai" data-yours hidden onclick="localAi()">Set up the free AI</button></div>
+          </div></div>
+          <h2 class="sect">Narrator voice <small>for explainer videos</small></h2>
+          <div class="card"><div class="body">
+        <p class="help" style="margin:0 0 4px">The voice that introduces the clip in an explainer version. The free voice runs on this computer. ElevenLabs sounds more natural, but it is a paid service and needs your own key.</p>
+        <label class="f" for="v-back">Where the voice comes from</label>
+        <select id="v-back" onchange="voiceBack()"><option value="kokoro">This computer (free)</option><option value="elevenlabs">ElevenLabs (paid, your own key)</option></select>
+        <div id="v-local">
+          <label class="f" for="v-kokoro">Voice <small>the best ones of the free voice model</small></label>
+          <select id="v-kokoro" onchange="act('/api/options',{voice_kokoro:val('v-kokoro')})"></select>
+          <label class="f" for="v-speed">Speaking speed <small id="v-speedv"></small></label>
+          <input type="range" id="v-speed" min="0.7" max="1.4" step="0.05" oninput="$('v-speedv').textContent=this.value+'×'" onchange="act('/api/options',{voice_speed:+this.value})">
+        </div>
+        <div id="v-eleven" hidden>
+          <div class="note" id="v-state"></div>
+          <div class="two"><div><label class="f" for="v-emodel">ElevenLabs model <small>best sounding first</small></label><select id="v-emodel" onchange="act('/api/options',{voice_eleven_model:val('v-emodel')})"></select></div>
+            <div><label class="f" for="v-evoice">Voice</label><select id="v-evoice" onchange="act('/api/options',{voice_eleven_voice:val('v-evoice')})"></select></div></div>
+        </div>
+        <div class="btns"><button class="btn" id="b-vlisten" onclick="voiceListen(this)" title="Hear one short line in the voice as it is set now">Listen</button>
+          <button class="btn" id="b-vcheck" onclick="voiceCheck(false)" title="Asks ElevenLabs whether your key works and which models and voices it offers. Costs nothing">Check ElevenLabs</button></div>
+        <p class="help" id="v-help" style="margin-top:6px"></p>
           </div></div>
         </div>
       </div>
@@ -1143,7 +1196,7 @@ function cardHtml(c){
     :where==='rejected'?'<button class="btn" onclick="save(\''+k+'\',{status:\'candidate\',held:false})">Back to review</button>':'';
   return '<div class="edhead"><button class="btn" onclick="closeClip()" title="Back to the list (Esc). Changes are saved.">'+ICON.back+'Clips</button><h3>'+esc(title)+'</h3><span class="badge">'+STATUS_TEXT[where]+'</span>'
    +'<span class="when">'+esc(who)+' · at '+clock(c.start_s)+' in the stream · '+secs+' s</span><span class="sp"></span>'+decide+'</div>'
-   +'<div class="vid">'+vid+'<span class="score num '+pc+'" title="One score from chat, sound, picture and AI. Higher is better.">'+c.points+'</span><span class="dur num">'+Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0')+'</span></div>'
+   +'<div class="vid">'+vid+'<label class="pk" title="Tick to select this clip"><input type="checkbox" aria-label="Select this clip"'+(SEL.has(k)?' checked':'')+' onchange="selSet(\''+k+'\',this.checked)"></label><span class="score num '+pc+'" title="One score from chat, sound, picture and AI. Higher is better.">'+c.points+'</span><span class="dur num">'+Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0')+'</span></div>'
    +'<div class="tile"><button class="tt" onclick="openClip(\''+k+'\')" title="Open this clip to edit it">'+esc(title)+'</button>'
    +'<div class="tm"><span class="who">'+esc(who)+'</span><span class="newtag" title="Made in the last hour and not reviewed yet"'+(isNew(c)?'':' hidden')+'>NEW</span>'
    +'<span class="when2" title="When this clip was made'+(c.decided_at?'. Decided '+esc(c.decided_at):'')+'">'+madeText(c.made_at)+'</span></div>'
@@ -1579,17 +1632,69 @@ function drawLooks(s){
   /* The form follows the style in use, unless you are in the middle of changing it. */
   const key=JSON.stringify(now);
   if(key!==lookSeen&&!$('lookbox').contains(document.activeElement)){lookSeen=key;
-    $('k-font').value=now.font||'';$('k-size').value=now.font_size||88;$('k-outline').value=now.outline??6;$('k-words').value=now.max_words||3;
+    $('k-font').value=now.font||'';fontPick(s,now.font);$('k-size').value=now.font_size||88;$('k-outline').value=now.outline??6;$('k-words').value=now.max_words||3;
     $('k-text').value=hex(now.text_color);$('k-active').value=hex(now.active_color);$('k-upper').checked=!!now.uppercase}
   const cp=$('capprev'), t=now.uppercase?['NO WAY','HE','DID THAT']:['No way','he','did that'];
-  cp.style.fontFamily='"'+(now.font||'Arial Black')+'",Arial,sans-serif';cp.style.fontWeight=900;cp.style.webkitTextStroke=Math.max(1,(now.outline||0)/4)+'px #000';cp.style.paintOrder='stroke fill';
+  const bf=fontOf(s,now.font);if(bf)fontLoad(bf);cp.style.fontFamily='"'+(now.font||'Arial Black')+'",Arial,sans-serif';cp.style.fontWeight=bf&&bf.weight<600?'normal':900;cp.style.webkitTextStroke=Math.max(1,(now.outline||0)/4)+'px #000';cp.style.paintOrder='stroke fill';
   cp.innerHTML='<span style="color:'+hex(now.text_color)+'">'+t[0]+' </span><span style="color:'+hex(now.active_color)+';font-size:112%">'+t[1]+'</span><span style="color:'+hex(now.text_color)+'"> '+t[2]+'</span>';
   const b=s.brand||{};
   if(!$('brandbox').contains(document.activeElement)){$('g-corner').value=b.logo_corner||'top-left';$('g-size').value=Math.round((b.logo_size||.16)*100);$('g-op').value=Math.round((b.logo_opacity||.9)*100);
     $('g-outro').value=b.outro_text||'';$('g-vol').value=Math.round((b.music_volume||0)*100)}
   $('g-logoname').textContent=b.logo_name?'In use: '+b.logo_name:'No logo';$('g-logooff').hidden=!b.logo_name;
   $('g-musicname').textContent=b.music_name?'In use: '+b.music_name:'No music';$('g-musicoff').hidden=!b.music_name;
+  posDraw(s);voiceDraw(s);
 }
+/* ---------- the fonts that come with the program ---------- */
+const FL=new Set();
+function fontOf(s,name){const n=String(name||'').toLowerCase();return ((s&&s.fonts)||[]).find(f=>f.family.toLowerCase()===n||f.label.toLowerCase()===n)}
+/* the caption sample on the page is drawn in the font itself: it is fetched from the program, once */
+function fontLoad(f){if(FL.has(f.family))return;FL.add(f.family);
+  try{new FontFace(f.family,'url(/fonts/'+encodeURIComponent(f.file)+')').load().then(x=>document.fonts.add(x)).catch(e=>console.warn('font not shown on the page',f.family,e))}catch(e){}}
+function fontPick(s,name){const sel=$('k-pick'),KIND={sans:'Bold and clean',condensed:'Tall and narrow',rounded:'Round and friendly',comic:'Comic',marker:'Hand-written',display:'Showy'};
+  if(!sel.options.length){const fs=(s&&s.fonts)||[];
+    sel.innerHTML='<option value="">'+(fs.length?'Choose one of the '+fs.length+' fonts…':'No fonts came with this copy')+'</option>'
+      +fs.map(f=>'<option value="'+esc(f.family)+'">'+esc(f.label)+(KIND[f.kind]?' · '+KIND[f.kind]:'')+'</option>').join('')}
+  const f=fontOf(s,name);sel.value=f?f.family:''}
+function pickFont(){const v=val('k-pick');if(!v)return;$('k-font').value=v;useLook()}
+/* ---------- where the captions sit ---------- */
+function posText(){const up=+val('p-up'),side=+val('p-side');
+  $('p-upv').textContent=Math.round(up/1920*100)+'% up from the bottom';
+  $('p-sidev').textContent=side===0?'in the middle':Math.round(Math.abs(side)/1080*100)+'% to the '+(side<0?'left':'right')}
+function posDraw(s){const p=s.caption_position;if(!p||document.activeElement===$('p-up')||document.activeElement===$('p-side'))return;
+  $('p-up').value=p.margin_v;$('p-side').value=p.offset_x||0;posText()}
+function savePos(){if(document.activeElement)document.activeElement.blur();act('/api/options',{caption_position:{margin_v:+val('p-up'),offset_x:+val('p-side')}})}
+/* ---------- the narrator of explainer videos ---------- */
+const VOICE={audio:null,seen:''};
+function voiceDraw(s){const v=s.voice;if(!v)return;const at=document.activeElement, c=v.check;
+  if(!$('v-kokoro').options.length)$('v-kokoro').innerHTML=v.kokoro_voices.map(x=>'<option value="'+esc(x[0])+'">'+esc(x[1])+'</option>').join('');
+  if(at!==$('v-back'))$('v-back').value=v.backend;
+  if(at!==$('v-kokoro'))$('v-kokoro').value=v.kokoro_voice;
+  if(at!==$('v-speed')){$('v-speed').value=v.speed;$('v-speedv').textContent=v.speed+'×'}
+  $('v-local').hidden=v.backend!=='kokoro';$('v-eleven').hidden=v.backend!=='elevenlabs';
+  const key=JSON.stringify([c&&c.at,c&&c.ok,v.eleven_model,v.eleven_voice]);
+  if(key!==VOICE.seen&&at!==$('v-emodel')&&at!==$('v-evoice')){VOICE.seen=key;
+    const ms=(c&&c.ok&&c.models.length?c.models.slice():[]);if(!ms.some(m=>m.id===v.eleven_model))ms.push({id:v.eleven_model,name:v.eleven_model});
+    $('v-emodel').innerHTML=ms.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.name)+(c&&c.ok&&m.id===c.best_model?' · recommended':'')+'</option>').join('');$('v-emodel').value=v.eleven_model;
+    const vs=(c&&c.ok&&c.voices.length?c.voices.slice():[]);if(!vs.some(x=>x.id===v.eleven_voice))vs.unshift({id:v.eleven_voice,name:'The voice in your settings',about:''});
+    $('v-evoice').innerHTML=vs.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+(x.about?' ('+esc(x.about.replace(/_/g,' '))+')':'')+'</option>').join('');$('v-evoice').value=v.eleven_voice}
+  $('v-state').innerHTML=!v.key?'<b>No ElevenLabs key is set.</b> Put a line ELEVENLABS_API_KEY=your-key in the file .env in the program folder, then press Check ElevenLabs.'
+    :!c?'A key is set. Press <b>Check ElevenLabs</b> to see whether it works and to fill the two lists.'
+    :c.ok?'<b style="color:var(--ok)">ElevenLabs answers</b> (asked at '+esc(c.at)+').'+(c.left!=null?' Characters left on your plan: '+Number(c.left).toLocaleString()+'.':'')+(c.note?' '+esc(c.note):'')+(c.changed?' '+esc(c.changed):'')
+    :'<b style="color:var(--bad)">ElevenLabs cannot be used:</b> '+esc(c.why);
+  $('v-help').textContent=v.backend==='elevenlabs'?'Each explainer video uses characters of your ElevenLabs plan, about one for every letter spoken. Listen uses about 60. Speech is in English.'
+    :'The free voice costs nothing and works without the internet. Speech is in English.'}
+async function voiceCheck(use){if(document.activeElement)document.activeElement.blur();$('b-vcheck').disabled=true;
+  const ok=await act('/api/voice/check',{use:!!use});$('b-vcheck').disabled=false;
+  if(!ok)poll1();else if(use)toast('The narrator now speaks with ElevenLabs, with the best model it offers. You can change the model and the voice below.')}
+function voiceBack(){if(val('v-back')==='elevenlabs')voiceCheck(true);else{if(document.activeElement)document.activeElement.blur();act('/api/options',{voice_backend:'kokoro'})}}
+async function voiceListen(btn){
+  if(last&&last.voice&&last.voice.backend==='elevenlabs'&&!confirm('Listen to the ElevenLabs voice?'+NL+NL+'It uses about 60 characters of your ElevenLabs plan.'))return;
+  const was=btn.textContent;btn.disabled=true;btn.textContent='Making the sample…';
+  try{const r=await fetch('/api/voice/sample',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    if(!r.ok)toast('The voice could not be played: '+await r.text(),true);
+    else{const u=URL.createObjectURL(await r.blob());if(VOICE.audio)VOICE.audio.pause();VOICE.audio=new Audio(u);VOICE.audio.onended=()=>URL.revokeObjectURL(u);await VOICE.audio.play()}}
+  catch(e){toast('The voice could not be played: '+e,true)}
+  btn.disabled=false;btn.textContent=was}
 function lookForm(){return {font:val('k-font').trim(),font_size:+val('k-size'),outline:+val('k-outline'),max_words:+val('k-words'),text_color:val('k-text').slice(1),active_color:val('k-active').slice(1),
   uppercase:$('k-upper').checked,animation:val('o-anim')}}
 function pickLook(){const v=val('o-cap');
@@ -2317,6 +2422,51 @@ if(HAS_PANEL)poll();else document.body.classList.add('nopanel');
 try{$('z-pick').value=localStorage.getItem('zones')||''}catch(e){}
 try{const a=JSON.parse(localStorage.getItem('arrange')||'{}');if(['new','score','old'].includes(a.sort))$('s-sort').value=a.sort;if(a.how)$('s-how').value=a.how;if(a.when)$('s-when').value=a.when}catch(e){}
 setZones();
+/* ---------- select several clips and do one thing to all of them ---------- */
+const SEL=new Set(), BULK={busy:false,stop:false};let SELECTING=false;
+function selDraw(){const have=new Set(known.map(c=>c.key));for(const k of [...SEL])if(!have.has(k))SEL.delete(k);
+  $('bulk-n').textContent=SEL.size+' selected';$('bulkbar').hidden=!SELECTING;$('clips').classList.toggle('selecting',SELECTING);
+  $('b-select').classList.toggle('on',SELECTING);$('b-select').textContent=SELECTING?'Selecting…':'Select several'}
+function selMode(on){if(BULK.busy)return;SELECTING=on===undefined?!SELECTING:!!on;if(!SELECTING)selNone();
+  if(SELECTING)$('bulk-note').textContent='Press a clip to tick it. Then choose what to do with the ticked clips.';selDraw()}
+function selSet(key,on){if(on)SEL.add(key);else SEL.delete(key);selDraw()}
+function selBoxes(){for(const el of document.querySelectorAll('#clips .clip')){const b=el.querySelector('.pk input');if(b&&el._c)b.checked=SEL.has(el._c.key)}}
+function selAll(){for(const el of document.querySelectorAll('#clips .clip'))if(el.offsetParent!==null&&el._c&&!el._c.broken)SEL.add(el._c.key);selBoxes();selDraw()}
+function selNone(){SEL.clear();selBoxes();selDraw()}
+/* in selecting mode a press anywhere on a tile's picture ticks it, instead of playing the video */
+$('clips').addEventListener('click',e=>{
+  if(!SELECTING)return;const card=e.target.closest('.clip');
+  if(!card||card.classList.contains('open')||!card._c||card._c.broken||e.target.closest('.pk,.tile'))return;
+  e.preventDefault();e.stopPropagation();selSet(card._c.key,!SEL.has(card._c.key));selBoxes()},true);
+function bulkMore(){const v=val('bulk-more');if(!v){toast('Choose what to do in the list beside this button first.',true);return}bulk(v).then(()=>{$('bulk-more').value=''})}
+async function bulk(what){
+  if(BULK.busy)return;
+  const keys=[...SEL].filter(k=>known.some(c=>c.key===k&&!c.broken));
+  if(!keys.length){toast('Tick the clips first: press a clip to tick it.',true);return}
+  const A={approve:{say:'approved',body:{status:'approved'},leaves:1},reject:{say:'rejected',body:{status:'rejected'},leaves:1},
+    review:{say:'put back under To review',body:{status:'candidate',held:false},leaves:1},pending:{say:'moved to Pending',body:{status:'candidate',held:true},leaves:1},
+    b_on:{say:'set to get a version B',body:{ab:true}},b_off:{say:'set to get no version B',body:{ab:false}},
+    x_on:{say:'set to get an explainer version',body:{explainer:true}},x_off:{say:'set to get no explainer version',body:{explainer:false}},
+    whole:{say:'changed to show the whole picture',url:'/framing',body:{layout:'blur',game:[0,0,1,1]},slow:1},
+    auto:{say:'set back to the automatic picture',url:'/framing',body:{auto:true,keep:true},slow:1},
+    del:{say:'deleted',url:'/delete',body:{},leaves:1}}[what];
+  if(!A)return;const n=keys.length, cl=n===1?'clip':'clips';
+  if(what==='del'&&!confirm('Delete '+(n===1?'this clip':'these '+n+' clips')+' forever?'+NL+NL+'Their drafts and downloaded videos are removed. Finished videos already in the videos folder stay.'))return;
+  if(A.slow&&!confirm('Change the picture of '+n+' '+cl+'?'+NL+NL+'Each draft is made again. That takes up to a minute for every clip.'))return;
+  BULK.busy=true;BULK.stop=false;$('bulk-stop').hidden=n<2;$('bulk-stop').disabled=false;let ok=0;const bad=[];
+  for(const b of $('bulkbar').querySelectorAll('button:not(#bulk-stop),select'))b.disabled=true;
+  for(let i=0;i<n;i++){
+    if(BULK.stop)break;
+    $('bulk-note').textContent='Working on clip '+(i+1)+' of '+n+'…'+(A.slow?' (each one takes up to a minute)':'');
+    const r=await send('/api/clip/'+keys[i]+(A.url||''),A.body);
+    if(r.error)bad.push(r.error);else{ok++;if(A.leaves)SEL.delete(keys[i])}
+  }
+  const left=n-ok-bad.length;
+  BULK.busy=false;$('bulk-stop').hidden=true;for(const b of $('bulkbar').querySelectorAll('button,select'))b.disabled=false;
+  for(const el of document.querySelectorAll('#clips .clip'))el.dataset.m='';
+  await loadClips();selBoxes();selDraw();
+  const msg=ok+' '+(ok===1?'clip':'clips')+' '+A.say+'.'+(left?' Stopped: '+left+' not done.':'')+(bad.length?' '+bad.length+' could not be done. The first reason: '+bad[0]:'');
+  $('bulk-note').textContent=msg;toast(msg,bad.length>0)}
 /* The program opens where you were last, but never on Set up: that page is only opened by you. */
 {let first='clips';try{first=localStorage.getItem('page')||'new'}catch(e){}if(first==='setup')first='new';go(HAS_PANEL?first:'clips');sub('vod')}
 clipLoop();

@@ -730,6 +730,14 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     log.error("downloaded part %s: its sound could not be read: %s", d.name, e, exc_info=True)
                     return self._send(500, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(data).encode(), "application/json")
+            m = re.fullmatch(r"/fonts/([A-Za-z0-9_.\-]+\.ttf)", self.path.split("?")[0])
+            if m:
+                # A font that comes with the program, so the page can show its caption sample in that very font.
+                from . import fonts
+
+                if m.group(1) not in {f["file"] for f in fonts.bundled()}:
+                    return self._send(404, b"no such font", "text/plain")
+                return self._send(200, (fonts.FONT_DIR / m.group(1)).read_bytes(), "font/ttf")
             if self.path.split("?")[0] == "/api/look/preview" and cfg is not None:
                 from .tools import ToolError
 
@@ -823,7 +831,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                        "/api/finish": "start_finish", "/api/finish/stop": "stop_finish", "/api/ready/open": "open_ready", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check", "/api/ai/local-setup": "start_local_ai",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
                        "/api/setup/install": "setup_install", "/api/setup/signin": "setup_signin", "/api/setup/refresh": "setup_refresh", "/api/setup/finish": "setup_finish",
-                       "/api/restart": "restart"}
+                       "/api/restart": "restart", "/api/voice/check": "check_voice"}
             if self.path.startswith("/api/brand/upload") and cfg is not None and control:
                 # Your logo or music file: kept under the data folder, then set as the one to use.
                 from urllib.parse import parse_qs, urlparse
@@ -889,11 +897,25 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 part.replace(target)
                 log.info("video file received: %s (%.0f MB)", target, target.stat().st_size / 1e6)
                 return self._send(200, json.dumps({"path": str(target)}).encode("utf-8"), "application/json")
+            if self.path == "/api/voice/sample" and control:
+                # One short line in the narrator voice as it is set now. With ElevenLabs this uses a few characters of the plan.
+                from . import tts
+                from .tools import ToolError
+
+                try:
+                    f = tts.sample(control.reload())
+                except (ToolError, ValueError) as e:
+                    log.error("the narrator sample could not be made: %s", e)
+                    return self._send(400, str(e).encode("utf-8", "replace"), "text/plain")
+                except Exception as e:
+                    log.error("the narrator sample could not be made: %s", e, exc_info=True)
+                    return self._send(500, f"{type(e).__name__}: {e}".encode("utf-8", "replace"), "text/plain")
+                return self._send(200, f.read_bytes(), "audio/mpeg" if f.suffix == ".mp3" else "audio/wav")
             if control and self.path in actions:
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
                     name = actions[self.path]
-                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut", "clip_now", "start_finish", "stop_finish", "setup_install", "setup_signin", "setup_finish") else getattr(control, name)()
+                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut", "clip_now", "start_finish", "stop_finish", "setup_install", "setup_signin", "setup_finish", "check_voice") else getattr(control, name)()
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 if isinstance(result, dict) and "watching" in result:

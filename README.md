@@ -125,6 +125,8 @@ The page opens at http://127.0.0.1:8765/. The code is plain Python and FFmpeg, s
 - **YouTube's own captions as the words.** For YouTube videos the words come from YouTube's captions when it has them, in seconds instead of minutes. The speech model stays the fallback.
 - **Subtitle files.** Download a clip's captions as .srt or .vtt, or use your own subtitle file as its captions.
 - **See it before you make it.** The Look and branding page shows real frames of one of your own clips with the choices you make, a few seconds after each change.
+- **Many clips in one go.** Tick several clips and approve, reject, change or delete them together.
+- **Captions where you want them.** Move them up, down, left or right, in one of 20 caption fonts that come with the program.
 - **More of the stream, later.** Add 15 or 30 seconds before or after a clip that starts too late or ends too early.
 - **Templates and a background card.** The clip as a rounded card on a blur, a colour, a gradient or your image; inside a social post; under a breaking-news banner; or with the opening text in a box on top.
 - **A strong first three seconds.** Zoom-in, pop-in opening text, a whoosh and a progress bar.
@@ -160,7 +162,7 @@ Everything in the core works with no paid service. These are optional:
 | Claude | Sign in with your own Claude plan on the Set up page, or put `ANTHROPIC_API_KEY` in `.env` | Writes opening text, titles, descriptions and narration; flags filler clips; can read a whole stream and pick moments | With a plan it uses your plan's limits; with a key about $0.01 per clip |
 | ChatGPT | Sign in with your own ChatGPT plan on the Set up page | Makes thumbnails | Uses your plan's limits |
 | Free local AI | Set up page, on a computer that can run it (about 3 GB) | Writes clip text when Claude cannot be reached | Free |
-| ElevenLabs | `ELEVENLABS_API_KEY` in `.env` | A more natural narrator voice | from $6 a month |
+| ElevenLabs | `ELEVENLABS_API_KEY` in `.env`, then choose it under Settings, Narrator voice | A more natural narrator voice for explainer videos, with the model and voice picked from your account | from $6 a month |
 | Groq | `GROQ_API_KEY` in `.env` | Faster speech-to-text on their servers (untested) | about $0.04 per audio hour |
 
 Sign-ins happen in each company's own window. Stream Clipper never sees or stores your password.
@@ -240,7 +242,7 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           430 unit tests (uv run python -m pytest -q)
+tests/           438 unit tests (uv run python -m pytest -q)
 ```
 
 </details>
@@ -268,6 +270,6 @@ Issues and pull requests are welcome. Keep the core free to run, keep settings i
 
 ## Licence
 
-[MIT](LICENSE). FFmpeg, TwitchDownloaderCLI, yt-dlp, faster-whisper, Kokoro and YuNet are downloaded by the setup script under their own licences.
+[MIT](LICENSE). FFmpeg, TwitchDownloaderCLI, yt-dlp, faster-whisper, Kokoro and YuNet are downloaded by the setup script under their own licences. The 20 caption fonts in `src/clipper/fonts` are from Google Fonts under the SIL Open Font License or the Apache License; each font's licence text is beside it.
 
 <sub>The screenshots show a made-up demo video generated for this page, not a real stream.</sub>

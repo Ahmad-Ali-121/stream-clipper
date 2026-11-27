@@ -13,6 +13,8 @@ Timing rules, chosen so captions never flicker or overlap:
 
 from __future__ import annotations
 
+from dataclasses import replace as _dc_replace
+
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
@@ -188,7 +190,14 @@ def build_ass(
         from dataclasses import replace as _replace
 
         settings = _replace(settings, font=font, uppercase=False)
+    from . import fonts
+
+    settings = _dc_replace(settings, font=fonts.ass_name(settings.font))
     s = settings
+    bold = fonts.bold_flag(s.font)  # a font with one weight only is not thickened artificially
+    # Captions sit in the middle between a left and a right margin. Moving them sideways by x widens one margin by 2x.
+    x = max(-300, min(300, int(getattr(s, "offset_x", 0) or 0)))
+    cap_l, cap_r = 60 + max(0, 2 * x), 60 + max(0, -2 * x)
     header = "\n".join(
         [
             "[Script Info]",
@@ -203,21 +212,21 @@ def build_ass(
             "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
             "MarginR, MarginV, Encoding",
             f"Style: Word,{s.font},{s.font_size},&H00{_bgr(s.text_color)},&H00{_bgr(s.text_color)},"
-            f"&H00{_bgr(s.outline_color)},&H80000000,-1,0,0,0,100,100,0,0,1,{s.outline},{s.shadow},2,60,60,{s.margin_v},1",
+            f"&H00{_bgr(s.outline_color)},&H80000000,{bold},0,0,0,100,100,0,0,1,{s.outline},{s.shadow},2,{cap_l},{cap_r},{s.margin_v},1",
             # Hook: black text on a white box, top centre. BorderStyle 3 draws the box in OutlineColour.
-            f"Style: Hook,{s.font},{hook_size},&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,14,0,8,90,90,{hook_margin_v},1",
+            f"Style: Hook,{s.font},{hook_size},&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,{bold},0,0,0,100,100,0,0,3,14,0,8,90,90,{hook_margin_v},1",
             # HookB: the B version's hook, black text on a box in the accent colour.
-            f"Style: HookB,{s.font},{hook_size},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,14,0,8,90,90,{hook_margin_v},1",
+            f"Style: HookB,{s.font},{hook_size},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},{bold},0,0,0,100,100,0,0,3,14,0,8,90,90,{hook_margin_v},1",
             "Style: Shape,Arial,20,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
-            f"Style: Credit,{s.font},{credit_size},&H30FFFFFF,&H30FFFFFF,&H40000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,0,2,40,40,70,1",
-            f"Style: Disclosure,{s.font},{credit_size},&H00FFFFFF,&H00FFFFFF,&H60000000,&H60000000,-1,0,0,0,100,100,0,0,3,8,0,7,40,40,60,1",
+            f"Style: Credit,{s.font},{credit_size},&H30FFFFFF,&H30FFFFFF,&H40000000,&H80000000,{bold},0,0,0,100,100,0,0,1,3,0,2,40,40,70,1",
+            f"Style: Disclosure,{s.font},{credit_size},&H00FFFFFF,&H00FFFFFF,&H60000000,&H60000000,{bold},0,0,0,100,100,0,0,3,8,0,7,40,40,60,1",
             # "PART 2" in the top right corner for the whole clip, and "PART 3 NEXT" near the bottom at the end.
-            f"Style: Part,{s.font},{credit_size + 14},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,10,0,9,40,40,64,1",
-            f"Style: PartNext,{s.font},{hook_size},&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,14,0,2,90,90,250,1",
+            f"Style: Part,{s.font},{credit_size + 14},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},{bold},0,0,0,100,100,0,0,3,10,0,9,40,40,64,1",
+            f"Style: PartNext,{s.font},{hook_size},&H00000000,&H00000000,&H00FFFFFF,&H00FFFFFF,{bold},0,0,0,100,100,0,0,3,14,0,2,90,90,250,1",
             # The outro ribbon: your own line over the last seconds, on a box in the accent colour, between captions and credit.
-            f"Style: Outro,{s.font},{credit_size + 18},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,12,0,2,70,70,380,1",
+            f"Style: Outro,{s.font},{credit_size + 18},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},{bold},0,0,0,100,100,0,0,3,12,0,2,70,70,380,1",
             # The same ribbon near the top, for layouts that keep a small face in a bottom corner.
-            f"Style: OutroTop,{s.font},{credit_size + 18},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},-1,0,0,0,100,100,0,0,3,12,0,8,70,70,330,1",
+            f"Style: OutroTop,{s.font},{credit_size + 18},&H00000000,&H00000000,&H00{_bgr(s.active_color)},&H00{_bgr(s.active_color)},{bold},0,0,0,100,100,0,0,3,12,0,8,70,70,330,1",
             *extra_styles,  # a template's own styles (see frames.py)
             "",
             "[Events]",

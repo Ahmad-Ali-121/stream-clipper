@@ -29,6 +29,7 @@ from .captions import Overlay, Word, build_ass
 from .config import Config
 from .render import render_clip, still_frame
 from .tools import ToolError, find_tool, run
+from .fonts import ass_filter as _ass
 from .tts import speak
 from .work import done, read_json, write_json, write_text
 
@@ -196,7 +197,7 @@ def card_filter(width: int, height: int, fps: int, frames: int, ass_name: str, v
             f"[s2]crop=iw:iw*{ih}/{iw}:0:(ih-iw*{ih}/{iw})/2,scale={iw * 2}:{ih * 2},"
             f"zoompan=z='1.07-0.07*on/{frames}':{centre}:d={frames}:s={iw}x{ih}:fps={fps},"
             f"pad={pw}:{ph}:{border}:{border}:0x{accent}[pic];"
-            f"[bg][pic]overlay=x='{px}-{int(1000 * k)}*{ease}':y={py},format=yuv420p,ass={ass_name}[v]"
+            f"[bg][pic]overlay=x='{px}-{int(1000 * k)}*{ease}':y={py},format=yuv420p,{_ass(ass_name)}[v]"
         )
     return (
         f"[0:v]trim=end_frame=1,scale={width}:{height},setsar=1,split=2[s1][s2];"
@@ -205,7 +206,7 @@ def card_filter(width: int, height: int, fps: int, frames: int, ass_name: str, v
         f"[s2]crop=iw:iw*{ih}/{iw}:0:(ih-iw*{ih}/{iw})/2,scale={iw * 2}:{ih * 2},"
         f"zoompan=z='1+0.07*on/{frames}':{centre}:d={frames}:s={iw}x{ih}:fps={fps},"
         f"pad={pw}:{ph}:{border}:{border}:white[pic];"
-        f"[bg][pic]overlay=x={px}:y='{py}+{int(900 * k)}*pow(1-min(t/0.45\\,1)\\,3)',format=yuv420p,ass={ass_name}[v]"
+        f"[bg][pic]overlay=x={px}:y='{py}+{int(900 * k)}*pow(1-min(t/0.45\\,1)\\,3)',format=yuv420p,{_ass(ass_name)}[v]"
     )
 
 

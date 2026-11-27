@@ -1,0 +1,182 @@
+[
+  {
+    "label": "Be Vietnam Pro ExtraBold",
+    "family": "Be Vietnam Pro ExtraBold",
+    "file": "BeVietnamPro-ExtraBold.ttf",
+    "weight": 800,
+    "license": "OFL-1.1",
+    "kind": "sans",
+    "source": "ofl/bevietnampro/BeVietnamPro-ExtraBold.ttf"
+  },
+  {
+    "label": "Poppins ExtraBold",
+    "family": "Poppins ExtraBold",
+    "file": "Poppins-ExtraBold.ttf",
+    "weight": 800,
+    "license": "OFL-1.1",
+    "kind": "sans",
+    "source": "ofl/poppins/Poppins-ExtraBold.ttf"
+  },
+  {
+    "label": "Bebas Neue",
+    "family": "Bebas Neue",
+    "file": "BebasNeue-Regular.ttf",
+    "weight": 400,
+    "license": "OFL-1.1",
+    "kind": "condensed",
+    "source": "ofl/bebasneue/BebasNeue-Regular.ttf"
+  },
+  {
+    "label": "Anton",
+    "family": "Anton",
+    "file": "Anton-Regular.ttf",
+    "weight": 400,
+    "license": "OFL-1.1",
+    "kind": "condensed",
+    "source": "ofl/anton/Anton-Regular.ttf"
+  },
+  {
+    "label": "Fjalla One",
+    "family": "Fjalla One",
+    "file": "FjallaOne-Regular.ttf",
+    "weight": 400,
+    "license": "OFL-1.1",
+    "kind": "condensed",
+    "source": "ofl/fjallaone/FjallaOne-Regular.ttf"
+  },
+  {
+    "label": "Bangers",
+    "family": "Bangers",
+    "file": "Bangers-Regular.ttf",
+    "weight": 400,
+    "license": "OFL-1.1",
+    "kind": "comic",
+    "source": "ofl/bangers/Bangers-Regular.ttf"
+  },
+  {
+    "label": "Luckiest Guy",
+    "family": "Luckiest Guy",
+    "file": "LuckiestGuy-Regular.ttf",
+    "weight": 400,
+    "license": "Apache-2.0",
+    "kind": "comic",
+    "source": "apache/luckiestguy/LuckiestGuy-Regular.ttf"
+  },
+  {
+    "label": "Fira Sans Black",
+    "family": "Fira Sans Black",
+    "file": "FiraSans-Black.ttf",
+    "weight": 900,
+    "license": "OFL-1.1",
+    "kind": "sans",
+    "source": "ofl/firasans/FiraSans-Black.ttf"
+  },
+  {
+    "label": "Kanit ExtraBold",
+    "family": "Kanit ExtraBold",
+    "file": "Kanit-ExtraBold.ttf",
+    "weight": 800,
+    "license": "OFL-1.1",
+    "kind": "sans",
+    "source": "ofl/kanit/Kanit-ExtraBold.ttf"
+  },
+  {
+    "label": "Lato Black",
+    "family": "Lato Black",
+    "file": "Lato-Black.ttf",
+    "weight": 900,
+    "license": "OFL-1.1",
+    "kind": "sans",
+    "source": "ofl/lato/Lato-Black.ttf"
+  },
+  {
+    "label": "Prompt ExtraBold",
+    "family": "Prompt ExtraBold",
+    "file": "Prompt-ExtraBold.ttf",
+    "weight": 800,
+    "license": "OFL-1.1",
+    "kind": "sans",
+    "source": "ofl/prompt/Prompt-ExtraBold.ttf"
+  },
+  {
+    "label": "Paytone One",
+    "family": "Paytone One",
+    "file": "PaytoneOne-Regular.ttf",
+    "weight": 400,
+    "license": "OFL-1.1",
+    "kind": "rounded",
+    "source": "ofl/paytoneone/PaytoneOne-Regular.ttf"
+  },
+  {
+    "label": "Archivo Black",
+    "family": "Archivo Black",
+    "file": "ArchivoBlack-Regular.ttf",
+    "weight": 400,
+    "license": "OFL-1.1",
+    "kind": "sans",
+    "source": "ofl/archivoblack/ArchivoBlack-Regular.ttf"
+  },
+  {
+    "label": "Barlow Condensed ExtraBold",
+    "family": "Barlow Condensed ExtraBold",
+    "file": "BarlowCondensed-ExtraBold.ttf",
+    "weight": 800,
+    "license": "OFL-1.1",
+    "kind": "condensed",
+    "source": "ofl/barlowcondensed/BarlowCondensed-ExtraBold.ttf"
+  },
+  {
+    "label": "Lilita One",
+    "family": "Lilita One",
+    "file": "LilitaOne-Regular.ttf",
+    "weight": 400,
+    "license": "OFL-1.1",
+    "kind": "rounded",
+    "source": "ofl/lilitaone/LilitaOne-Regular.ttf"
+  },
+  {
+    "label": "Permanent Marker",
+    "family": "Permanent Marker",
+    "file": "PermanentMarker-Regular.ttf",
+    "weight": 400,
+    "license": "Apache-2.0",
+    "kind": "marker",
+    "source": "apache/permanentmarker/PermanentMarker-Regular.ttf"
+  },
+  {
+    "label": "Russo One",
+    "family": "Russo One",
+    "file": "RussoOne-Regular.ttf",
+    "weight": 400,
+    "license": "OFL-1.1",
+    "kind": "display",
+    "source": "ofl/russoone/RussoOne-Regular.ttf"
+  },
+  {
+    "label": "Chewy",
+    "family": "Chewy",
+    "file": "Chewy-Regular.ttf",
+    "weight": 400,
+    "license": "Apache-2.0",
+    "kind": "comic",
+    "source": "apache/chewy/Chewy-Regular.ttf"
+  },
+  {
+    "label": "Titan One",
+    "family": "Titan One",
+    "file": "TitanOne-Regular.ttf",
+    "weight": 400,
+    "license": "OFL-1.1",
+    "kind": "rounded",
+    "source": "ofl/titanone/TitanOne-Regular.ttf"
+  },
+  {
+    "label": "Passion One Bold",
+    "family": "Passion One Bold",
+    "file": "PassionOne-Bold.ttf",
+    "weight": 700,
+    "license": "OFL-1.1",
+    "kind": "display",
+    "source": "ofl/passionone/PassionOne-Bold.ttf"
+  }
+]

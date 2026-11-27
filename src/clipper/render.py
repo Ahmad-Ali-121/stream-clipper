@@ -525,10 +525,12 @@ def _render_clip(clip_dir: Path, cfg: Config, force: bool = False, out_name: str
         build_ass(words, captions, overlays, hook_size=r.hook_font_size, credit_size=r.credit_font_size, hook_margin_v=hook_margin,
                   progress_s=duration if r.opening else 0.0, extra_styles=frame.styles, extra_events=frame.events),
     )
+    from .fonts import ass_filter
+
     zoom, whoosh = opening_filters(r)
 
     graph = layout_filter(int(state["source_width"]), int(state["source_height"]), r, layout)
-    graph += f";[v0]fps={r.fps}{',' + zoom if r.opening else ''}[vz];{frame.graph};[t0]ass={stem}.ass[v1]"
+    graph += f";[v0]fps={r.fps}{',' + zoom if r.opening else ''}[vz];{frame.graph};[t0]{ass_filter(stem + '.ass')}[v1]"
     inputs = ["-ss", f"{offset:.3f}", "-t", f"{duration:.3f}", "-i", "source.mp4"] + frame.inputs
     extra = 1 + frame.inputs.count("-i")  # the number the next input file gets
     last = "[v1]"

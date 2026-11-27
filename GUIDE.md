@@ -66,7 +66,7 @@ The clipper works with none of these. Create a file named `.env` in the program'
 | Key | What it adds | Cost | Where to get it |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Claude writes the hook, title, description and narration, and marks filler clips | About $0.02 per clip with the default model, far less with `claude-haiku-5-5` (set `llm.model` in `config.yaml`). Minimum top-up is $5 | console.anthropic.com |
-| `ELEVENLABS_API_KEY` | A more natural narrator voice (set `voice.backend: elevenlabs`) | Starter plan $6 a month | elevenlabs.io |
+| `ELEVENLABS_API_KEY` | A more natural narrator voice. After putting the key in `.env`, choose ElevenLabs on the Settings page under **Narrator voice** | Starter plan $6 a month | elevenlabs.io |
 | `GROQ_API_KEY` | Faster transcription (set `transcribe.backend: groq`) | About $0.04 per hour of audio | console.groq.com |
 
 **Claude without an API key.** If you pay for a Claude plan (Pro or Max), the clipper can use it instead of an API key:
@@ -94,11 +94,11 @@ Open http://127.0.0.1:8765/ in your browser. The page has a menu on the left and
 
 - **New clips:** make clips from a finished stream, a video link or a file on this PC. Four tabs: **Find the best moments** (paste a link, press the button, the program picks the moments), **Pick the part myself** (you give the start and the end), **Cutting board** (cut a downloaded part into pieces) and **Search what was said** (find a moment by its words). Under them, **Your videos** lists the videos you have clips of, newest first; click one to see only that video's clips on My clips (a line under the filters says so, and **Clear filters** shows all clips again).
 - **Live channels:** type channel names, pick A, B, C or D, press **Start watching**. **Stop** ends it. **Clip the last** makes a clip of what just happened.
-- **My clips:** every clip as a tile with its video, score, length and title. This is where you review, edit and approve, and where **Make videos** is. The number beside it in the menu is how many clips wait for review.
+- **My clips:** every clip as a tile with its video, score, length and title. This is where you review, edit and approve, and where **Make videos** is. The number beside it in the menu is how many clips wait for review. **Select several** lets you tick many clips and handle them together (see *Several clips at once* below).
 - **Look and branding:** the caption style, the template and opening text, your logo, closing text and music, and the thumbnails. What you choose here is used for every clip made from now on. A **Preview** on the right of the page shows one of your own clips with these choices: three real frames (**Start** with the opening text, **Middle** with the captions, **End** with the closing text), made the same way as the videos, so you do not have to make a video to see the result. It follows every change a few seconds later; **Try another clip** shows the same choices on another of your newest clips. Music cannot be shown. With no clip made yet, the preview says so.
 - **Posted and earnings:** what you posted, its views and what it earned, and the campaign choice.
 - **Set up:** the step-by-step guide that installs what the program needs and signs you in to Claude and ChatGPT. It never opens by itself. While a needed step (Video tools, Captions) is missing, its menu entry is an amber warning with the number of steps left; with only optional steps left it shows their number quietly.
-- **Settings:** the **Setup check**, the AI connection, the language, and updates.
+- **Settings:** the **Setup check**, the AI connection, the **Narrator voice** for explainer videos, the language, and updates.
 - **Ask for help:** the help chat.
 
 At the bottom of the menu are the status lines (setup, watching, how many clips) and the **Activity log**.
@@ -114,7 +114,9 @@ At the bottom of the menu are the status lines (setup, watching, how many clips)
 | Watch, approve, reject or edit clips | **My clips** |
 | Make the finished videos | **My clips**, button **Make videos** (top right) |
 | Change a clip's text, captions, start and end, framing, thumbnail or versions | **My clips**, press **Edit** on the clip, then the tab with that name |
-| Caption style, template, logo, music, thumbnails for every clip, and a preview of how a clip looks with them | **Look and branding** |
+| Caption style, the caption font, where captions sit, template, logo, music, thumbnails for every clip, and a preview of how a clip looks with them | **Look and branding** |
+| Approve, reject, change or delete many clips in one go | **My clips**, **Select several** |
+| The voice of the narrator in explainer videos, from this computer or from ElevenLabs | **Settings**, **Narrator voice** |
 | Whether one clip gets a version B, and what its thumbnail must leave out | The clip's **Edit**, tabs **Versions** and **Thumbnail** |
 | Log a post, see views and earnings, choose a campaign | **Posted and earnings** (log a post from the clip's **Posted** tab) |
 | Install something that is missing, or sign in to Claude or ChatGPT | **Set up** |
@@ -346,12 +348,23 @@ Open the clip with **Edit** and go to **Start, end and picture**. **What the cli
 
 For the last two, choose the corner and how big the small face is. A face in a bottom corner pushes the captions just above it.
 
+### Several clips at once
+
+On **My clips**, press **Select several**. Every tile gets a tick box; press a clip (anywhere on its picture) to tick it, or **Select all shown** to tick every clip in the list you are looking at. A bar shows how many are ticked and what you can do with them:
+
+- **Approve**, **Reject**, **Back to review**.
+- **More to do with them…**, then **Do it**: move to Pending; **Picture: show the whole picture** or **Picture: automatic**; make or do not make **version B**; make or do not make the **explainer version**; **Delete forever**.
+
+Deleting, and changing the picture (each draft is made again, up to a minute per clip), ask first. While it works the bar counts the clips, and **Stop after this one** ends it early. At the end it says how many were done and, if some could not be, the first reason. Clips that leave the list (approved, rejected, deleted) are unticked. **Done** leaves selecting; nothing else changes. Everything a single clip's own buttons refuse is refused here too, and the help assistant may not press these buttons for you.
+
 ### Caption movement and your own caption style
 
 On the **Look and branding** page, under **Captions**:
 
 - **How the captions move:** the spoken word changes colour (as before), pops in, shows one big word at a time, or the line fills in word by word.
-- **Your own caption style:** type a font installed on the PC, pick the size, outline thickness, words shown at once and the two colours. **Use this style** applies it; **Save this style…** keeps it under a name you choose, and it then appears in the Caption style list.
+- **Captions higher or lower** and **Captions left or right** (two sliders under *How the captions move*): move the captions anywhere on the screen. The first says how far up from the bottom they sit, the second how far from the middle to the left or right. The Preview on the right shows the result a few seconds later. **Back to the usual place** puts them a little below the middle, centred. A small face in a bottom corner, and some templates, still move the captions out of their own way. Drafts already made get the new position when you press Make videos.
+- **Fonts:** open **Your own caption style**. The **Font** list holds 20 caption fonts that come with the program, so they work on every computer without installing anything: heavy clean ones (Poppins ExtraBold, Be Vietnam Pro ExtraBold, Kanit ExtraBold, Prompt ExtraBold, Fira Sans Black, Lato Black, Archivo Black), tall narrow ones (Bebas Neue, Anton, Fjalla One, Barlow Condensed ExtraBold), round friendly ones (Paytone One, Lilita One, Titan One), comic ones (Bangers, Luckiest Guy, Chewy), a hand-written one (Permanent Marker) and two showy ones (Russo One, Passion One Bold). Choosing one applies it at once. They are free fonts from Google Fonts; each one's licence is in the program's `src/clipper/fonts` folder. Below the list you can still type the name of any font installed on this computer.
+- **Your own caption style:** choose or type a font, pick the size, outline thickness, words shown at once and the two colours. **Use this style** applies it; **Save this style…** keeps it under a name you choose, and it then appears in the Caption style list.
 
 Clips already drafted get the new look when you press **Make videos**.
 
@@ -498,6 +511,14 @@ Then do steps 2 to 4 above. This also works with a YouTube stream recording, if 
 
 These add a narrator, which is what YouTube asks for before it pays for clip content.
 
+**The narrator's voice** is chosen on the **Settings** page, under **Narrator voice**. *Where the voice comes from* has two choices:
+
+- **This computer (free):** the voice model that came with the program. **Voice** lists its twelve best voices, the two its makers rate highest first (Heart and Bella, American women), then other American women and men, and British voices (Emma, George, Fable), which read with British sounds. **Speaking speed** makes it slower or faster. It costs nothing and works without the internet.
+- **ElevenLabs (paid, your own key):** sounds more natural. Put a line `ELEVENLABS_API_KEY=your-key` in the file `.env` in the program's folder first (the key is made on elevenlabs.io; it is never typed on the page). When you choose ElevenLabs, the program asks ElevenLabs whether the key works, and if it does it switches to the best sounding model your account offers. You can then pick another **ElevenLabs model** and a **Voice** from your account's own list. Each explainer video uses characters of your ElevenLabs plan, about one for every letter spoken.
+- **Check ElevenLabs** asks ElevenLabs whether the key works, which models and voices it offers and how many characters your plan has left. It makes no speech, so it costs nothing. If it says the key *may not list models*, the key works but was made without that permission: the usual models are offered instead.
+- **Listen** plays one short line in the voice as it is set now. With ElevenLabs it uses about 60 characters of your plan and asks first.
+- The narrator speaks English with either choice.
+
 - **Explained clip:** the narrator sets the moment up over an animated card (the clip's picture sliding in, the streamer's name, a progress bar, a whoosh), then the clip plays.
 
   ```powershell
@@ -550,6 +571,9 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | Windows says "Smart App Control blocked an app that may be unsafe" when the installer is opened | Smart App Control is a Windows 11 protection that blocks programs not signed with a paid certificate, and this installer is not signed. There is no "Run anyway" button for it. Either install the other way, from a terminal (Part 1, **The other way, for people who use a terminal**), or turn Smart App Control off in Windows Security, App & browser control, Smart App Control settings. Know first that Windows does not let you turn it back on without resetting Windows; that choice is yours |
 | "Captions are not set up on this computer yet" when you start a job | The speech model (about 1.6 GB) has not been downloaded, and the program does not fetch something that size without being asked. Open **Set up** in the menu, go to the **Captions** step, press **Download and try it**, wait for it to turn green, then start the job again |
 | The **Set up** entry in the menu is amber with a warning triangle | Something the program needs is missing (Video tools or Captions). Hover over it to read which, or click it: the page shows the step and its button. Nothing is downloaded until you press that button |
+| "ElevenLabs cannot be chosen yet: no key is set" | Put a line `ELEVENLABS_API_KEY=your-key` in the file `.env` in the program's folder, restart the program, then choose ElevenLabs again under Settings, Narrator voice |
+| "ElevenLabs refused the key" | The key in `.env` is wrong or was deleted on elevenlabs.io. Make a new key there and put it in `.env`. The narrator stays on this computer's free voice meanwhile |
+| A caption font looks different in the finished video than expected | Look at the Preview on Look and branding: it is drawn by the same engine as the videos. A font typed by name must be installed on this computer; the 20 in the Font list always work |
 | Captions miss words | Normal on very noisy moments. The larger model is already the default |
 | Too many clips with nothing in them in mode B, C or D | Raise `audio_level` or `video_level` under `watch:` in `config.yaml` |
 | Anything else | Open an issue on the project's GitHub page, or open Claude Code in this folder and describe it |

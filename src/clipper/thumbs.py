@@ -127,7 +127,7 @@ def frame_cover(d: Path, cfg: Config) -> Path:
             # With the face in one half and the video in the other, the words sit where the two meet, not across the face.
             split = str(state.get("layout") or cfg.render.layout) in ("split", "split_under")
             (d / "cover.ass").write_text(cover_ass(words, cfg.captions.font, top=560 if split else 190), encoding="utf-8")
-            cmd += ["-vf", f"scale={cfg.render.width}:{cfg.render.height},eq=saturation=1.25:contrast=1.06,ass=cover.ass"]
+            cmd += ["-vf", f"scale={cfg.render.width}:{cfg.render.height},eq=saturation=1.25:contrast=1.06," + __import__("clipper.fonts", fromlist=["ass_filter"]).ass_filter("cover.ass")]
         else:
             cmd += ["-vf", f"scale={cfg.render.width}:{cfg.render.height},eq=saturation=1.25:contrast=1.06"]
         run(cmd + ["-frames:v", "1", "-q:v", "2", "cover.part.jpg"], timeout_s=120, what=f"thumbnail of clip {d.name}", cwd=d)

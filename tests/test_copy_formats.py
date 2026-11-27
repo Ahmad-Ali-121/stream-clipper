@@ -126,7 +126,7 @@ def test_card_graphics_rank_or_label_and_progress_bar():
 
 def test_card_filter_scales_with_output_size():
     full = card_filter(1080, 1920, 30, 120, "c.ass")
-    assert "pad=772:962:6:6:white" in full and "overlay=x=154:y='310+" in full and full.endswith("ass=c.ass[v]")
+    assert "pad=772:962:6:6:white" in full and "overlay=x=154:y='310+" in full and "ass=c.ass" in full and full.endswith("[v]")
     half = card_filter(540, 960, 30, 120, "c.ass")
     assert "pad=386:480:3:3:white" in half and "s=540x960" in half
 

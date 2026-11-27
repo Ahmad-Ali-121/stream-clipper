@@ -77,7 +77,8 @@ class CaptionSettings:
     outline: int = 6
     shadow: int = 2
     active_scale: int = 112
-    margin_v: int = 520
+    margin_v: int = 520  # how far the captions sit above the bottom edge, in pixels of the 1920-high video
+    offset_x: int = 0  # captions moved sideways from the middle, in pixels: negative = left, positive = right
     uppercase: bool = True
     max_words: int = 3
     max_chars: int = 18

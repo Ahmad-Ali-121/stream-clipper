@@ -121,10 +121,10 @@ ai:                       # "AI reads the stream": transcribes a finished stream
 
 voice:                    # narration for the "explained" and "top moments" formats
   backend: kokoro         # kokoro = free, runs on this machine; elevenlabs = paid, needs ELEVENLABS_API_KEY in .env
-  kokoro_voice: am_michael
+  kokoro_voice: am_michael  # the free voice: af_heart and af_bella are rated best; the page (Settings, Narrator voice) lists the twelve offered
   speed: 1.05
   elevenlabs_voice_id: JBFqnCBsd6RMkjVDRZzb
-  elevenlabs_model: eleven_turbo_v2_5
+  elevenlabs_model: eleven_turbo_v2_5   # choosing ElevenLabs on the page switches this to the best sounding model your account offers
 
 # Per-streamer layout, keyed by lower-case channel name. Each streamer puts the
 # facecam somewhere different, so measure it once from a frame and record it here.
@@ -150,7 +150,8 @@ captions:
   outline: 6
   shadow: 2
   active_scale: 112         # percent size of the active word
-  margin_v: 520             # distance of the caption from the bottom edge, in pixels
+  margin_v: 520             # distance of the caption from the bottom edge, in pixels (Look and branding, Captions higher or lower)
+  offset_x: 0               # captions moved sideways from the middle, in pixels: negative = left, positive = right (at most 300)
   uppercase: true
   script: roman             # Urdu or Hindi speech only: roman = Latin letters ("bhai ne kamaal kar diya"), best with Claude; native = Urdu / Devanagari letters
   max_words: 3              # words on screen at once

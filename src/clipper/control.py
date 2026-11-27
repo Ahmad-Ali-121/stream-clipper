@@ -145,6 +145,41 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if value not in ANIMATIONS:
                 raise ValueError(f"the caption movement must be one of: {', '.join(ANIMATIONS)}")
             out.setdefault("captions", {})["animation"] = value
+        elif key == "caption_position":
+            try:
+                up = int(round(float((value or {}).get("margin_v"))))
+                side = int(round(float((value or {}).get("offset_x") or 0)))
+            except (TypeError, ValueError, AttributeError):
+                raise ValueError("the caption position must be two numbers: how high, and how far left or right") from None
+            # how high: pixels above the bottom edge of the 1920-high video; sideways: pixels from the middle
+            out.setdefault("captions", {}).update(margin_v=min(1500, max(80, up)), offset_x=min(300, max(-300, side)))
+        elif key == "voice_backend":
+            if value not in ("kokoro", "elevenlabs"):
+                raise ValueError("the narrator voice comes from this computer (kokoro) or from ElevenLabs")
+            if value == "elevenlabs":
+                from .tts import elevenlabs_key
+
+                if not elevenlabs_key():
+                    raise ValueError("ElevenLabs cannot be chosen yet: no key is set. Put a line ELEVENLABS_API_KEY=your-key in the file .env "
+                                     "in the program's folder, then press Check ElevenLabs")
+            out.setdefault("voice", {})["backend"] = value
+        elif key == "voice_kokoro":
+            from .tts import KOKORO_VOICES
+
+            if value not in [v for v, _ in KOKORO_VOICES]:
+                raise ValueError("that is not one of the voices on this computer")
+            out.setdefault("voice", {})["kokoro_voice"] = value
+        elif key == "voice_speed":
+            try:
+                out.setdefault("voice", {})["speed"] = round(min(1.4, max(0.7, float(value))), 2)
+            except (TypeError, ValueError):
+                raise ValueError("the speaking speed must be a number between 0.7 and 1.4") from None
+        elif key in ("voice_eleven_voice", "voice_eleven_model"):
+            import re as _re
+
+            if not _re.fullmatch(r"[A-Za-z0-9_.\-]{4,64}", str(value or "")):
+                raise ValueError("choose one from the list (press Check ElevenLabs to fill it)")
+            out.setdefault("voice", {})["elevenlabs_voice_id" if key == "voice_eleven_voice" else "elevenlabs_model"] = str(value)
         elif key == "caption_look":
             name = str((value or {}).get("name") or "custom").strip()[:40] or "custom"
             out.setdefault("captions", {}).update(preset=name, **clean_look(value))
@@ -285,6 +320,7 @@ class Control:
         self.maint = {"name": "", "running": False, "lines": []}  # the one maintenance job: full check, repair or update
         self.health_started = False
         self.update_asked = 0.0  # when GitHub was last asked for a newer version
+        self.voice_check: dict | None = None  # what ElevenLabs said the last time it was asked (Settings, Narrator voice)
         # Jobs started from the page say how far they are in this file (see progress.py); the page shows it as a percentage.
         self.progress_path = cfg.data_dir / "progress.json"
         self.finish_progress_path = cfg.data_dir / "progress-finish.json"
@@ -330,6 +366,9 @@ class Control:
                                                            "music_rise_s", "music_peak")},
                       "logo_name": Path(cfg.brand.logo).name if cfg.brand.logo else "", "music_name": Path(cfg.brand.music).name if cfg.brand.music else ""},
             "caption_presets": {k: {"label": v[0], **v[1]} for k, v in CAPTION_PRESETS.items()},
+            "caption_position": {"margin_v": cfg.captions.margin_v, "offset_x": cfg.captions.offset_x},
+            "fonts": [{"label": f["label"], "family": f["family"], "file": f["file"], "kind": f.get("kind", ""), "weight": int(f.get("weight") or 400)} for f in __import__("clipper.fonts", fromlist=["bundled"]).bundled()],
+            "voice": self.voice_status(),
             "finish_progress": self.finish_progress,
             "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
             "finishing": self.finishing, "finish_log": self.finish_lines[-200:], "finish_stopping": self.finish_stopping if self.finishing else "",
@@ -398,6 +437,44 @@ class Control:
             except Exception as e:  # shown on the page; the page itself must still open
                 self.watch_problem = f"WATCHING COULD NOT START BY ITSELF: {e}"
                 log.error("%s", self.watch_problem)
+
+    def voice_status(self) -> dict:
+        """What the page shows about the narrator of explainer videos."""
+        from . import tts
+
+        v = self.cfg.voice
+        return {"backend": v.backend, "kokoro_voice": v.kokoro_voice, "speed": v.speed, "eleven_voice": v.elevenlabs_voice_id, "eleven_model": v.elevenlabs_model,
+                "key": bool(tts.elevenlabs_key()), "kokoro_voices": [list(x) for x in tts.KOKORO_VOICES], "check": getattr(self, "voice_check", None)}
+
+    def check_voice(self, raw: dict | None = None) -> dict:
+        """Ask ElevenLabs whether the key works (free). ``use`` also switches the narrator to ElevenLabs with its best
+        model, when the key works: that is what "use ElevenLabs" on the page means."""
+        from . import tts
+
+        cfg = self.reload()
+        got = tts.elevenlabs_check(cfg)
+        got["at"] = time.strftime("%H:%M")
+        self.voice_check = got
+        if got.get("ok"):
+            change = {}
+            ids = [m["id"] for m in got.get("models", [])]
+            if got.get("best_model") and cfg.voice.elevenlabs_model not in ids:
+                change["voice_eleven_model"] = got["best_model"]  # the model in the settings is not one this account has
+            voices = [v["id"] for v in got.get("voices", [])]
+            if voices and cfg.voice.elevenlabs_voice_id not in voices:
+                change["voice_eleven_voice"] = voices[0]
+            if (raw or {}).get("use"):
+                change["voice_backend"] = "elevenlabs"
+                if got.get("best_model"):
+                    change["voice_eleven_model"] = got["best_model"]  # the best sounding one this account has
+            if change:
+                save_local(clean_options(change))
+                self.reload()
+                if not (raw or {}).get("use"):
+                    got["changed"] = "The model or voice in your settings is not in this account, so the best one it has was chosen."
+        elif (raw or {}).get("use"):
+            raise ValueError("ElevenLabs cannot be used yet. " + str(got.get("why") or ""))
+        return self.status()
 
     def _local_ai(self) -> dict:
         from . import localai
