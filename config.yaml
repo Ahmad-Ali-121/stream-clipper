@@ -41,7 +41,7 @@ fetch:
 
 transcribe:
   backend: local          # local = faster-whisper on this machine (free); groq = paid API, needs GROQ_API_KEY in .env
-  model: large-v3-turbo   # most complete captions; about 45-65 s per 36-second clip on this CPU. "small" takes about 5 s but drops and mishears more
+  model: large-v3-turbo   # most complete captions; about 45-65 s per 36-second clip on this CPU. "small" (Fast on the Settings page, 0.5 GB) is 2 to 5 times quicker but drops and mishears more
   vad_filter: false       # the silence filter removed real speech under game audio, so it is off
   min_word_prob: 0.35     # drop words the model itself is unsure of
   compute_type: auto      # auto, or int8 / int8_float16 / float16
@@ -122,6 +122,8 @@ ai:                       # "AI reads the stream": transcribes a finished stream
 voice:                    # narration for the "explained" and "top moments" formats
   backend: kokoro         # kokoro = free, runs on this machine; elevenlabs = paid, needs ELEVENLABS_API_KEY in .env
   kokoro_voice: am_michael  # the free voice: af_heart and af_bella are rated best; the page (Settings, Narrator voice) lists the twelve offered
+  language: English       # what the narrator speaks: English, Hindi or Urdu (Settings, Narrator voice). Hindi is read from Hindi letters, Urdu from Urdu letters
+  kokoro_voice_hindi: hf_alpha  # the free voice for Hindi and Urdu: hf_alpha, hf_beta (women), hm_psi, hm_omega (men)
   speed: 1.05
   elevenlabs_voice_id: JBFqnCBsd6RMkjVDRZzb
   elevenlabs_model: eleven_turbo_v2_5   # choosing ElevenLabs on the page switches this to the best sounding model your account offers
@@ -159,6 +161,11 @@ captions:
   max_gap_s: 0.6            # a pause longer than this starts a new caption line
   min_word_s: 0.12          # shortest time a word stays highlighted
   animation: highlight      # how the words move: highlight, pop, word (one big word at a time), build (the line fills in), popline (each line pops in), line (plain)
+
+cleanup:                    # clearing old files by itself, while the program is open and idle (Settings, Disk space)
+  bin_days: 7               # a clip you delete waits in the bin this many days, then its files are removed for good
+  rejected_days: 14         # the downloads and drafts of rejected clips are cleared this many days after the rejection (0 = never)
+  finished_days: 0          # the big download of a clip whose videos are made is cleared after this many days (0 = never; the videos stay)
 
 brand:                      # your own mark on every clip; all optional, set on the review page under Branding
   logo: ""                  # an image file shown for the whole clip (PNG with a clear background is best)

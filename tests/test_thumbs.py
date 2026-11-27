@@ -185,7 +185,7 @@ def test_the_option_and_the_page_controls_are_there():
     with pytest.raises(ValueError, match="thumbnails must be one of"):
         clean_options({"thumbnail": "midjourney"})
     assert load_config().render.thumbnail == "off"  # an extra: nothing is made unless it is switched on
-    page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+    page = clipper.page_source()
     for piece in ('id="o-thumb"', "makeCover(", "Let ChatGPT make it", "Make it from the clip (free)", "Make it from my description", 'name="t_cover"', "/cover.jpg"):
         assert piece in page, piece
 

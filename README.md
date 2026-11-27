@@ -159,11 +159,11 @@ Everything in the core works with no paid service. These are optional:
 
 | Add-on | How | What it adds | Rough cost |
 |---|---|---|---|
-| Claude | Sign in with your own Claude plan on the Set up page, or put `ANTHROPIC_API_KEY` in `.env` | Writes opening text, titles, descriptions and narration; flags filler clips; can read a whole stream and pick moments | With a plan it uses your plan's limits; with a key about $0.01 per clip |
+| Claude | Sign in with your own Claude plan on the Set up page, or paste a Claude key under Settings, Keys | Writes opening text, titles, descriptions and narration; flags filler clips; can read a whole stream and pick moments | With a plan it uses your plan's limits; with a key about $0.01 per clip |
 | ChatGPT | Sign in with your own ChatGPT plan on the Set up page | Makes thumbnails | Uses your plan's limits |
 | Free local AI | Set up page, on a computer that can run it (about 3 GB) | Writes clip text when Claude cannot be reached | Free |
-| ElevenLabs | `ELEVENLABS_API_KEY` in `.env`, then choose it under Settings, Narrator voice | A more natural narrator voice for explainer videos, with the model and voice picked from your account | from $6 a month |
-| Groq | `GROQ_API_KEY` in `.env` | Faster speech-to-text on their servers (untested) | about $0.04 per audio hour |
+| ElevenLabs | Paste your key under Settings, Keys, then choose it under Settings, Narrator voice | A more natural narrator voice for explainer videos, with the model and voice picked from your account | from $6 a month |
+| Groq | Paste your key under Settings, Keys | Faster speech-to-text on their servers (untested) | about $0.04 per audio hour |
 
 Sign-ins happen in each company's own window. Stream Clipper never sees or stores your password.
 
@@ -235,6 +235,7 @@ src/clipper/
   layout.py      crop or split, facecam     cuts.py      snap cuts to pauses
   captions.py    caption file (ASS)         render.py    final video with FFmpeg
   review.py      local review page          control.py   options panel behind it
+  review_page.html / .css / .js   the page itself: layout, styles, script (served as one document)
   llm.py         text by Claude             trends.py    hashtags from YouTube
   tts.py         narration voice            compose.py   explained and top-N videos
   post.py        export and upload text     brief.py     campaign rule checks
@@ -242,7 +243,8 @@ src/clipper/
   health.py      setup check, repair, update   scoring.py   one score per clip, learning
   tracker.py     what was posted, views, payouts
   hw.py          GPU / CPU choice           buffer.py    rolling live copy when there is no recording
-tests/           438 unit tests (uv run python -m pytest -q)
+tests/           462 unit tests (uv run python -m pytest -q), and 5 that drive the page in Edge or Chrome
+                 (uv run --with playwright python -m pytest -q tests/test_browser.py)
 ```
 
 </details>
@@ -252,7 +254,7 @@ tests/           438 unit tests (uv run python -m pytest -q)
 - Chat spikes also happen for giveaways, greetings and raids. Expect filler among the drafts; that is what the review step is for.
 - The audio and video signals are new and their thresholds are not tuned on many streams.
 - On live YouTube streams moments come from chat only (no sound or picture detection yet), and a clip must be cut within about 15 minutes of its moment, which is how long YouTube keeps a live stream's pieces available.
-- Urdu and Hindi: the narrator in explainer videos speaks English only. Latin-letter captions need Claude.
+- Urdu and Hindi: the narrator of explainer videos can speak Hindi or Urdu with the free voice (Settings, Narrator voice), read from that language's own letters. It was checked by a speech model listening back, not yet judged by a person. Latin-letter captions need Claude.
 - A stream with recordings switched off costs about 3 GB of internet an hour to watch, and moments during advert breaks cannot be clipped.
 - Speech-to-text on an NVIDIA card is new and has had almost no testing. If it cannot be used, the processor is used instead.
 - The first clip or two of a new streamer may be framed slightly off until the facecam box has been measured twice.

@@ -15,7 +15,7 @@ from clipper import cli, health, plain, setupguide, thumbs
 from clipper.config import Config, ConfigError, load_config
 
 SRC = Path(clipper.__file__).parent
-PAGE = (SRC / "review_page.html").read_text(encoding="utf-8")
+PAGE = clipper.page_source()
 
 
 # ---------------------------------------------------------------- the page
@@ -27,7 +27,7 @@ def test_the_page_keeps_what_was_found_by_using_it():
         # the cutting board's keys only on the cutting board
         "if(curPage!=='new'||curSub!=='board'||openKey||",
         # a clip that goes away while open closes its editor
-        "if(el){if(openKey===key)closeClip(true);el.remove()}",
+        "if(el){if(openKey===key)closeClip(true);if(r.binned)el.dataset.m='';else el.remove()}",
         "if(el.classList.contains('open')){closeClip(true);",
         # a job that ends does not pull the person away
         "const here=curPage==='new'&&!openKey;",

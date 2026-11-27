@@ -14,7 +14,7 @@ You give it a Twitch stream. It finds the moments where chat went wild (and, if 
 2. It works through five steps and ticks each one: fetch **uv** (the small tool that installs Python for this program only), make sure **Git** is there (for the Update button), fetch the program, install Python and the program's parts (the longest step), download the video tools and models (about 300 MB). It takes 5 to 20 minutes and needs the internet.
 3. At the end a **Stream Clipper** shortcut is on your desktop. Leave **Start Stream Clipper now** ticked and press **Finish**.
 
-If a step fails (most often the internet dropped), the window says so in plain words and has a **Try again** button; it carries on where it stopped. The full log is in `install-log.txt` in the program folder. **Stop** (or closing the window) asks first, then really stops: whatever was downloading is ended, and running the installer again later carries on. Running the installer again over a copy that is already installed keeps that copy's clips folder (it shows it and uses it again) and its settings. If Windows does not let a shortcut be put on the desktop, the last screen says so and names the file to start the program with (`Stream-Clipper.cmd` in the program's folder).
+If a step fails (most often the internet dropped), the window says so in plain words and has a **Try again** button; it carries on where it stopped. The full log is in `install-log.txt` in the program folder. **Stop** (or closing the window) asks first, then really stops: whatever was downloading is ended, and running the installer again later carries on. Running the installer again over a copy that is already installed keeps that copy's clips folder (it shows it and uses it again) and its settings, and **brings the program up to date** with the newest version, the same step forward the Update button makes. Your settings, your keys and your clips are not touched. If it cannot be brought up to date (no internet, or files of the program were changed on this computer), the log says why in one line and the install carries on with the copy as it is. If Windows does not let a shortcut be put on the desktop, the last screen says so and names the file to start the program with (`Stream-Clipper.cmd` in the program's folder).
 
 Windows may show a blue box, "Windows protected your PC", the first time: the installer is not signed with a paid certificate. Press **More info**, then **Run anyway**. If Windows instead says **Smart App Control blocked an app**, there is no such button: see that line in the problems table near the end of this guide.
 
@@ -23,7 +23,7 @@ A new or freshly reset computer often lacks the **Microsoft Visual C++ runtime**
 **Then: the Set up page.** The program never opens this page by itself and never downloads anything large without your own press. It opens on **New clips** (or where you were last). While something the program needs is still missing, the **Set up** entry in the menu on the left turns into a warning: amber, with a warning triangle and how many steps are left, for example **1 to do**. Click it. The page takes you through what is left, one step per screen:
 
 1. **Video tools** (done by the installer; here in case something is missing).
-2. **Captions:** downloads the speech model (about 1.6 GB) and tries it on this computer.
+2. **Captions:** downloads the speech model (about 1.6 GB; about 0.5 GB if you chose **Fast** under Settings, Language) and tries it on this computer.
 3. **Claude, for titles and ratings** (optional): **Install Claude Code**, then **Sign in to Claude**.
 4. **ChatGPT, for thumbnails** (optional): **Install Node.js first** if the PC has none, then **Install the ChatGPT tool**, then **Sign in to ChatGPT**.
 5. **Free AI on this computer** (optional, about 3 GB).
@@ -61,12 +61,14 @@ The speech model (1.6 GB) is downloaded when you press **Download and try it** o
 
 ## Part 2: Optional paid keys
 
-The clipper works with none of these. Create a file named `.env` in the program's folder (copy `.env.example`; with the installer that folder is `app` inside the program folder you chose, normally `%LOCALAPPDATA%\StreamClipper\app`) and add only the lines you have keys for.
+The clipper works with none of these. A key is a long password that a paid service gives you on its website. Open **Settings**, find the card **Keys**, paste the key into its box and press **Save**. The key is kept only in a file on this computer (`.env` in the program's folder) and goes to nobody but that service. The box is emptied at once and the page never shows the key again: it only says *a key is saved*. **Remove** takes it out again. A key works at once, without a restart.
+
+(By hand instead: create a file named `.env` in the program's folder, copying `.env.example`, and add only the lines you have keys for. With the installer that folder is `app` inside the program folder you chose, normally `%LOCALAPPDATA%\StreamClipper\app`.)
 
 | Key | What it adds | Cost | Where to get it |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Claude writes the hook, title, description and narration, and marks filler clips | About $0.02 per clip with the default model, far less with `claude-haiku-5-5` (set `llm.model` in `config.yaml`). Minimum top-up is $5 | console.anthropic.com |
-| `ELEVENLABS_API_KEY` | A more natural narrator voice. After putting the key in `.env`, choose ElevenLabs on the Settings page under **Narrator voice** | Starter plan $6 a month | elevenlabs.io |
+| `ELEVENLABS_API_KEY` | A more natural narrator voice. After saving the key, choose ElevenLabs on the Settings page under **Narrator voice** | Starter plan $6 a month | elevenlabs.io |
 | `GROQ_API_KEY` | Faster transcription (set `transcribe.backend: groq`) | About $0.04 per hour of audio | console.groq.com |
 
 **Claude without an API key.** If you pay for a Claude plan (Pro or Max), the clipper can use it instead of an API key:
@@ -215,7 +217,7 @@ With one of the two chosen, the thumbnail is made when you press **Make videos**
 
 **Move to Pending** on an approved clip takes it out of Approved, so **Make videos** does not make it, and puts it in the **Pending** list instead of mixing it back into To review. In the Approved list, **Move all ... to Pending** does that for every approved clip at once (clips that are already Done are not touched). In Pending, **Approve** sends a clip back to Approved, **Reject** rejects it, and **Back to review** returns it to To review. Nothing is deleted by any of these.
 
-**Delete** on a clip removes it and its files for good; in the Rejected list, **Delete all rejected** clears them all. Videos you already made stay in the ready folder. Red messages can be closed with the × in their corner.
+**Delete** on a clip moves it to **the bin**. Nothing is removed yet: the clip leaves its list and waits in the bin for 7 days. While there is something in it, a **Bin** button stands beside the other lists on My clips; in it each clip has **Bring back** (it returns to the list it was in, with its text, cut and videos as they were) and **Delete forever** (asks first, then removes its draft and downloaded video for good). After 7 days the program empties the bin by itself. In the Rejected list, **Move all rejected to the bin** does it for all of them. Videos you already made stay in the ready folder. A clip whose record is damaged cannot wait in the bin: Delete removes it for good, and says so first. Red messages can be closed with the × in their corner.
 
 The **Activity log** at the bottom of the menu shows what the program is doing, line by line, in four parts: watching live channels, finding moments, making videos, and setup. Problems are shown in red, at the top of the page and on the clip they belong to.
 
@@ -353,7 +355,7 @@ For the last two, choose the corner and how big the small face is. A face in a b
 On **My clips**, press **Select several**. Every tile gets a tick box; press a clip (anywhere on its picture) to tick it, or **Select all shown** to tick every clip in the list you are looking at. A bar shows how many are ticked and what you can do with them:
 
 - **Approve**, **Reject**, **Back to review**.
-- **More to do with them…**, then **Do it**: move to Pending; **Picture: show the whole picture** or **Picture: automatic**; make or do not make **version B**; make or do not make the **explainer version**; **Delete forever**.
+- **More to do with them…**, then **Do it**: move to Pending; **Picture: show the whole picture** or **Picture: automatic**; make or do not make **version B**; make or do not make the **explainer version**; **Delete (to the bin)**.
 
 Deleting, and changing the picture (each draft is made again, up to a minute per clip), ask first. While it works the bar counts the clips, and **Stop after this one** ends it early. At the end it says how many were done and, if some could not be, the first reason. Clips that leave the list (approved, rejected, deleted) are unticked. **Done** leaves selecting; nothing else changes. Everything a single clip's own buttons refuse is refused here too, and the help assistant may not press these buttons for you.
 
@@ -377,6 +379,24 @@ Open the **Look and branding** page, **Logo, closing text and music**.
 - **Background music:** choose a sound file and its loudness. It fades in and out and repeats if it is shorter than the clip. Use only music you have the right to use; platforms mute or remove clips with other people's songs.
 
 Your logo, closing text and music are added whenever a draft or a video is made. Press **Make videos** to add it to clips drafted earlier.
+
+### Captions: best or fast
+
+Under **Settings**, **Language**, *Captions: best or fast* chooses the speech model that listens to a clip and writes its captions:
+
+- **Best** (the usual one): the large model, about 1.6 GB. Fewest wrong words. On a computer without an NVIDIA card it takes about a minute to load for the first clip and about 11 seconds for each 30-second clip after it.
+- **Fast:** the small model, about 0.5 GB. About 2 to 5 times quicker, with a few more wrong or missing words, which you can fix in the clip's Captions tab.
+
+Choosing one never downloads anything. If the model you chose is not on this computer yet, the line under the list says so, the **Set up** entry in the menu turns amber, and the Captions step there has the **Download and try it** button for it. Until then no clips can be made. The choice applies to clips made from then on.
+
+### Disk space: old downloads are cleared by themselves
+
+Every clip keeps the piece of the stream it was cut from, so that you can change it later; these downloads are what fills the disk. **Settings**, **Disk space** shows how much they take, and has two choices:
+
+- **Clear the downloads and drafts of rejected clips:** 3, 7, 14 (the usual), 30 or 60 days after you rejected them, or never. The clip stays in the Rejected list, but it can no longer be played or brought back to review.
+- **Clear the big download of clips whose videos are made:** never (the usual), or after 3 to 60 days. The finished videos stay, and the clip still plays, but its videos cannot be made again with a new look.
+
+The program does this by itself while it is open and nothing else is running. **Clear rejected clips now** and **Empty the bin now** do it at once and say how much was freed. A clip still waiting for review is never touched.
 
 ### Faster on YouTube: its own captions
 
@@ -440,6 +460,8 @@ Works on every clip: live Twitch, Kick and YouTube drafts, finished streams and 
 - what the streamer speaks: English, Urdu or Hindi;
 - how captions are written: in Latin letters ("bhai ne kamaal kar diya", needs Claude) or in Urdu or Hindi letters;
 - what the opening text and titles are written in: English, Roman Urdu, Hinglish, Urdu or Hindi.
+
+The **narrator** of explainer videos has its own choice, under **Settings**, **Narrator voice**, **What the narrator speaks**: English, Hindi or Urdu (see *The narrator's voice* further down).
 
 The choice applies to clips made from then on. Set it back to English before watching an English streamer.
 
@@ -514,10 +536,10 @@ These add a narrator, which is what YouTube asks for before it pays for clip con
 **The narrator's voice** is chosen on the **Settings** page, under **Narrator voice**. *Where the voice comes from* has two choices:
 
 - **This computer (free):** the voice model that came with the program. **Voice** lists its twelve best voices, the two its makers rate highest first (Heart and Bella, American women), then other American women and men, and British voices (Emma, George, Fable), which read with British sounds. **Speaking speed** makes it slower or faster. It costs nothing and works without the internet.
-- **ElevenLabs (paid, your own key):** sounds more natural. Put a line `ELEVENLABS_API_KEY=your-key` in the file `.env` in the program's folder first (the key is made on elevenlabs.io; it is never typed on the page). When you choose ElevenLabs, the program asks ElevenLabs whether the key works, and if it does it switches to the best sounding model your account offers. You can then pick another **ElevenLabs model** and a **Voice** from your account's own list. Each explainer video uses characters of your ElevenLabs plan, about one for every letter spoken.
+- **ElevenLabs (paid, your own key):** sounds more natural. Paste your key under **Keys** on the Settings page first and press **Save** (the key is made on elevenlabs.io). When you choose ElevenLabs, the program asks ElevenLabs whether the key works, and if it does it switches to the best sounding model your account offers. You can then pick another **ElevenLabs model** and a **Voice** from your account's own list. Each explainer video uses characters of your ElevenLabs plan, about one for every letter spoken.
 - **Check ElevenLabs** asks ElevenLabs whether the key works, which models and voices it offers and how many characters your plan has left. It makes no speech, so it costs nothing. If it says the key *may not list models*, the key works but was made without that permission: the usual models are offered instead.
 - **Listen** plays one short line in the voice as it is set now. With ElevenLabs it uses about 60 characters of your plan and asks first.
-- The narrator speaks English with either choice.
+- **What the narrator speaks:** English, **Hindi** (people who speak Urdu understand it too) or **Urdu**. With Hindi or Urdu the free voice model uses its four Hindi voices (Alpha and Beta, women; Psi and Omega, men), and the narrator's line must be written in that language's own letters: Hindi letters (Devanagari) for Hindi, Urdu letters for Urdu. With AI switched on, the lines of new clips are written that way by themselves; for a clip you already have, press **Write again with AI** or type the line yourself (the clip's editor, Versions, What the narrator says). A line in the wrong letters is refused with a message that says what to do; it is never spoken wrongly. A game's name or a number inside a Hindi line is fine (GTA is read as letters, 6 as the Hindi word). Hindi is read more reliably than Urdu: Urdu writing leaves out short vowels, so an English word written in Urdu letters can be said a little wrong. **Press Listen before you rely on it:** the Hindi and Urdu voices were checked by letting the speech model listen to them (it wrote back the same words), not yet by a person. With ElevenLabs, choose a many-language model such as Multilingual v2; its English-only models are refused for Hindi and Urdu.
 
 - **Explained clip:** the narrator sets the moment up over an animated card (the clip's picture sliding in, the streamer's name, a progress bar, a whoosh), then the clip plays.
 
@@ -558,7 +580,7 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 |---|---|
 | A download fails | The connection dropped. Run the same command again; it continues where it stopped |
 | "not found on PATH" | Run the setup script again |
-| "less than 2 GB free" | Run `uv run clipper clean`, or delete old folders in `D:\clipper-data\work` |
+| "less than 2 GB free" | Open **Settings**, **Disk space**. It shows what takes the space. Press **Clear rejected clips now** or **Empty the bin now**, or choose a shorter time under *Clear the downloads and drafts of rejected clips* |
 | "live ... but Twitch is not recording this broadcast" | Not an error. The streamer has recordings (VODs) switched off, so the watcher keeps the last 10 minutes of the live stream on disk and cuts clips from that. It uses about 3 GB of internet an hour for that channel, the first minute is lost to Twitch's opening advert, and moments during advert breaks are lost. To skip such streams instead, set `buffer_when_no_vod: false` under `watch:` in `config.yaml` |
 | "no chat replay" | That video cannot be scored from chat. Use a live watch instead |
 | A clip is framed wrong, or too much of the stream picture is cut off | Open the clip with Edit. Under the player, **Picture**: press **Whole picture** to show everything with blur above and below, or **Choose boxes…** to draw what is shown. The draft is made again at once |
@@ -566,15 +588,18 @@ The narration lines are written by Claude when the Anthropic key is set. Without
 | "this clip comes from a live stream that is not being recorded" when adding seconds | The seconds around that clip were only kept for a few minutes while the stream was live and are gone. Nothing can be added to it |
 | "an NVIDIA card was found but speech-to-text cannot run on it" | Not an error: speech-to-text runs on the processor instead (slower, same result). To use the card, run the setup command again with `-Gpu` added at the end. It downloads NVIDIA's libraries (about 1 GB) and then says whether the card works. If it still cannot, update the NVIDIA driver and run `uv run clipper hardware --refresh` |
 | A red box at the top of the page | The watcher stopped by itself, or the program is not answering. The red and yellow lines in the **Activity log** (bottom of the menu), and the terminal window, say why. A clip that could not be made says so on its tile and shows its own reason in red in its editor |
-| The program closes or says "access violation" when captions are made | The computer's Microsoft Visual C++ runtime is too old. Install the x64 version from https://aka.ms/vs/17/release/vc_redist.x64.exe, restart, and try again. `uv run clipper doctor` shows the installed version |
+| The program closes or says "access violation" when captions are made | The computer's Microsoft Visual C++ runtime is too old. Install the x64 version from https://aka.ms/vs/17/release/vc_redist.x64.exe, restart, and try again. Under Settings, Setup check, the button **Find out why captions fail** (shown when captions fail) writes a report with the installed version |
 | "Windows' C++ runtime (msvcp140.dll) is missing", or "Could not find module ... ctranslate2.dll (or one of its dependencies)", or the installer stops at **Download the video tools and models** with "Tests failed" on a new computer | The computer does not have the Microsoft Visual C++ runtime, a free part of Windows that many programs share and that a new or freshly reset PC often lacks. Captions (speech-to-text) need it. The program adds it by itself: press **Try again** in the installer, or **Install the video tools** on the **Set up** page, or **Repair** under Settings, Setup check, and press **Yes** when Windows asks to allow Microsoft Visual C++. If that does not work (no administrator password, the download is blocked, or the copy was fetched before 26 November 2026 and has no such step), download Microsoft's own installer from https://aka.ms/vs/17/release/vc_redist.x64.exe (about 25 MB), run it, restart the computer, then press **Try again** or **Check again**. Nothing already downloaded is fetched again |
 | Windows says "Smart App Control blocked an app that may be unsafe" when the installer is opened | Smart App Control is a Windows 11 protection that blocks programs not signed with a paid certificate, and this installer is not signed. There is no "Run anyway" button for it. Either install the other way, from a terminal (Part 1, **The other way, for people who use a terminal**), or turn Smart App Control off in Windows Security, App & browser control, Smart App Control settings. Know first that Windows does not let you turn it back on without resetting Windows; that choice is yours |
-| "Captions are not set up on this computer yet" when you start a job | The speech model (about 1.6 GB) has not been downloaded, and the program does not fetch something that size without being asked. Open **Set up** in the menu, go to the **Captions** step, press **Download and try it**, wait for it to turn green, then start the job again |
+| "Captions are not set up on this computer yet" when you start a job | The speech model (about 1.6 GB, or 0.5 GB for the fast one) has not been downloaded, and the program does not fetch something that size without being asked. Open **Set up** in the menu, go to the **Captions** step, press **Download and try it**, wait for it to turn green, then start the job again |
 | The **Set up** entry in the menu is amber with a warning triangle | Something the program needs is missing (Video tools or Captions). Hover over it to read which, or click it: the page shows the step and its button. Nothing is downloaded until you press that button |
-| "ElevenLabs cannot be chosen yet: no key is set" | Put a line `ELEVENLABS_API_KEY=your-key` in the file `.env` in the program's folder, restart the program, then choose ElevenLabs again under Settings, Narrator voice |
-| "ElevenLabs refused the key" | The key in `.env` is wrong or was deleted on elevenlabs.io. Make a new key there and put it in `.env`. The narrator stays on this computer's free voice meanwhile |
+| "ElevenLabs cannot be chosen yet: no key is set" | Paste your ElevenLabs key under Settings, **Keys**, press Save, then choose ElevenLabs again under Narrator voice |
+| "ElevenLabs refused the key" | The key is wrong or was deleted on elevenlabs.io. Make a new key there and save it under Settings, **Keys**. The narrator stays on this computer's free voice meanwhile |
 | A caption font looks different in the finished video than expected | Look at the Preview on Look and branding: it is drawn by the same engine as the videos. A font typed by name must be installed on this computer; the 20 in the Font list always work |
-| Captions miss words | Normal on very noisy moments. The larger model is already the default |
+| Captions miss words | Normal on very noisy moments. The larger model is already the default; if you chose **Fast** under Settings, Language, switch back to **Best** |
+| "The narrator is set to speak Hindi, and reads Hindi letters ... only" (or the same for Urdu or English) on a clip's explainer | The narrator's line of that clip is written in other letters than the narrator reads. Open the clip, Versions, and rewrite **What the narrator says** in that language (or press **Write again with AI**), or change **What the narrator speaks** under Settings, Narrator voice |
+| A clip I deleted | It is in the bin for 7 days: My clips, **Bin**, **Bring back** |
+| "The copy that is here could not be brought up to date" in the installer's log | Not an error: the install carried on with the copy you had. It says why. To get the newest version, run the installer again and choose a new, empty program folder (keep the same clips folder) |
 | Too many clips with nothing in them in mode B, C or D | Raise `audio_level` or `video_level` under `watch:` in `config.yaml` |
 | Anything else | Open an issue on the project's GitHub page, or open Claude Code in this folder and describe it |
 

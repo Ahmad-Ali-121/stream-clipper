@@ -10,7 +10,7 @@ from pathlib import Path
 import clipper
 from clipper.review import page_html
 
-PAGE = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+PAGE = clipper.page_source()
 BODY = PAGE[PAGE.index("<body>"):PAGE.index("<script>")]
 SCRIPT = PAGE[PAGE.index("<script>"):]
 

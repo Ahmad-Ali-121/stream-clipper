@@ -1151,7 +1151,7 @@ def write_clip_copy(d: Path, state: dict, cfg: Config, force: bool = False) -> d
         state.pop("copy_problem", None)
     except llm.LlmUnavailable as e:
         log.warning("clip %s: text written WITHOUT AI: %s", d.name, e)
-        copy = llm.fallback_copy(state, tags, cfg.trends.max_tags)
+        copy = llm.fallback_copy(state, tags, cfg.trends.max_tags, narrator=cfg.voice.language)
         state["copy_source"] = "plain"
         state["copy_problem"] = str(e)  # shown on the review page
     # The call took a while. Text a person typed and saved meanwhile is theirs: carry on from the clip as it is now.
@@ -1299,6 +1299,88 @@ def stage_clean(cfg: Config, dry_run: bool = False) -> tuple[int, float]:
                     if not dry_run:
                         f.unlink()
     return count, freed
+
+
+CLEAR_REJECTED = ("source.mp4", "final.mp4", "final_b.mp4", "explained.mp4", "explained_b.mp4", "body.mp4", "intro_card.mp4", "intro_card_b.mp4",
+                  "captions.ass", "final.ass", "source.part.mp4", "final.part.mp4", "wave.json")
+CLEAR_FINISHED = ("source.mp4", "source.part.mp4", "wave.json")  # the big download only: the draft stays so the clip still plays on the page
+
+
+def _clip_age_days(d: Path, now: float) -> float:
+    """Days since anything about this clip last changed (its record is rewritten by every decision and edit)."""
+    try:
+        return (now - (d / "clip.json").stat().st_mtime) / 86400
+    except OSError:
+        return 0.0
+
+
+def auto_clean(cfg: Config, now: float | None = None, everything_rejected: bool = False) -> dict:
+    """Clear the downloads of old rejected clips, and of old finished clips when that is switched on (cleanup settings).
+
+    The clip's record stays, so the lists on the page stay as they are; finished videos in the ready folder are never
+    touched. ``everything_rejected`` clears every rejected clip now, whatever its age (the "Clear now" button).
+    Returns {"files", "mb"}.
+    """
+    now = time.time() if now is None else now
+    c = cfg.cleanup
+    files, freed = 0, 0.0
+    for work in all_works(cfg):
+        for d in clip_dirs(work):
+            state = read_json(d / "clip.json", {})
+            status = state.get("status")
+            age = _clip_age_days(d, now)
+            if status == "rejected" and (everything_rejected or (c.rejected_days > 0 and age >= c.rejected_days)):
+                names = CLEAR_REJECTED
+            elif status == "approved" and state.get("exported") and c.finished_days > 0 and age >= c.finished_days and not everything_rejected:
+                names = CLEAR_FINISHED
+            else:
+                continue
+            for name in names:
+                f = d / name
+                try:
+                    if f.is_file():
+                        size = f.stat().st_size
+                        f.unlink()
+                        files += 1
+                        freed += size / 1e6
+                except OSError as e:  # open in a player or a job: it is tried again next time
+                    log.info("clip %s: %s could not be cleared now (%s)", d.name, name, e)
+    if files:
+        log.info("cleared %d old file(s) of rejected or finished clips, %.0f MB freed", files, freed)
+    return {"files": files, "mb": round(freed)}
+
+
+def disk_use(cfg: Config) -> dict:
+    """How much room the clips take, in MB: {"work", "rejected", "finished", "bin", "ready"}.
+
+    ``rejected`` and ``finished`` are what clearing would free; ``bin`` is what the bin frees when it is emptied."""
+    out = {"work": 0.0, "rejected": 0.0, "finished": 0.0, "bin": 0.0, "ready": 0.0}
+
+    def size(folder: Path) -> float:
+        total = 0
+        try:
+            for f in folder.rglob("*"):
+                if f.is_file():
+                    total += f.stat().st_size
+        except OSError:
+            pass
+        return total / 1e6
+
+    for work in all_works(cfg):
+        out["work"] += size(work)
+        for d in clip_dirs(work):
+            state = read_json(d / "clip.json", {})
+            status = state.get("status")
+            names = CLEAR_REJECTED if status == "rejected" else CLEAR_FINISHED if status == "approved" and state.get("exported") else ()
+            there = sum((d / n).stat().st_size for n in names if (d / n).is_file()) / 1e6
+            if status == "rejected":
+                out["rejected"] += there
+            elif names:
+                out["finished"] += there
+            elif status == "deleted":
+                out["bin"] += sum(f.stat().st_size for f in d.iterdir() if f.is_file() and f.name != "clip.json") / 1e6
+    out["ready"] = size(cfg.data_dir / "ready")
+    return {k: round(v) for k, v in out.items()}
 
 
 def stage_run(url: str, cfg: Config, top: int | None = None, mode: str | None = None, refresh_chat: bool = False,

@@ -264,7 +264,9 @@ namespace StreamClipperSetup
             // "Already there" must mean whole: a file left half-written by a cut-off run does not count.
             Add("Fetch uv, the tool that installs Python", delegate { return File.Exists(Uv) && Answers(Uv, "--version"); }, GetUv);
             Add("Make sure Git is there (for the Update button)", delegate { return (File.Exists(OwnGit) && Answers(OwnGit, "--version")) || (!portableGit && OnPath("git.exe") != null); }, GetGit);
-            Add("Fetch the program", ProgramWhole, GetProgram);
+            // never "already there": a copy that is already here is brought up to date instead (see UpdateProgram), so that running
+            // the installer again over an old copy repairs it with the newest files, not with the old ones
+            Add("Fetch the program", delegate { return false; }, GetProgram);
             Add("Install Python and the program's parts", delegate { return false; }, SyncParts);
             Add("Download the video tools and models", delegate { return false; }, RunSetup);
             int y = 4;
@@ -433,12 +435,13 @@ namespace StreamClipperSetup
 
         void GetProgram()
         {
+            if (ProgramWhole()) { UpdateProgram(); return; }   // a whole copy is not fetched again, only brought up to date
             string[] keep = { "config.local.yaml", ".env" };   // a person's own settings and keys survive a fetch that is done again
             if (Directory.Exists(App))
             {
                 if (Directory.GetFileSystemEntries(App).Length > 0 && !Directory.Exists(Path.Combine(App, ".git")))
                     throw new Exception("The folder " + App + " already holds something that is not Stream Clipper. Choose another program folder, or empty that one");
-                // a fetch that was cut off (this step only runs when the copy is not whole): it is taken again from the start
+                // a fetch that was cut off (a whole copy was dealt with above): it is taken again from the start
                 foreach (string k in keep)
                 {
                     string f = Path.Combine(App, k), aside = Path.Combine(root, k + ".kept");
@@ -453,6 +456,130 @@ namespace StreamClipperSetup
                 string aside = Path.Combine(root, k + ".kept");
                 if (File.Exists(aside)) { File.Copy(aside, Path.Combine(App, k), true); File.Delete(aside); }
             }
+        }
+
+        // The copy that is already here is brought up to date the way the program's own Update button does it: the newest version is
+        // asked for and taken only when that is a plain step forward (a fast-forward). Nothing of the person's is touched: their
+        // settings, their keys and every file Git does not know stay where they are. When it cannot be done (no internet, files of the
+        // program changed on this PC, a copy that went its own way) the reason is written down and the install carries on with the copy as it is.
+        void UpdateProgram()
+        {
+            Line("The program is already here: bringing it up to date...");
+            string said, bad, old, now, origin, count, changed;
+            if (AskGit("rev-parse HEAD", 60, false, out old, out bad) != 0) { NotUpdated("Git could not read this copy (" + Why(bad, old) + ")"); return; }
+            if (AskGit("remote get-url origin", 60, false, out origin, out bad) != 0) { NotUpdated("this copy has no address to fetch new versions from"); return; }
+            string place = origin.ToLowerInvariant().Contains("github.com") ? "GitHub" : origin.Trim();   // with /source it is a folder on this PC
+            Status("Asking " + place + " for the newest version ...");
+            int code = AskGit("fetch --quiet origin", 300, true, out said, out bad);   // quiet: only what goes wrong is printed
+            Status("");
+            if (code != 0)
+            {   // a repair without the internet must still work: the copy that is here is whole
+                Line(place + " could not be reached (" + Why(bad, said) + "), so the program was not brought up to date. The copy that is here is used as it is. " +
+                     "When the internet works again, run this installer once more or press Update in the program.");
+                return;
+            }
+            if (AskGit("rev-parse --verify --quiet refs/remotes/origin/main", 60, false, out now, out bad) != 0) { NotUpdated(place + " has no version called main"); return; }
+            old = old.Trim(); now = now.Trim();
+            if (now == old) { Line("Already the newest version."); return; }
+            if (AskGit("rev-list --count " + old + ".." + now, 60, false, out count, out bad) != 0)
+            { NotUpdated("Git could not compare this copy with the newest version (" + Why(bad, count) + ")"); return; }
+            count = count.Trim();
+            if (count == "0") { Line("Already the newest version (this copy has changes of its own on top of it)."); return; }
+            code = AskGit("merge-base --is-ancestor " + old + " " + now, 60, false, out said, out bad);
+            if (code == 1) { NotUpdated("this copy and " + place + " have gone separate ways"); return; }
+            if (code != 0) { NotUpdated("Git could not compare this copy with the newest version (" + Why(bad, said) + ")"); return; }
+            if (AskGit("status --porcelain --untracked-files=no", 120, false, out changed, out bad) != 0)
+            { NotUpdated("Git could not say whether files of the program were changed (" + Why(bad, changed) + ")"); return; }
+            if (changed.Trim().Length > 0) { NotUpdated("files of the program were changed on this computer (" + Names(changed) + ")"); return; }
+            Status("Taking the new version ...");
+            // fast-forward only: Git itself refuses, and changes nothing, if a file of the person's would be written over
+            code = AskGit("merge --ff-only --no-stat origin/main", 0, true, out said, out bad);
+            Status("");
+            if (code != 0) { NotUpdated("Git would not take the new version (" + Why(bad, said) + ")"); return; }
+            Line("Updated: " + count + " change(s) brought in.");
+        }
+
+        // Not a failure of the install: the copy that is here is whole and is used as it is. One plain line says why and what can be done.
+        void NotUpdated(string why)
+        {
+            Line("The copy that is here could not be brought up to date: " + why + ". It is used as it is. " +
+                 "To get the newest version, run this installer again and choose a new, empty program folder (the same data folder can be kept).");
+        }
+
+        // Asks Git one thing about the copy in the app folder and waits for the answer. Unlike Exec, a "no" from Git does not stop the
+        // install: the exit code is handed back with what Git printed (``said``) and what it complained about (``bad``), and the caller decides.
+        // ``seconds``: how long to wait before giving up (0: as long as it takes). ``show``: whether Git's lines also go into the log box.
+        int AskGit(string args, int seconds, bool show, out string said, out string bad)
+        {
+            ProcessStartInfo si = new ProcessStartInfo(Git, args)
+            {
+                WorkingDirectory = App, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8
+            };
+            // the same two settings Exec gives Git: the program's own Git first, and never a question nobody can answer
+            si.EnvironmentVariables["PATH"] = (File.Exists(OwnGit) ? Path.Combine(root, "tools", "git", "cmd") + ";" : "") + Environment.GetEnvironmentVariable("PATH");
+            si.EnvironmentVariables["GIT_TERMINAL_PROMPT"] = "0";
+            StringBuilder o = new StringBuilder(), e = new StringBuilder();
+            bool late = false; int code;
+            using (Process p = new Process { StartInfo = si })
+            {
+                p.OutputDataReceived += delegate(object s, DataReceivedEventArgs d)
+                {
+                    if (d.Data == null) return;
+                    lock (o) o.Append(d.Data).Append('\n');
+                    if (show && d.Data.Trim().Length > 0) Line(d.Data.TrimEnd());
+                };
+                p.ErrorDataReceived += delegate(object s, DataReceivedEventArgs d)
+                {
+                    if (d.Data == null) return;
+                    lock (e) e.Append(d.Data).Append('\n');
+                    if (show && d.Data.Trim().Length > 0) Line(d.Data.TrimEnd());
+                };
+                try { p.Start(); }
+                catch (Exception x) { said = ""; bad = "Git could not be started: " + x.Message; return -1; }
+                running = p;
+                p.BeginOutputReadLine(); p.BeginErrorReadLine();
+                DateTime began = DateTime.Now;
+                while (!p.WaitForExit(500))
+                {
+                    // a connection that goes silent must not hold the install up for ever
+                    if (seconds > 0 && !late && (DateTime.Now - began).TotalSeconds > seconds) { late = true; KillRunning(); }
+                }
+                p.WaitForExit();   // lets the last lines arrive
+                running = null;
+                code = p.ExitCode;
+            }
+            if (stopping) throw new Exception("stopped");
+            lock (o) said = o.ToString().TrimEnd();
+            lock (e) bad = e.ToString().TrimEnd();
+            if (late) { bad = "no answer within " + (seconds >= 120 ? (seconds / 60) + " minutes" : seconds + " seconds"); return -1; }
+            return code;
+        }
+
+        // Git's reason in one line: its first "fatal:" or "error:" line, or else the last thing it printed.
+        static string Why(string bad, string said)
+        {
+            string last = "";
+            foreach (string l in (bad + "\n" + said).Split('\n'))
+            {
+                string t = l.Trim();
+                if (t.Length == 0) continue;
+                if (t.StartsWith("fatal:") || t.StartsWith("error:")) { last = t.Substring(6).Trim(); break; }
+                last = t;
+            }
+            last = last.TrimEnd(':', '.');
+            if (last.Length > 300) last = last.Substring(0, 300);
+            return last.Length == 0 ? "no reason given" : last;
+        }
+
+        // The first few names from Git's list of changed files (each line is two letters, a space and the name), for a message.
+        static string Names(string list)
+        {
+            List<string> names = new List<string>();
+            foreach (string l in list.Split('\n'))
+                if (l.TrimEnd().Length > 3) names.Add(l.TrimEnd().Substring(3).Trim('"'));
+            string s = string.Join(", ", names.GetRange(0, Math.Min(3, names.Count)).ToArray());
+            return names.Count > 3 ? s + " and " + (names.Count - 3) + " more" : s;
         }
 
         void SyncParts()

@@ -109,9 +109,13 @@ def narration_words(text: str, voice: Path, duration: float, cfg: Config) -> lis
     from .transcribe import transcribe_file
 
     try:
-        # The narrator's voice is an English one whatever is spoken on the stream. Listening to it as Urdu or Hindi
-        # gives words that match nothing, and the captions then fall back to guessed timing without a word.
-        listen = replace(cfg, transcribe=replace(cfg.transcribe, language="en"))
+        # The narrator speaks its own language (Settings, Narrator voice), whatever is spoken on the stream. Listening to it
+        # in another language gives words that match nothing, and the captions then fall back to guessed timing without a word.
+        from .tts import narrator_language
+
+        # "native": the words heard are compared with the line as it is written, so they must not be put into Latin letters first
+        listen = replace(cfg, transcribe=replace(cfg.transcribe, language={"Hindi": "hi", "Urdu": "ur"}.get(narrator_language(cfg), "en")),
+                         captions=replace(cfg.captions, script="native"))
         heard = transcribe_file(voice, listen)
         words = align_words(text, heard, duration)
         if heard and len(text.split()) >= 4:
@@ -331,7 +335,11 @@ def top_moments(clip_dirs: list[Path], out: Path, cfg: Config, opener: str = "")
     bodies = []
     for rank, d in enumerate(clip_dirs, 1):
         state = read_json(d / "clip.json")
-        line = (state.get("rank_line") or state.get("hook") or "").strip() or f"Moment number {rank}."
+        # the first of the clip's own lines the narrator can read (a Hindi narrator cannot read an English opening text), or a plain one
+        from .tts import fits_narrator, narrator_language
+
+        line = next((t for t in ((state.get("rank_line") or "").strip(), (state.get("hook") or "").strip()) if t and fits_narrator(t, cfg)), "") or {
+            "Hindi": f"\u092e\u094b\u092e\u0947\u0902\u091f \u0928\u0902\u092c\u0930 {rank}.", "Urdu": f"\u0645\u0648\u0645\u0646\u0679 \u0646\u0645\u0628\u0631 {rank}\u06d4"}.get(narrator_language(cfg), f"Moment number {rank}.")
         # Made fresh every time: a body kept from an earlier top video would still have the caption look and
         # branding of that day, and the countdown would mix old and new.
         body = render_clip(d, cfg, out_name="body.mp4", hook=False, force=True)  # the card already says what this is

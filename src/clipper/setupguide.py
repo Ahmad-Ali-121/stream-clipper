@@ -196,7 +196,9 @@ def status(cfg: Config, health_items: list[dict], local_ai: dict, fresh: bool = 
                                "https://aka.ms/vs/17/release/vc_redist.x64.exe and restart the computer." if runtime_bad else "")),
                   "actions": [] if tools_ok or unchecked else [{"do": "install", "what": "tools", "label": "Install the video tools"}]})
     speech_ok = speech.get("state") == "ok"
-    steps.append({"id": "speech", "title": "Captions", "optional": False, "size": "about 1.6 GB the first time",
+    from .health import SPEECH_SIZES
+
+    steps.append({"id": "speech", "title": "Captions", "optional": False, "size": SPEECH_SIZES.get(str(cfg.transcribe.model), "about 1.6 GB") + " the first time",
                   "what": "The speech model is the part that listens to what is said and writes the captions. It is downloaded once and then tested on this computer.",
                   "state": "done" if speech_ok else ("wait" if not tools_ok else "todo"),
                   "detail": "The video tools come first: go back one step." if not speech_ok and not tools_ok else

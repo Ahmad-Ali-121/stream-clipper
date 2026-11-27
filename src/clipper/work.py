@@ -189,7 +189,7 @@ class clip_lock:
                 pass
 
 
-def update_clip(path: Path, changes: dict, drop: tuple = ()) -> dict:
+def update_clip(path: Path, changes: dict, drop: tuple = (), reopen: bool = False) -> dict:
     """Change a few keys of a clip's state as it is on disk now.
 
     For a step that took a while (a render, an export): writing back the copy it read at the start would undo
@@ -219,7 +219,7 @@ def update_clip(path: Path, changes: dict, drop: tuple = ()) -> dict:
         state.update(changes)
         for key in drop:
             state.pop(key, None)
-        write_json(path, state)
+        write_json(path, state, reopen=reopen)   # reopen: a person's own press may move a decided clip back to review
     return state
 
 

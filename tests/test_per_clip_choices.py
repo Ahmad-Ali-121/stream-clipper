@@ -10,7 +10,7 @@ import clipper
 from clipper import pipeline, review, thumbs
 from clipper.config import load_config
 
-PAGE = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+PAGE = clipper.page_source()
 
 
 def _cfg(tmp_path):

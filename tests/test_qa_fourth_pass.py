@@ -236,7 +236,7 @@ def test_the_page_keeps_the_new_safeguards():
 
     import clipper
 
-    page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+    page = clipper.page_source()
     for piece in ('id="o-thumb" data-yours', "if(e.repeat)", "'.clip,#boxes,#stopbox,[data-yours]'", "coverText.set(", "cur._c.key",
                   'in the "Stop making videos?" window', "if(await act('/api/finish/stop'", 'class="makebar"', "showCover("):
         assert piece in page, piece

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,7 +23,9 @@ EDITABLE = {"status", "hook", "hook_b", "intro", "intro_b", "explainer", "simple
             "title", "title_b", "description", "tags", "notes"}
 TEXT_FIELDS = ("hook", "hook_b", "intro", "intro_b", "title", "title_b", "description", "tags")
 
-PAGE_FILE = Path(__file__).with_name("review_page.html")
+from . import page_source  # noqa: E402
+
+PAGE_FILE = Path(__file__).with_name("review_page.html")   # the layout; its styles and script are beside it (see clipper.page_source)
 
 
 def code_stamp() -> str:
@@ -62,8 +65,8 @@ class OneAtATimeServer(ThreadingHTTPServer):
 
 
 def page_html(title: str, has_panel: bool) -> str:
-    """The review page: one HTML file, with the title and whether the controls are shown filled in."""
-    return (PAGE_FILE.read_text(encoding="utf-8")
+    """The review page as one document (layout, styles and script put together), with the title and whether the controls are shown filled in."""
+    return (page_source()
             .replace("__TITLE__", json.dumps(title).replace("</", "<\\/"))
             .replace("__HAS_PANEL__", "true" if has_panel else "false")
             .replace("__STAMP__", json.dumps(code_stamp()))
@@ -197,6 +200,9 @@ def clip_view(d: Path, weights: dict | None = None, brief=None, cfg=None) -> dic
         # two choices that belong to the clip: whether it comes out as A and B, and what its thumbnail must leave out
         ab=bool((cfg.render.ab_versions if cfg is not None else True) if c.get("ab") is None else c.get("ab")),
         cover_avoid=str(c.get("cover_avoid") or ""),
+        binned=c.get("status") == "deleted",
+        bin_days_left=(max(0, int(round((cfg.cleanup.bin_days if cfg is not None else 7) - (time.time() - float(c.get("deleted_at") or 0)) / 86400)))
+                       if c.get("status") == "deleted" else None),
         # Changes whenever the clip's data or its draft video changes, so the page knows to redraw it.
         mtime=int(max((d / n).stat().st_mtime for n in ("clip.json", video) if n) * 1000),
     )
@@ -507,6 +513,58 @@ class ClipInUse(ValueError):
     """A clip's file is open in another program, so it cannot be deleted yet."""
 
 
+def bin_clip(d: Path) -> float:
+    """Put a clip in the bin: it leaves every list, but its files stay until the bin's days are over, so it can be brought back.
+
+    Returns the megabytes that emptying the bin will free. A clip whose record cannot be read cannot wait in the bin
+    (there is nothing to bring back to): the caller deletes it for good instead."""
+    from .work import update_clip
+
+    state = read_json(d / "clip.json")
+    if state.get("status") == "deleted":
+        return 0.0
+    mb = sum(f.stat().st_size for f in d.iterdir() if f.is_file() and f.name != "clip.json") / 1e6
+    update_clip(d / "clip.json", {"status": "deleted", "deleted_at": time.time(), "was_status": state.get("status", "candidate"), "was_held": bool(state.get("held"))})
+    return mb
+
+
+def restore_clip(d: Path) -> dict:
+    """Bring a clip back from the bin, to the list it was in."""
+    from .work import update_clip
+
+    state = read_json(d / "clip.json")
+    if state.get("status") != "deleted" or not in_bin(d, state):
+        raise ValueError("this clip is not in the bin any more: its files were removed for good")
+    # reopen: a clip that was still to review goes back to review, and that is the person's own press (Bring back)
+    return update_clip(d / "clip.json", {"status": state.get("was_status") or "candidate", "held": bool(state.get("was_held"))},
+                       drop=("deleted_at", "was_status", "was_held"), reopen=True)
+
+
+def in_bin(d: Path, state: dict) -> bool:
+    """A deleted clip whose files are still there (it was put in the bin, and the bin's days are not over)."""
+    return state.get("status") == "deleted" and bool(state.get("deleted_at")) and any(f.is_file() and f.suffix == ".mp4" for f in d.iterdir())
+
+
+_bin_looked = 0.0
+
+
+def empty_old_bin(works: list[Path], days: float, everything: bool = False) -> int:
+    """Remove for good the clips whose days in the bin are over (or, with ``everything``, all of them). Returns how many."""
+    gone = 0
+    for w in works:
+        for d in clip_dirs(w):
+            try:
+                state = read_json(d / "clip.json", {})
+                if in_bin(d, state) and (everything or time.time() - float(state.get("deleted_at") or 0) >= days * 86400):
+                    delete_clip(d)
+                    gone += 1
+            except (OSError, ValueError) as e:  # in use, or unreadable: it is tried again at the next look
+                log.info("clip %s in the bin could not be removed yet (%s)", d.name, e)
+    if gone:
+        log.info("%d clip(s) left the bin for good", gone)
+    return gone
+
+
 def delete_clip(d: Path) -> float:
     """Delete a clip: every file in its folder goes, megabytes freed are returned.
 
@@ -573,8 +631,14 @@ def list_clips(works: list[Path], weights: dict | None = None) -> list[Path]:
     """Clip folders of the given streams: waiting ones first, best score first; then approved, then rejected (newest first)."""
     from . import scoring
 
-    order = {"candidate": 0, "approved": 1, "rejected": 2}
-    dirs = [d for w in works for d in clip_dirs(w) if read_json(d / "clip.json", {}).get("status") != "deleted"]
+    order = {"candidate": 0, "approved": 1, "rejected": 2, "deleted": 3}
+    # a deleted clip is listed while it waits in the bin (its files are still there), so it can be brought back
+    dirs = []
+    for w in works:
+        for d in clip_dirs(w):
+            state = read_json(d / "clip.json", {})
+            if state.get("status") != "deleted" or in_bin(d, state):
+                dirs.append(d)
 
     def key(d: Path):
         state = read_json(d / "clip.json", {})
@@ -654,6 +718,11 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
             if self.path == "/api/clips":
                 from . import scoring
 
+                global _bin_looked
+                if cfg is not None and time.time() - _bin_looked > 600:  # every ten minutes: clips whose days in the bin are over leave for good
+                    _bin_looked = time.time()
+                    empty_old_bin(list(by_name.values()), (control.cfg if control else cfg).cleanup.bin_days)
+
                 use_cfg = control.cfg if control else cfg
                 weights = scoring.mixed(scoring.load_weights(cfg.data_dir), use_cfg.moments.mix) if cfg is not None else None
                 brief = current_brief(control.cfg if control else cfg)
@@ -730,6 +799,11 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                     log.error("downloaded part %s: its sound could not be read: %s", d.name, e, exc_info=True)
                     return self._send(500, str(e).encode(), "text/plain")
                 return self._send(200, json.dumps(data).encode(), "application/json")
+            if self.path == "/api/disk" and cfg is not None:
+                from .pipeline import disk_use
+
+                use = control.cfg if control else cfg
+                return self._send(200, json.dumps({**disk_use(use), "bin_days": use.cleanup.bin_days}).encode(), "application/json")
             m = re.fullmatch(r"/fonts/([A-Za-z0-9_.\-]+\.ttf)", self.path.split("?")[0])
             if m:
                 # A font that comes with the program, so the page can show its caption sample in that very font.
@@ -831,7 +905,8 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                        "/api/finish": "start_finish", "/api/finish/stop": "stop_finish", "/api/ready/open": "open_ready", "/api/run": "start_run", "/api/run/stop": "stop_run", "/api/cut": "start_cut", "/api/range": "start_range", "/api/range/cut": "start_range_cut", "/api/ai/check": "start_ai_check", "/api/ai/local-setup": "start_local_ai",
                        "/api/health/check": "start_full_check", "/api/health/repair": "start_repair", "/api/health/update": "start_update",
                        "/api/setup/install": "setup_install", "/api/setup/signin": "setup_signin", "/api/setup/refresh": "setup_refresh", "/api/setup/finish": "setup_finish",
-                       "/api/restart": "restart", "/api/voice/check": "check_voice"}
+                       "/api/restart": "restart", "/api/voice/check": "check_voice", "/api/keys/save": "save_key", "/api/clean": "clean_now",
+                       "/api/health/doctor": "start_doctor"}
             if self.path.startswith("/api/brand/upload") and cfg is not None and control:
                 # Your logo or music file: kept under the data folder, then set as the one to use.
                 from urllib.parse import parse_qs, urlparse
@@ -915,7 +990,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
                     name = actions[self.path]
-                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut", "clip_now", "start_finish", "stop_finish", "setup_install", "setup_signin", "setup_finish", "check_voice") else getattr(control, name)()
+                    result = getattr(control, name)(body) if name in ("save", "start_watch", "start_run", "start_cut", "start_range", "start_range_cut", "clip_now", "start_finish", "stop_finish", "setup_install", "setup_signin", "setup_finish", "check_voice", "save_key", "clean_now") else getattr(control, name)()
                 except (ValueError, TypeError) as e:
                     return self._send(400, str(e).encode(), "text/plain")
                 if isinstance(result, dict) and "watching" in result:
@@ -1015,7 +1090,7 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
                 for d in list_clips(list(by_name.values())):
                     if read_json(d / "clip.json", {}).get("status") == "rejected":
                         try:
-                            mb += delete_clip(d)
+                            mb += bin_clip(d)  # to the bin, where they wait a few days before they are gone for good
                             gone += 1
                         except ClipInUse as e:
                             busy += 1
@@ -1160,12 +1235,31 @@ def serve(works: list[Path], title: str, port: int = 8765, cfg=None, every_strea
 
                     threading.Thread(target=remake, daemon=True).start()
                 return self._send(200, json.dumps({"others": len(others), "skipped": skipped}).encode(), "application/json")
-            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(delete|clear-error)", self.path)
+            m = re.fullmatch(r"/api/clip/([A-Za-z0-9_-]+)/([0-9a-z]+)/(delete|clear-error|restore)", self.path)
             if m and m.group(1) in by_name:
                 d = by_name[m.group(1)] / "clips" / m.group(2)
                 if not (d / "clip.json").exists():
                     return self._send(404, b"no such clip", "text/plain")
+                if m.group(3) == "restore":
+                    try:
+                        state = restore_clip(d)
+                    except ValueError as e:
+                        return self._send(400, str(e).encode(), "text/plain")
+                    log.info("clip %s/%s brought back from the bin", m.group(1), m.group(2))
+                    return self._send(200, json.dumps({"status": state.get("status")}).encode(), "application/json")
                 if m.group(3) == "delete":
+                    try:
+                        body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", "0")), 2000)) or b"{}")
+                    except ValueError:
+                        body = {}
+                    try:
+                        was = read_json(d / "clip.json")
+                    except (OSError, ValueError):
+                        was = None  # a damaged record: nothing to bring back, so it goes for good
+                    if isinstance(was, dict) and was.get("status") != "deleted" and not body.get("forever"):
+                        mb = bin_clip(d)
+                        log.info("clip %s/%s put in the bin (%.0f MB, kept for %s days)", m.group(1), m.group(2), mb, (control.cfg if control else cfg).cleanup.bin_days if cfg is not None else 7)
+                        return self._send(200, json.dumps({"binned": 1, "mb": round(mb), "days": (control.cfg if control else cfg).cleanup.bin_days if cfg is not None else 7}).encode(), "application/json")
                     try:
                         mb = delete_clip(d)
                     except ClipInUse as e:

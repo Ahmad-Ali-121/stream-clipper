@@ -426,8 +426,18 @@ def language_note(cfg: Config) -> str:
                  "Judge the clip as a viewer who speaks that language would.")
     how = TEXT_LANGUAGES.get(cfg.llm.text_language, cfg.llm.text_language)
     if how:
-        note += (f"\n\nWrite hook, hook_b, title, title_b and description in {how} Keep hashtags in Latin letters. "
-                 "Write intro, intro_b and rank_line in English: the narrator's voice is English. Write the reason in English.")
+        note += f"\n\nWrite hook, hook_b, title, title_b and description in {how} Keep hashtags in Latin letters. Write the reason in English."
+    narrator = str(cfg.voice.language or "English").strip().capitalize()
+    if narrator == "Hindi":
+        note += ("\n\nWrite intro, intro_b and rank_line in Hindi, in Devanagari letters only: they are read aloud by a narrator voice that reads Devanagari and "
+                 "nothing else. Write names, game titles and English words in Devanagari too, the way they sound (\u0921\u0915\u0940 \u092d\u093e\u0908, "
+                 "\u091c\u0940\u091f\u0940\u090f \u0938\u093f\u0915\u094d\u0938), and numbers as Hindi words. Not one Latin letter or digit in these three.")
+    elif narrator == "Urdu":
+        note += ("\n\nWrite intro, intro_b and rank_line in Urdu, in Urdu (Arabic) script only: they are read aloud by a narrator voice that reads Urdu script and "
+                 "nothing else. Write names, game titles and English words in Urdu letters too, the way they sound, and numbers as Urdu words. "
+                 "Not one Latin letter or digit in these three.")
+    elif how:
+        note += "\n\nWrite intro, intro_b and rank_line in English: the narrator's voice is English."
     return note
 
 
@@ -479,7 +489,7 @@ def clean_copy(data: dict) -> dict:
     }
 
 
-def fallback_copy(state: dict, trend_tags: list[str], max_tags: int = 6) -> dict:
+def fallback_copy(state: dict, trend_tags: list[str], max_tags: int = 6, narrator: str = "English") -> dict:
     """Plain text built without an LLM, so the pipeline still produces something usable."""
     words = (state.get("transcript") or "").split()
     channel = state.get("channel") or "Stream"
@@ -502,7 +512,9 @@ def fallback_copy(state: dict, trend_tags: list[str], max_tags: int = 6) -> dict
         "title_b": "",
         "description": "",
         "tags": uniq[:max_tags],
-        "intro": f"Here's {channel}.",
+        # without AI nothing can write a line about this clip in the narrator's language, so it gets a plain one that the narrator can read
+        "intro": {"Hindi": "\u0926\u0947\u0916\u093f\u090f \u092f\u0939 \u0915\u094d\u0932\u093f\u092a.", "Urdu": "\u06cc\u06c1 \u06a9\u0644\u067e \u062f\u06cc\u06a9\u06be\u06cc\u06ba\u06d4"}.get(
+            str(narrator or "English").strip().capitalize(), f"Here's {channel}."),
         "intro_b": "",
         "rank_line": hook,
     }

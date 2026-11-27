@@ -225,6 +225,8 @@ class AiSettings:
 class VoiceSettings:
     backend: str = "kokoro"  # "kokoro" = free, runs on this machine; "elevenlabs" = paid, needs ELEVENLABS_API_KEY
     kokoro_voice: str = "am_michael"
+    language: str = "English"  # what the narrator speaks: English, Hindi or Urdu. The narration line must be written in that language's own letters
+    kokoro_voice_hindi: str = "hf_alpha"  # the free voice used when the narrator speaks Hindi or Urdu: hf_alpha, hf_beta (women), hm_psi, hm_omega (men)
     speed: float = 1.05
     elevenlabs_voice_id: str = "JBFqnCBsd6RMkjVDRZzb"
     elevenlabs_model: str = "eleven_turbo_v2_5"
@@ -249,6 +251,15 @@ class WatchSettings:
 
 
 @dataclass
+class CleanupSettings:
+    """Keeping the disk from filling up. Finished videos in the ready folder are never touched by any of this."""
+
+    bin_days: int = 7  # a deleted clip waits this many days in the bin, where it can be brought back, before its files are removed
+    rejected_days: int = 14  # the downloads and drafts of rejected clips are cleared after this many days; 0 = never
+    finished_days: int = 0  # the same for the downloads of clips whose videos are made; 0 = never (then they can be made again later)
+
+
+@dataclass
 class Config:
     paths: PathSettings = field(default_factory=PathSettings)
     moments: MomentSettings = field(default_factory=MomentSettings)
@@ -262,6 +273,7 @@ class Config:
     llm: LlmSettings = field(default_factory=LlmSettings)
     voice: VoiceSettings = field(default_factory=VoiceSettings)
     brand: BrandSettings = field(default_factory=BrandSettings)
+    cleanup: CleanupSettings = field(default_factory=CleanupSettings)
     # Per-streamer layout, keyed by lower-case channel name:
     #   channels: {lacy: {layout: split, facecam: [0.0, 0.0, 0.28, 0.28]}}
     channels: dict = field(default_factory=dict)
@@ -318,12 +330,41 @@ def _right_kind(current: Any, value: Any, where: str) -> Any:
     return value
 
 
+KEY_NAMES = {"claude": "ANTHROPIC_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY", "groq": "GROQ_API_KEY"}  # what the page calls a key -> its line in .env
+
+
+def env_path() -> Path:
+    """The file the keys of paid services are kept in: .env in the program's folder (CLIPPER_ENV names another, for trying things out)."""
+    return Path(os.environ.get("CLIPPER_ENV") or PROJECT_ROOT / ".env")
+
+
+def save_env_key(name: str, value: str) -> None:
+    """Put one key into .env (or take it out with an empty value), leaving every other line as it is.
+
+    The key is never logged or returned anywhere. It is also set for this running program, so it works at once."""
+    if name not in KEY_NAMES.values():
+        raise ConfigError(f"unknown key name {name}")
+    value = value.strip()
+    path = env_path()
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    kept = [line for line in lines if line.strip().partition("=")[0].strip() != name or line.strip().startswith("#")]
+    if value:
+        kept.append(f"{name}={value}")
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+    tmp.replace(path)
+    if value:
+        os.environ[name] = value
+    else:
+        os.environ.pop(name, None)
+
+
 def load_env(path: Path | None = None) -> None:
     """Read KEY=value lines from .env into the environment (existing variables win).
 
     API keys for optional paid add-ons live in .env, which is git-ignored.
     """
-    env = path or PROJECT_ROOT / ".env"
+    env = path or env_path()
     if not env.exists():
         return
     for line in env.read_text(encoding="utf-8").splitlines():

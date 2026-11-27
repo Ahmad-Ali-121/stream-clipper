@@ -145,6 +145,16 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
             if value not in ANIMATIONS:
                 raise ValueError(f"the caption movement must be one of: {', '.join(ANIMATIONS)}")
             out.setdefault("captions", {})["animation"] = value
+        elif key in ("cleanup_rejected_days", "cleanup_finished_days"):
+            if value not in (0, 3, 7, 14, 30, 60):
+                raise ValueError("choose one of the times in the list")
+            out.setdefault("cleanup", {})[key[len("cleanup_"):]] = int(value)
+        elif key == "speech_model":
+            from .health import SPEECH_SIZES
+
+            if value not in SPEECH_SIZES:
+                raise ValueError("choose Best or Fast")
+            out.setdefault("transcribe", {})["model"] = value
         elif key == "caption_position":
             try:
                 up = int(round(float((value or {}).get("margin_v"))))
@@ -160,15 +170,24 @@ def clean_options(raw: dict) -> dict[str, dict[str, Any]]:
                 from .tts import elevenlabs_key
 
                 if not elevenlabs_key():
-                    raise ValueError("ElevenLabs cannot be chosen yet: no key is set. Put a line ELEVENLABS_API_KEY=your-key in the file .env "
-                                     "in the program's folder, then press Check ElevenLabs")
+                    raise ValueError("ElevenLabs cannot be chosen yet: no key is set. Paste your ElevenLabs key under Keys on the Settings page and press Save, "
+                                     "then press Check ElevenLabs")
             out.setdefault("voice", {})["backend"] = value
         elif key == "voice_kokoro":
-            from .tts import KOKORO_VOICES
+            from .tts import KOKORO_HINDI_VOICES, KOKORO_VOICES
 
-            if value not in [v for v, _ in KOKORO_VOICES]:
+            if value in [v for v, _ in KOKORO_HINDI_VOICES]:
+                out.setdefault("voice", {})["kokoro_voice_hindi"] = value     # the Hindi and Urdu narrator has its own voice, kept apart from the English one
+            elif value in [v for v, _ in KOKORO_VOICES]:
+                out.setdefault("voice", {})["kokoro_voice"] = value
+            else:
                 raise ValueError("that is not one of the voices on this computer")
-            out.setdefault("voice", {})["kokoro_voice"] = value
+        elif key == "voice_language":
+            from .tts import NARRATOR_LANGUAGES
+
+            if value not in NARRATOR_LANGUAGES:
+                raise ValueError("the narrator speaks English, Hindi or Urdu")
+            out.setdefault("voice", {})["language"] = value
         elif key == "voice_speed":
             try:
                 out.setdefault("voice", {})["speed"] = round(min(1.4, max(0.7, float(value))), 2)
@@ -369,6 +388,9 @@ class Control:
             "caption_position": {"margin_v": cfg.captions.margin_v, "offset_x": cfg.captions.offset_x},
             "fonts": [{"label": f["label"], "family": f["family"], "file": f["file"], "kind": f.get("kind", ""), "weight": int(f.get("weight") or 400)} for f in __import__("clipper.fonts", fromlist=["bundled"]).bundled()],
             "voice": self.voice_status(),
+            "speech_model": cfg.transcribe.model, "speech_model_there": __import__("clipper.health", fromlist=["speech_model_there"]).speech_model_there(cfg),
+            "keys": {name: bool(os.environ.get(env)) for name, env in __import__("clipper.config", fromlist=["KEY_NAMES"]).KEY_NAMES.items()},
+            "cleanup": {"rejected_days": cfg.cleanup.rejected_days, "finished_days": cfg.cleanup.finished_days, "bin_days": cfg.cleanup.bin_days},
             "finish_progress": self.finish_progress,
             "watching": self.watching(), "watch_log": tail, "watch_problem": self.watch_problem,
             "finishing": self.finishing, "finish_log": self.finish_lines[-200:], "finish_stopping": self.finish_stopping if self.finishing else "",
@@ -438,13 +460,72 @@ class Control:
                 self.watch_problem = f"WATCHING COULD NOT START BY ITSELF: {e}"
                 log.error("%s", self.watch_problem)
 
+    def save_key(self, raw: dict) -> dict:
+        """Keep the key of a paid service that the person pasted on the Settings page (or take it out, with an empty value).
+
+        It goes into the .env file on this computer and nowhere else; it is never shown again, logged, or put in an answer."""
+        import re as _re
+
+        from .config import KEY_NAMES, load_env, save_env_key
+
+        name = str((raw or {}).get("name") or "")
+        if name not in KEY_NAMES:
+            raise ValueError("unknown service")
+        value = str((raw or {}).get("value") or "").strip()
+        if value and not _re.fullmatch(r"[A-Za-z0-9_.\-]{16,300}", value):
+            raise ValueError("That does not look like a key: a key is one long word of letters, digits, dashes and underscores, without spaces. "
+                             "Copy it again from the service's website and paste it whole.")
+        load_env()  # so a key already in the file is known before it is replaced
+        save_env_key(KEY_NAMES[name], value)
+        log.info("the %s key was %s on the Settings page", name, "saved" if value else "removed")
+        if name == "elevenlabs":
+            self.voice_check = None  # what was known belonged to the old key
+            if not value and self.cfg.voice.backend == "elevenlabs":
+                save_local(clean_options({"voice_backend": "kokoro"}))  # no key, no ElevenLabs: back to the free voice
+                self.reload()
+        return self.status()
+
+    def clean_now(self, raw: dict | None = None) -> dict:
+        """The two buttons of the Disk space card: clear every rejected clip's downloads now, or empty the bin now."""
+        from .pipeline import all_works, auto_clean
+        from .review import empty_old_bin
+
+        if self.running() or self.finishing:
+            raise ValueError("a job is running (finding moments or making videos). Wait for it to finish, then press again")
+        cfg = self.reload()
+        what = (raw or {}).get("what")
+        if what == "bin":
+            gone = empty_old_bin(all_works(cfg), cfg.cleanup.bin_days, everything=True)
+            return {**self.status(), "cleaned": f"{gone} clip(s) removed from the bin for good."}
+        if what == "rejected":
+            got = auto_clean(cfg, everything_rejected=True)
+            return {**self.status(), "cleaned": f"{got['files']} file(s) of rejected clips cleared, {got['mb']} MB freed."}
+        raise ValueError("unknown clean-up")
+
+    def start_doctor(self) -> dict:
+        """The captions report: describe this computer and try the speech model several ways, with the lines shown under Setup check."""
+        from . import health
+
+        if not health.speech_model_there(self.cfg):
+            raise ValueError(health.NEED_CAPTIONS)
+
+        def work(say) -> None:
+            code = self._run_logged([sys.executable, "-u", "-c", "from clipper.cli import main; raise SystemExit(main())", "doctor"], say, str(PROJECT_ROOT))
+            say("Copy the lines above when you ask for help." if code else "The usual way works on this computer.")
+
+        return self._maintain("Captions report", work)
+
     def voice_status(self) -> dict:
         """What the page shows about the narrator of explainer videos."""
         from . import tts
 
         v = self.cfg.voice
-        return {"backend": v.backend, "kokoro_voice": v.kokoro_voice, "speed": v.speed, "eleven_voice": v.elevenlabs_voice_id, "eleven_model": v.elevenlabs_model,
-                "key": bool(tts.elevenlabs_key()), "kokoro_voices": [list(x) for x in tts.KOKORO_VOICES], "check": getattr(self, "voice_check", None)}
+        language = str(v.language or "English").strip().capitalize()
+        other = language in ("Hindi", "Urdu")   # these two are spoken by the model's Hindi voices
+        return {"backend": v.backend, "kokoro_voice": v.kokoro_voice_hindi if other else v.kokoro_voice, "speed": v.speed, "eleven_voice": v.elevenlabs_voice_id,
+                "eleven_model": v.elevenlabs_model, "key": bool(tts.elevenlabs_key()), "language": language, "languages": list(tts.NARRATOR_LANGUAGES),
+                "english_only": v.elevenlabs_model in tts.ELEVEN_ENGLISH_ONLY,
+                "kokoro_voices": [list(x) for x in (tts.KOKORO_HINDI_VOICES if other else tts.KOKORO_VOICES)], "check": getattr(self, "voice_check", None)}
 
     def check_voice(self, raw: dict | None = None) -> dict:
         """Ask ElevenLabs whether the key works (free). ``use`` also switches the narrator to ElevenLabs with its best
@@ -557,6 +638,18 @@ class Control:
                     log.error("GitHub could not be asked for a newer version: %s", e, exc_info=True)
 
             threading.Thread(target=ask, daemon=True).start()
+        if time.time() - getattr(self, "cleaned_at", 0.0) > 6 * 3600 and not self.maint["running"] and not self.running() and not self.finishing:
+            self.cleaned_at = time.time()
+
+            def clear() -> None:
+                from .pipeline import auto_clean
+
+                try:
+                    auto_clean(self.cfg)
+                except Exception as e:
+                    log.error("old downloads could not be cleared: %s", e, exc_info=True)
+
+            threading.Thread(target=clear, daemon=True, name="auto-clean").start()
         upd = saved.get("update") or {}
         return {"items": items, "summary": health.summary(items), "maint": {**self.maint, "lines": self.maint["lines"][-200:]},
                 "can_update": bool(upd.get("can")), "launcher": bool(os.environ.get("CLIPPER_LAUNCHER"))}
@@ -737,7 +830,7 @@ class Control:
             cfg = self.reload()
             there = health.speech_model_there(cfg)
             if not there:
-                say("the speech model is not on this computer yet, so it was not tried. The Captions step of Set up downloads it (about 1.6 GB) when you press its button.")
+                say("the speech model is not on this computer yet, so it was not tried. The Captions step of Set up downloads it when you press its button.")
             health.full_check(cfg, speech=there)
             if os.environ.get("CLIPPER_LAUNCHER") and self.shutdown:
                 say("updated. Restarting the program now; this page reconnects by itself.")

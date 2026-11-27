@@ -261,7 +261,7 @@ def test_the_page_has_the_new_controls():
 
     import clipper
 
-    page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+    page = clipper.page_source()
     for piece in ('name="simple"', 'id="b-fstop"', 'id="stop-cancel"', "finishStop('after')", "finishStop('now')", "['pending','Pending']",
                   "Move to Pending", "/api/clips/hold-approved", "makeOne(", 'id="b-ready"', "!$('stopbox').hidden||"):
         assert piece in page, piece

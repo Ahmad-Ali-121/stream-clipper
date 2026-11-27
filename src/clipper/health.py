@@ -108,17 +108,23 @@ def quick_checks(cfg: Config) -> list[dict]:
                          "In My clips, open the Rejected list and press 'Delete all rejected'. Or delete old folders inside the 'work' folder of the data folder."))
     except OSError as e:
         out.append(_item("disk", "Free disk space for clips", "bad", f"the data folder {cfg.data_dir} cannot be read ({e})",
-                         "Check that the drive is connected, or run the setup step again with another -DataDir."))
+                         "Check that the drive is connected, then press Run the full check. If your clips folder was moved for good, run the installer again and choose the new folder."))
     saved = read_json(cfg.data_dir / "health.json", {}) or {}
     speech = saved.get("speech") or {}
-    if speech.get("ok") is True:
+    if cfg.transcribe.backend == "local" and speech.get("ok") is not None and not speech_model_there(cfg):
+        # another speech model was chosen since the last try (best or fast, on the Settings page): what is known is about the other one
+        size = SPEECH_SIZES.get(str(cfg.transcribe.model), "its size depends on the model")
+        out.append(_item("speech", "Captions (turning speech into text really works)", "todo", f"the speech model chosen now ({cfg.transcribe.model}) is not on this computer yet",
+                         f"Open Set up, go to the Captions step and press 'Download and try it' ({size})."))
+    elif speech.get("ok") is True:
         out.append(_item("speech", "Captions (turning speech into text really works)", "ok", speech.get("detail", "")))
     elif speech.get("ok") is False:
         out.append(_item("speech", "Captions (turning speech into text really works)", "bad", speech.get("detail", ""),
-                         "Fix the red items above first, then press 'Run the full check'. If it still fails, run:  uv run clipper doctor"))
+                         "Fix the red items above first, then press 'Run the full check'. If it still fails, press 'Find out why captions fail' below: it tries the speech model "
+                         "several ways and writes a report to copy when you ask for help."))
     else:
         out.append(_item("speech", "Captions (turning speech into text really works)", "todo", "not tried yet on this computer",
-                         "Press 'Run the full check'. The first time it downloads the speech model (about 1.6 GB)."))
+                         f"Press 'Run the full check'. The first time it downloads the speech model ({SPEECH_SIZES.get(str(cfg.transcribe.model), 'about 1.6 GB')})."))
     hwinfo = read_json(cfg.data_dir / "hardware.json", {}) or {}
     if hwinfo:
         speech_on = "the NVIDIA card" if hwinfo.get("whisper_device") == "cuda" else "the processor"
@@ -129,7 +135,7 @@ def quick_checks(cfg: Config) -> list[dict]:
     works = [llm.BACKENDS[b] for b in llm.BACKENDS if checks[b]["ok"] is True]
     if ai_problem:
         out.append(_item("ai", "Claude (optional: writes text, reads streams)", "warn", ai_problem,
-                         "Optional. Either sign in to Claude on the Set up page, or put a paid Claude key (API key) in the .env file. See Settings, under AI."))
+                         "Optional. Either sign in to Claude on the Set up page, or paste a paid Claude key (API key) under Keys on the Settings page."))
     elif works:
         out.append(_item("ai", "Claude (optional: writes text, reads streams)", "ok", "works: " + " and ".join(works)))
     else:
@@ -166,8 +172,10 @@ def summary(items: list[dict]) -> dict:
     return {"bad": bad, "warn": warn, "todo": todo, "text": text}
 
 
+# The two speech models offered on the page, and what each download weighs.
+SPEECH_SIZES = {"large-v3-turbo": "about 1.6 GB", "small": "about 0.5 GB"}
 ASK_FIRST = "CLIPPER_ASK_FIRST"  # set by the page's program (clipper review) for itself and every job it starts
-NEED_CAPTIONS = ("Captions are not set up on this computer yet. The speech model (the part that turns speech into text, about 1.6 GB) has not been downloaded, and a download "
+NEED_CAPTIONS = ("Captions are not set up on this computer yet. The speech model (the part that turns speech into text, about 1.6 GB, or 0.5 GB for the fast one) has not been downloaded, and a download "
                  "that size never starts until you press the button for it. Open Set up in the menu, go to the Captions step and press "
                  "'Download and try it'. Then start this again. Nothing was started.")
 

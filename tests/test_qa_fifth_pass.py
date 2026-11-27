@@ -284,7 +284,7 @@ def test_the_page_shows_each_logs_newest_error_and_leaves_ordinary_lines_alone()
 
     import clipper
 
-    page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+    page = clipper.page_source()
     for piece in ("lastBad(s.watch_log)", "lastBad(s.finish_log)", "lastBad(s.run_log)", "(READY|INFO) ", "el._shown===key", "trackerLater"):
         assert piece in page, piece
 
@@ -718,7 +718,7 @@ def test_the_page_keeps_typing_and_reads_any_subtitle_file():
 
     import clipper
 
-    page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+    page = clipper.page_source()
     for piece in ("&&!(await save(key))){for(const b of ['bx-save'", "function subText(", "utf-16le", "windows-1252", "if(c.broken)return", "the boxes are saved"):
         assert piece in page, piece
 

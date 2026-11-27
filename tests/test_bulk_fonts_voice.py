@@ -12,7 +12,7 @@ from clipper import control, fonts, tts
 from clipper.captions import build_ass
 from clipper.config import load_config
 
-PAGE = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+PAGE = clipper.page_source()
 SERVER = (Path(clipper.__file__).parent / "review.py").read_text(encoding="utf-8")
 
 
@@ -164,6 +164,7 @@ def test_checking_elevenlabs_says_what_is_true_about_the_key(monkeypatch):
 def test_choosing_elevenlabs_takes_its_best_model_and_is_refused_without_a_working_key(tmp_path, monkeypatch):
     cfg = load_config()
     cfg.paths.data_dir = str(tmp_path)
+    cfg.voice.backend, cfg.voice.elevenlabs_model = "kokoro", "eleven_turbo_v2_5"   # whatever this computer's own settings say
     c = control.Control(cfg)
     saved = []
     monkeypatch.setattr(control, "save_local", lambda values, folder=None: saved.append(values))

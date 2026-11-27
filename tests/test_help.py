@@ -171,7 +171,7 @@ def test_the_page_never_lets_typed_words_decide_about_clips():
 
     import clipper
 
-    page = (Path(clipper.__file__).parent / "review_page.html").read_text(encoding="utf-8")
+    page = clipper.page_source()
     keys = page[page.index("const cards=shownCards()") - 400: page.index("const cards=shownCards()")]
     assert "!$('helpbox').hidden" in keys and "HELP.doing" in keys  # the A and R shortcuts are off while the chat is open
     run = page[page.index("async function helpDo(box){"): page.index("/* Bring a thing into view")]
